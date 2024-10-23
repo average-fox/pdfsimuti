@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "pdfsimuti"
+version = "0.1.0"
+description = ""
+authors = ["foxtbirdy <foxtbird7@gmail.com>"]
+readme = "README.md"
+packages = [{include = "pdfsimuti", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+python-magic = "^0.4.27"
+pymupdf = "^1.24.12"
+typer = "^0.12.5"
+
+[tool.poetry.scripts]
+app = "pdfsimuti.main:app"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

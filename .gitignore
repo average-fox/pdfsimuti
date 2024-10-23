@@ -1,0 +1,9 @@
+# Virtual Environemnt Based
+pyvenv.cfg
+lib
+lib64
+include
+bin
+
+# Python Cache files
+src/pdfsimuti/__pycache__
