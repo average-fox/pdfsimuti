@@ -13,7 +13,7 @@ pymupdf = "^1.24.12"
 typer = "^0.12.5"
 
 [tool.poetry.scripts]
-app = "pdfsimuti.main:app"
+pdfsimuti= "pdfsimuti.main:app"
 
 
 [build-system]
