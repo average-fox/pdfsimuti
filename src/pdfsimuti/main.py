@@ -1,7 +1,8 @@
 import typer
 import fitz # fitz is actually PyMuPDF
 import magic
-import os.path
+from os import path
+import os
 from typing import List # Needed for getting more than 1 argument in command-line
 from typing_extensions import Annotated
 
@@ -15,7 +16,7 @@ app = typer.Typer(
 @app.callback()
 def callback():
     """
-    A very simple PDF utility tool written in Python using Typer
+    A very simple PDF utility tool written in Python using Typer.
     """
 
 
@@ -25,31 +26,25 @@ def exit(code):
     raise typer.Exit()
 
 
-def checkIfPDF(item, mimeCheck):
-    """
-    1. Checks for the file's existence using os.path
-    2. Takes arg(item), splits it by '.' and checks for .pdf existence
-    3. If mimeCheck is True, runs a mime_type check on the item
-    """
-    # If File doesn't exists in address, stop.
-    if not os.path.exists(item):
-        typer.echo(f"Error: {item} doesn't exist.")
-        return False
 
-    # If File isn't PDF by filename.filetype, stop
-    item_type = item.lower().split('.')[-1]
-    if item_type != 'pdf': 
-        typer.echo(f"Error: {item} has wrong filetype. Expected: 'pdf' Got '{item_type}'.")
-        return False
-   
-    # If mimeCheck is passed, python-magic(magic) lib will check for the item's mimeType to be 'application/pdf' negatively
+def validateListForPDF(items, mimeCheck):
+    list_items=[]
+    for item in items:
+        if not os.path.isdir(item) and os.path.exists(item) and item.lower().split(".")[-1] == "pdf":
+            list_items.append(item)
+
     if mimeCheck:
-        if not magic.detect_from_filename(item).mime_type == 'application/pdf':
-            print(f"Error! {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
-            return False
+        for item in list_items:
+            if magic.detect_from_filename(item).mime_type != "application/pdf":
+                print(f"Caution! {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
+                list_items.remove(item)
 
-    return True
-    
+    if len(list_items) <= 1:
+        typer.echo(f"Excepted more than 1 compatible file for merging.")
+        exit(1)
+
+    return list_items
+
 
 def merge_runtime(input_files):
     """
@@ -60,29 +55,21 @@ def merge_runtime(input_files):
         for input_file in input_files:
             doc.insert_file(input_file)
         doc.save("merged.pdf")
-    except Exception as e: print(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimeCheck mode.")
+    except Exception as e: print(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode.")
 
 
 
-@app.command(
-    help="Merges [italic]n[/italic] number of PDFs into a super PDF")
-def merge(items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths.")],
+@app.command(help="Merges [italic]n[/italic] number of PDFs into a super PDF.")
+def merge(items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
           mimeCheck: Annotated[bool, typer.Option(help="Performs a PDF file mime check.")]=False):
     """
     main function for the merge function.
     """
-    # Check if number of items as PDF arguments is more than 1.
-    # You need at least 2 PDFs to merge
-    if len(items) <= 1: 
-        typer.echo(f"Excepted more than 1 file for Merging.")
-        exit(1)
-    
-    # Check each of the arguments to see if they are actually PDFs negatively.
     for item in items:
-        if not checkIfPDF(item, mimeCheck=mimeCheck): exit(1)
+        if item == ".": 
+            items.remove(".") # remove . because we don't need it in our list
+            items.extend(os.listdir(os.getcwd())) # Adds two lists into 1
     
-    # Pass list to merge function
-    merge_runtime(items)
-
+    merge_runtime(validateListForPDF(items, mimeCheck=mimeCheck))
 
 
