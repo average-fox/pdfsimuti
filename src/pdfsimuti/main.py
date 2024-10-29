@@ -31,7 +31,7 @@ def confirmTask(itemsList, outputFileName):
     for i in itemsList:
         fileSize+=(os.path.getsize(i) / (1024*1024))
 
-    print(f"\nThe following files will be merged: {itemsList}. \nOutput file is: {outputFileName} \nEstimated Size: More than {fileSize: .2f} MB\n")
+    print(f"\nThe following files will be merged: {itemsList}. \nOutput file is: {os.path.basename(outputFileName)}\nSaving directory is: {os.path.dirname(outputFileName)}\nEstimated Size: More than{fileSize: .2f} MB\n")
     choice = typer.confirm("Are you certain you want to continue?")
     if not choice:
         raise typer.Abort()
@@ -52,16 +52,34 @@ def validateListForPDF(items, mimeCheck):
                 list_items.remove(item)
 
     if len(list_items) <= 1:
-        raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.\n")
+        raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
     
     return list_items
 
 
 # TODO: Make the entire project determine if the output file exists in nature or not. If it exists, warn for replacing or not.
 def validateOutputFileName(filename):
-    while filename.lower().split('.')[-1] != "pdf":
-        print(f"{filename} is not a valid filename.")
-        filename = typer.prompt("Enter Output Name: ")
+    folder_path = os.path.dirname(filename)
+    file_path_exists = os.path.isdir(os.path.dirname(filename))
+    fileType = filename.lower().split('.')[-1]
+    
+    while True:
+        print(f"\n{filename} is not a valid filename.")
+
+        if not file_path_exists and fileType != "pdf":
+            raise typer.BadParameter(f"Critical. Folder path doesn't exist. \nAdditionally, filetype is invalid. Expected 'pdf' Got '{fileType}'")
+
+        if not file_path_exists:
+            choice = typer.confirm(f"\nThe folder ({folder_path}) you given as output doesn't exist. \nDo you wish to create it?")
+            if choice: 
+                os.makedirs(folder_path, exist_ok=True)
+
+        # BUG: If the user creates a directory, the file should be saved inside that directory. However, this code allows the file to be saved elsewhere.
+        # That means: This feature is useless and not properly utilized.
+        if fileType != "pdf":
+            filename = typer.prompt("Enter output location: ")
+
+        break
     return filename
 
 
@@ -72,8 +90,10 @@ def merge_runtime(input_files, outputFileName):
             doc.insert_file(input_file)
         doc.save(outputFileName)
         print(f"File Saved as {outputFileName}")
-    except Exception as e: 
-        raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
+    except RuntimeError: # If output directory specified doesn't exist 
+        print("Housten, We ... got a problem")
+        print(Tools.mupdf_warnings())
+        # raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
 
 
 @app.command(help="Merges [italic]n[/italic] number of PDFs into a super PDF.")
