@@ -26,61 +26,66 @@ def exit(code):
     raise typer.Exit()
 
 
+def confirmTask(itemsList, outputFileName):
+    fileSize = 0
+    for i in itemsList:
+        fileSize+=(os.path.getsize(i) / (1024*1024))
+
+    print(f"\nThe following files will be merged: {itemsList}. \nOutput file is: {outputFileName} \nEstimated Size: More than {fileSize: .2f} MB\n")
+    choice = typer.confirm("Are you certain you want to continue?")
+    if not choice:
+        raise typer.Abort()
+    return True
+
 
 def validateListForPDF(items, mimeCheck):
-    """
-    Accepts LIST required, BOOL optional.
-    Appends the accepted files into another list. Returns a list of validated files.
-    1. item must be a path in existence.
-    2. item cannot be a directory. This function only accepts files.
-    3. item must end with .pdf as format.
-    4. Accepted list must be greater than 1.
-    5. (optional) Item will be checked with mimecheck if passed
-    """
     list_items=[]
     for item in items:
         if not os.path.isdir(item) and os.path.exists(item) and item.lower().split(".")[-1] == "pdf":
             list_items.append(item)
 
     if mimeCheck:
+        print("\nmimecheck is enabled.")
         for item in list_items:
             if magic.detect_from_filename(item).mime_type != "application/pdf":
                 print(f"Caution! Automatic Ignore. {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
                 list_items.remove(item)
 
     if len(list_items) <= 1:
-        typer.echo(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
-        exit(1)
+        raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.\n")
     
     return list_items
 
 
-def merge_runtime(input_files):
-    """
-    Takes a LIST of the compatible target PDFs and merge them.
-    The list must be validated beforehand.
-    """
+# TODO: Make the entire project determine if the output file exists in nature or not. If it exists, warn for replacing or not.
+def validateOutputFileName(filename):
+    while filename.lower().split('.')[-1] != "pdf":
+        print(f"{filename} is not a valid filename.")
+        filename = typer.prompt("Enter Output Name: ")
+    return filename
+
+
+def merge_runtime(input_files, outputFileName):
     try:
         doc = fitz.open()
         for input_file in input_files:
             doc.insert_file(input_file)
-        doc.save("merged.pdf")
-        print("File Saved as merged.pdf")
-    except Exception as e: print(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode.")
-
+        doc.save(outputFileName)
+        print(f"File Saved as {outputFileName}")
+    except Exception as e: 
+        raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
 
 
 @app.command(help="Merges [italic]n[/italic] number of PDFs into a super PDF.")
-def merge(items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
-          mimeCheck: Annotated[bool, typer.Option(help="Performs a PDF file mime check.")]=False):
-    """
-    Main function for the merge function.
-    Accepts a required argument that automatically gets turned into a list if more of the arguments were passed.
-    Contains an optional mimecheck as bool for enabling mimecheeck functionality.
-    """
+def merge(
+    items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
+    mimecheck: Annotated[bool, typer.Option(help="Performs a PDF file mime check. Files that failed the check will be removed from selection.")]=False,
+    output: Annotated[str, typer.Option(help="Save ouutput file name. Can Accept a folder directory as well.")]="merged.pdf"):
     for item in items:
         if item == ".": 
             items.extend(os.listdir(os.getcwd())) # Adds two lists into 1
-    merge_runtime(validateListForPDF(items, mimeCheck=mimeCheck))
-
+    
+    if output != "merged.pdf": output = validateOutputFileName(output)
+    accepted_file_list = validateListForPDF(items, mimecheck)
+    if confirmTask(accepted_file_list, output): merge_runtime(accepted_file_list, output)
 
