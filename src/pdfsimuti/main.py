@@ -18,24 +18,38 @@ def callback():
     A very simple PDF utility tool written in Python using Typer.
     """
 
-
-def exit(code):
-    if code == 1:
-        raise typer.Exit(code=code)
-    raise typer.Exit()
-
-
 def getFileType(filename):
+    """
+    Returns the filetype by checking if it endswith .pdf
+    """
     return filename.lower().split('.')[-1]
 
 
+def getFileBaseName(fileStr):
+    """
+    Returns the directory basename of the file
+    """
+    return os.path.basename(fileStr)
+
+
+def getFileDirName(fileStr):
+    """
+    Returns the directory folder path of the file
+    """
+    return os.path.dirname(fileStr)
+
+
 def confirmTask(itemsList, outputFileName):
-    outputFileFolder = os.path.dirname(outputFileName)
+    """
+    Overview of the entire task before the start of the job
+    """
+    outputFileFolder = getFileDirName(outputFileName)
+    # Calculate estimated size of the merge
     fileSize = 0
     for i in itemsList:
         fileSize+=(os.path.getsize(i) / (1024*1024))
 
-    print(f"\nThe following files will be merged: {itemsList}. \nOutput file is: {os.path.basename(outputFileName)}\nSaving directory is: {outputFileFolder}\nEstimated Size: More than{fileSize: .2f} MB\n")
+    print(f"\nThe following files will be merged: {itemsList}. \nOutput file is: {getFileBaseName(outputFileName)}\nSaving directory is: {outputFileFolder}\nEstimated Size: More than{fileSize: .2f} MB\n")
     choice = typer.confirm("Are you certain you want to continue?")
     if not choice:
         # if user created the custom saving directory, delete the newly created directory.
@@ -43,32 +57,38 @@ def confirmTask(itemsList, outputFileName):
         # Directories can be created from validateOutputFileName()
         try:
             if os.getcwd() != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
-                print(f"Cleaning created directory...{outputFileFolder}")
+                print(f"Cleaning created directory ({outputFileFolder})....")
                 os.rmdir(outputFileFolder)
         except Exception as e:
             print(e)
         raise typer.Abort()
     return True
 
+
 def validateListForPDF(items, mimeCheck):
+    """
+    List validation of accepted pdf files for merge
+    """
     # WARNING: If the list contains an item that was a merged pdf before, the list will include that item as well. Use exclude option to fix this.
     # TODO: Add a new option to merge called "exclude" which contains a list of excluded items from target list. Also make sure it doesn't throwback any errors.
-    list_items=[]
+    valid_items=[]
     for item in items:
-        if not os.path.isdir(item) and os.path.exists(item) and item.lower().split(".")[-1] == "pdf":
-            list_items.append(item)
+        if not os.path.isdir(item) and os.path.exists(item) and getFileType(item) == "pdf":
+            valid_items.append(item)
 
     if mimeCheck:
-        print("\nmimecheck is enabled.")
-        for item in list_items:
+        print("\nmimecheck is enabled.\n")
+        for item in valid_items:
             if magic.detect_from_filename(item).mime_type != "application/pdf":
                 print(f"Caution! Automatic Ignore. {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
-                list_items.remove(item)
+                valid_items.remove(item)
 
-    if len(list_items) <= 1:
+    # List needs to be more than 1 validated pdf to work with merge
+    if len(valid_items) <= 1:
         raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
 
-    return list_items
+    return valid_items
+
 
 def validateWorkingDirectory(target_file_path):
     """
@@ -79,24 +99,27 @@ def validateWorkingDirectory(target_file_path):
 
     Returns a validated folder path as str
     """
-    trueFolderPath = os.path.dirname(target_file_path) # in case someone throws a directory of a file
+    trueFolderPath = getFileDirName(target_file_path) # in case someone throws a directory of a file
     doesPathExist = os.path.isdir(trueFolderPath)
 
     if not doesPathExist:
-        folder_creation_choice = typer.confirm(f"Warning! folder path {trueFolderPath} doesn't exist\nDo you wish to create it?")
+        folder_creation_choice = typer.confirm(f"\nWarning! folder path {trueFolderPath} doesn't exist\nDo you wish to create it?")
         if folder_creation_choice:
             os.makedirs(trueFolderPath, exist_ok=True)
         else:
-            print("Custom folder path creation aborted. Working directory will be the saving directory")
+            print("\nCustom folder path creation aborted. Working directory will be the saving directory")
             trueFolderPath = os.getcwd()
 
     return trueFolderPath
 
 
 def validateOverWrite(target_dir):
-    filename = os.path.basename(target_dir)
+    """
+    Prompts y/n as bool to get permission either to overwrite existing file or not
+    """
+    filename = getFileBaseName(target_dir)
     if os.path.exists(target_dir):
-        return typer.confirm(f"{filename} already exists. Do you want to overwrite this file?")
+        return typer.confirm(f"\n{filename} already exists. Do you want to overwrite this file?")
     return False
 
 
@@ -105,53 +128,58 @@ def validateFileName(target_file_path):
     Checks the filetype of the target directory filename.
     this will keep causing a prompt if the filetype doesn't match the correct type or the filename is SUS.
     """
-    filename = os.path.basename(target_file_path)
-    folderpath = os.path.dirname(target_file_path)
+    filename = getFileBaseName(target_file_path)
+    folderpath = getFileDirName(target_file_path)
     while True:
         # if file is not a pdf format
         # WARNING: If filename is only 'pdf' then it will pass the checks. That is not accepted. Solution: Advanced search using mimetypes
         if getFileType(filename) != "pdf":
-            print(f"Invalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
+            print(f"\nInvalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
             filename = typer.prompt("Enter saving filename: ")
             continue
 
         elif os.path.exists(os.path.join(folderpath, filename)):
             # if the output already leads to an existing file and then user doesn't want to overwrite so they add another file
             #  and AGAIN make the same mistake like before, prompt them again!
-            print("Changed file name already exists")
+            print(f"\nChanged file name ({filename}) already exists")
             if not validateOverWrite(os.path.join(folderpath, filename)):
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
         break
-    return os.path.basename(filename)
+
+    return getFileBaseName(filename) # This function will return basename only. Path dir is not accepted.
 
 
-def validateOutputFileName(file_target_path):
+def validateOutputFileName(target_file_path):
     """Extensive output file validation checker. Checks for filename first, then folder
 
     Args:
-        file_target_path (str): Directory address of the saving file on system
+        target_file_path (str): Directory address of the saving file on system
 
     Returns:
         str: validated/corrected directory str to save the file
     """
     # if user passes . then the working directory will be folder path
     # Otherwise, saving directory will say "" in confirmTask()
-    folder_path = os.getcwd() if os.path.dirname(file_target_path) == "" else os.path.dirname(file_target_path)
+    folder_path = os.getcwd() if getFileDirName(target_file_path) == "" else getFileDirName(target_file_path)
     final_filename = ""
     while True:
-        final_filename = validateFileName(file_target_path)
+        final_filename = validateFileName(target_file_path)
         working_dir = validateWorkingDirectory(os.path.join(folder_path, final_filename))
 
         break
     return os.path.join(working_dir, final_filename)
 
 
-def merge_runtime(input_files, outputFileName):
+def merge_runtime(input_file_list, outputFileName):
+    """
+    Takes 2 arguments, input_file_list and outputFileName
+    This handles the main pdf merging.
+    """
     try:
         doc = fitz.open()
-        for input_file in input_files:
-            doc.insert_file(input_file)
+        for file in input_file_list:
+            doc.insert_file(file)
         doc.save(outputFileName)
         print(f"File Saved as {outputFileName}")
     except Exception as e: # If output directory specified doesn't exist
