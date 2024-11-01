@@ -94,20 +94,19 @@ def validateWorkingDirectory(target_file_path):
 
 
 def validateOverWrite(target_dir):
-    print(os.path.exists(target_dir))
+    filename = os.path.basename(target_dir)
     if os.path.exists(target_dir):
-        print("Warning file name already exists")
-        return typer.confirm("Do you want to overwrite file?")
+        return typer.confirm(f"{filename} already exists. Do you want to overwrite this file?")
     return False
 
 
 def validateFileName(target_file_path):
     """
     Checks the filetype of the target directory filename.
-    this will keep causing a prompt if the filetype doesn't match the correct type.
+    this will keep causing a prompt if the filetype doesn't match the correct type or the filename is SUS.
     """
     filename = os.path.basename(target_file_path)
-    print(os.path.exists(target_file_path))
+    folderpath = os.path.dirname(target_file_path)
     while True:
         # if file is not a pdf format
         # WARNING: If filename is only 'pdf' then it will pass the checks. That is not accepted. Solution: Advanced search using mimetypes
@@ -115,39 +114,37 @@ def validateFileName(target_file_path):
             print(f"Invalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
             filename = typer.prompt("Enter saving filename: ")
             continue
-        if os.path.exists(target_file_path):
-            if not validateOverWrite(target_file_path):
-                print("File name cannot be the same")
-                filename = typer.prompt("Enter saving filename: ")
+
+        elif os.path.exists(os.path.join(folderpath, filename)):
+            # if the output already leads to an existing file and then user doesn't want to overwrite so they add another file
+            #  and AGAIN make the same mistake like before, prompt them again!
+            print("Changed file name already exists")
+            if not validateOverWrite(os.path.join(folderpath, filename)):
+                filename = typer.prompt("Enter saving filename again: ")
+                continue
         break
     return os.path.basename(filename)
 
 
 def validateOutputFileName(file_target_path):
+    """Extensive output file validation checker. Checks for filename first, then folder
+
+    Args:
+        file_target_path (str): Directory address of the saving file on system
+
+    Returns:
+        str: validated/corrected directory str to save the file
+    """
     # if user passes . then the working directory will be folder path
     # Otherwise, saving directory will say "" in confirmTask()
-
     folder_path = os.getcwd() if os.path.dirname(file_target_path) == "" else os.path.dirname(file_target_path)
     final_filename = ""
-
-    # Stop the saving for the following reasons
-    # 1. filetype is not a pdf.
-    # 2. folder path doesn't exist.
-    # 3. file name already exists.
     while True:
-
         final_filename = validateFileName(file_target_path)
         working_dir = validateWorkingDirectory(os.path.join(folder_path, final_filename))
-        # WARNING: If file_target_dir is corrected over filename and the filename given is an already existing filename then it will overwrite the file without asking for prompt
-        # if os.path.exists(os.path.join(working_dir, final_filename)) and not validateOverWrite(file_target_path):
-        #     file_target_path = os.path.join(working_dir, final_filename)
-        #     continue
 
         break
     return os.path.join(working_dir, final_filename)
-
-def overwrite_list_if_occurance(target_list):
-    pass
 
 
 def merge_runtime(input_files, outputFileName):
