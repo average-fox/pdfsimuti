@@ -38,6 +38,8 @@ def getFileDirName(fileStr):
     """
     return os.path.dirname(fileStr)
 
+def returnStrPath(folderpath, filename):
+    return os.path.join(folderpath, filename)
 
 def confirmTask(itemsList, outputFileName, preserve_files):
     """
@@ -50,10 +52,10 @@ def confirmTask(itemsList, outputFileName, preserve_files):
         fileSize+=(os.path.getsize(i) / (1024*1024))
 
     print(f"""
-    The following files will be merged: {itemsList}
-    Output file is: {getFileBaseName(outputFileName)}
-    Saving directory is: {outputFileFolder}
-    Estimated Size: More than{fileSize: .2f} MB
+The following files will be merged: {itemsList}
+Output file is: {getFileBaseName(outputFileName)}
+Saving directory is: {outputFileFolder}
+Estimated Size: More than{fileSize: .2f} MB
     """)
 
     if not preserve_files:
@@ -159,11 +161,11 @@ def validateFileName(target_file_path):
             filename = typer.prompt("Enter saving filename: ")
             continue
 
-        elif os.path.exists(os.path.join(folderpath, filename)):
+        elif os.path.exists(returnStrPath(folderpath, filename)):
             # if the output already leads to an existing file and then user doesn't want to overwrite so they add another file
             #  and AGAIN make the same mistake like before, prompt them again!
             print(f"\nChanged file name ({filename}) already exists")
-            if not validateOverWrite(os.path.join(folderpath, filename)):
+            if not validateOverWrite(returnStrPath(folderpath, filename)):
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
         break
@@ -186,10 +188,10 @@ def validateOutputFileName(target_file_path):
     final_filename = ""
     while True:
         final_filename = validateFileName(target_file_path)
-        working_dir = validateWorkingDirectory(os.path.join(folder_path, final_filename))
+        working_dir = validateWorkingDirectory(returnStrPath(folder_path, final_filename))
 
         break
-    return os.path.join(working_dir, final_filename)
+    return returnStrPath(working_dir, final_filename)
 
 
 def merge_runtime(input_file_list, outputFileName, preserve_files):
