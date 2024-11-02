@@ -65,9 +65,19 @@ def confirmTask(itemsList, outputFileName):
     return True
 
 
-def validateListForPDF(items, mimeCheck):
-    """
-    List validation of accepted pdf files for merge
+def validateListForPDF(items, exclude, mimeCheck):
+    """List Validation of eligible PDF files
+
+    Args:
+        items (list): Unchecked list of str as file path
+        exclude (list) : List of excluded files that will remove from items
+        mimeCheck (bool): Mimecheck of files using bool
+
+    Raises:
+        typer.BadParameter: Typer Exception if list has less than 2 PDF files
+
+    Returns:
+        list: Validated list of PDF files
     """
     # WARNING: If the list contains an item that was a merged pdf before, the list will include that item as well. Use exclude option to fix this.
     # TODO: Add a new option to merge called "exclude" which contains a list of excluded items from target list. Also make sure it doesn't throwback any errors.
@@ -86,6 +96,8 @@ def validateListForPDF(items, mimeCheck):
     # List needs to be more than 1 validated pdf to work with merge
     if len(valid_items) <= 1:
         raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
+
+    valid_items = [i for i in valid_items if i not in exclude]
 
     return valid_items
 
@@ -151,7 +163,7 @@ def validateFileName(target_file_path):
 
 
 def validateOutputFileName(target_file_path):
-    """Extensive output file validation checker. Checks for filename first, then folder
+    """Extensive output file validation checker. Checks for filename first, then folder.
 
     Args:
         target_file_path (str): Directory address of the saving file on system
@@ -189,15 +201,20 @@ def merge_runtime(input_file_list, outputFileName):
 @app.command(help="Merges [italic]n[/italic] number of PDFs into a super PDF.")
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....")]=[],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF file mime check. Files that failed the check will be removed from selection.")]=False,
     output: Annotated[str, typer.Option(help="Save output file name. Can Accept a folder directory as well.")]="merged.pdf"):
+
+    # In case the user passes "." as current working directory
+    # List will include all files in the current working directory
     for item in items:
         if item == ".":
             items.extend(os.listdir(os.getcwd())) # Adds two lists into 1
 
-    accepted_file_list = validateListForPDF(items, mimecheck)
-
+    accepted_file_list = validateListForPDF(items, exclude, mimecheck)
     validated_output_filename = ""
+
+    # If normal output is not "merged.pdf" then perform extensive validation checks
     if output != "merged.pdf":
         validated_output_filename = validateOutputFileName(output)
 
