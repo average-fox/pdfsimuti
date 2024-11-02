@@ -39,7 +39,7 @@ def getFileDirName(fileStr):
     return os.path.dirname(fileStr)
 
 
-def confirmTask(itemsList, outputFileName):
+def confirmTask(itemsList, outputFileName, preserve_files):
     """
     Overview of the entire task before the start of the job
     """
@@ -49,8 +49,17 @@ def confirmTask(itemsList, outputFileName):
     for i in itemsList:
         fileSize+=(os.path.getsize(i) / (1024*1024))
 
-    print(f"\nThe following files will be merged: {itemsList}. \nOutput file is: {getFileBaseName(outputFileName)}\nSaving directory is: {outputFileFolder}\nEstimated Size: More than{fileSize: .2f} MB\n")
-    choice = typer.confirm("Are you certain you want to continue?")
+    print(f"""
+    The following files will be merged: {itemsList}
+    Output file is: {getFileBaseName(outputFileName)}
+    Saving directory is: {outputFileFolder}
+    Estimated Size: More than{fileSize: .2f} MB
+    """)
+
+    if not preserve_files:
+        print("Caution! Preserving of files is off. Files will be deleted after merging")
+
+    choice = typer.confirm("\nAre you certain you want to continue?")
     if not choice:
         # if user created the custom saving directory, delete the newly created directory.
         # It assumes that the saving directory is not the working directory.
@@ -79,8 +88,7 @@ def validateListForPDF(items, exclude, mimeCheck):
     Returns:
         list: Validated list of PDF files
     """
-    # WARNING: If the list contains an item that was a merged pdf before, the list will include that item as well. Use exclude option to fix this.
-    # TODO: Add a new option to merge called "exclude" which contains a list of excluded items from target list. Also make sure it doesn't throwback any errors.
+
     valid_items=[]
     for item in items:
         if not os.path.isdir(item) and os.path.exists(item) and getFileType(item) == "pdf":
@@ -93,11 +101,12 @@ def validateListForPDF(items, exclude, mimeCheck):
                 print(f"Caution! Automatic Ignore. {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
                 valid_items.remove(item)
 
+    valid_items = [i for i in valid_items if i not in exclude]
+
     # List needs to be more than 1 validated pdf to work with merge
     if len(valid_items) <= 1:
         raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
 
-    valid_items = [i for i in valid_items if i not in exclude]
 
     return valid_items
 
@@ -169,7 +178,7 @@ def validateOutputFileName(target_file_path):
         target_file_path (str): Directory address of the saving file on system
 
     Returns:
-        str: validated/corrected directory str to save the file
+        validated_target_file_path (str): validated/corrected directory str to save the file
     """
     # if user passes . then the working directory will be folder path
     # Otherwise, saving directory will say "" in confirmTask()
@@ -183,26 +192,36 @@ def validateOutputFileName(target_file_path):
     return os.path.join(working_dir, final_filename)
 
 
-def merge_runtime(input_file_list, outputFileName):
+def merge_runtime(input_file_list, outputFileName, preserve_files):
     """
     Takes 2 arguments, input_file_list and outputFileName
     This handles the main pdf merging.
     """
+
     try:
         doc = fitz.open()
         for file in input_file_list:
             doc.insert_file(file)
+            # Remove files if preserve is removed
+            if not preserve_files:
+                os.remove(file)
+
         doc.save(outputFileName)
-        print(f"File Saved as {outputFileName}")
+        print(f"File Saved as {getFileBaseName(outputFileName)} over {getFileDirName(outputFileName)}")
+
     except Exception as e: # If output directory specified doesn't exist
         raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
 
 
+# WARNING: If you use exclude then you have to pass files as a list like items. However, that doesn't work here. You need to pass it like --exclude ITEM1 --exclude ITEM2
+# WARNING: You cannot pass exclude items like --exclude ITEM1 ITEM2
+# SOLUTION: You can find this problem's solution on the typer doc
 @app.command(help="Merges [italic]n[/italic] number of PDFs into a super PDF.")
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....")]=[],
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....")]=[...],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF file mime check. Files that failed the check will be removed from selection.")]=False,
+    preserve: Annotated[bool, typer.Option(help="Preserve the files after merging..")] = True,
     output: Annotated[str, typer.Option(help="Save output file name. Can Accept a folder directory as well.")]="merged.pdf"):
 
     # In case the user passes "." as current working directory
@@ -225,5 +244,5 @@ def merge(
     else:
         validated_output_filename = "merged.pdf"
 
-    if confirmTask(accepted_file_list, validated_output_filename):
-        merge_runtime(accepted_file_list, validated_output_filename)
+    if confirmTask(accepted_file_list, validated_output_filename, preserve):
+        merge_runtime(accepted_file_list, validated_output_filename, preserve)
