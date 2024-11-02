@@ -93,7 +93,12 @@ def validateListForPDF(items, exclude, mimeCheck):
 
     valid_items=[]
     for item in items:
-        if not os.path.isdir(item) and os.path.exists(item) and getFileType(item) == "pdf":
+        # Include item in valid list if
+        # 1. It exists on the system via os.path.exists(item)
+        # 2. It is not already a directory of some folders
+        # 3. It has a filetype of "pdf"
+        # 4. It is not already included in items as duplicate
+        if not os.path.isdir(item) and os.path.exists(item) and getFileType(item) == "pdf" and item not in valid_items:
             valid_items.append(item)
 
     if mimeCheck:
