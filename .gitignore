@@ -5,5 +5,8 @@ lib64
 include
 bin
 
+# Personal for VSCODE
+settings.json
+
 # Python Cache files
 src/pdfsimuti/__pycache__
