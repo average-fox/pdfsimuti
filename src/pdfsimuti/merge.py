@@ -5,10 +5,11 @@ import os
 from typing import List # Needed for getting more than 1 argument in command-line
 from typing_extensions import Annotated
 
+from rich.panel import Panel
+from rich.console import Console
 
+console = Console()
 app = typer.Typer()
-
-
 
 def getFileType(filename):
     """
@@ -33,6 +34,7 @@ def getFileDirName(fileStr):
 def returnStrPath(folderpath, filename):
     return os.path.join(folderpath, filename)
 
+
 def confirmTask(itemsList, outputFileName, preserve_files):
     """
     Overview of the entire task before the start of the job
@@ -43,12 +45,12 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     for i in itemsList:
         fileSize+=(os.path.getsize(i) / (1024*1024))
 
-    print(f"""
-The following files will be merged: {itemsList}
-Output file is: {getFileBaseName(outputFileName)}
-Saving directory is: {outputFileFolder}
-Estimated Size: More than{fileSize: .2f} MB
-    """)
+    console.print(Panel(f"""
+[u]Files to be merged[/u]: {itemsList}
+[u]Output file[/u]: {getFileBaseName(outputFileName)}
+[u]Saving directory[/u]: {outputFileFolder}
+[u]Estimated Size[/u]: >{fileSize: .2f} MB
+    """, title="OVERVIEW", border_style="blue", expand=False))
 
     if not preserve_files:
         print("Caution! Preserving of files is off. Files will be deleted after merging")
@@ -206,7 +208,7 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
                 os.remove(file)
 
         doc.save(outputFileName)
-        print(f"File Saved as {getFileBaseName(outputFileName)} over {getFileDirName(outputFileName)}")
+        print(f"File Saved as '{getFileBaseName(outputFileName)}' over '{getFileDirName(outputFileName)}'")
 
     except Exception as e: # If output directory specified doesn't exist
         raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
