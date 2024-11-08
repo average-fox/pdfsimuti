@@ -13,4 +13,5 @@ def callback():
     A very simple PDF utility tool written in Python using Typer.
     """
 
-app.add_typer(merge.app, name="merge", help="Merges [italic]n[/italic] number of PDFs into a super PDF.")
+# why app.command()(app.app)? See: https://github.com/fastapi/typer/issues/178
+app.command(help="Merges [italic]n[/italic] number of PDFs into a super PDF.")(merge.merge)

@@ -212,7 +212,6 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
         raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
 
 
-@app.command(help="Merges [italic]n[/italic] number of PDFs into a super PDF.")
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....")]=None,
