@@ -1,8 +1,8 @@
 import typer
-import fitz # fitz is actually PyMuPDF
+import fitz  # fitz is actually PyMuPDF
 import magic
 import os
-from typing import List # Needed for getting more than 1 argument in command-line
+from typing import List  # Needed for getting more than 1 argument in command-line
 from typing_extensions import Annotated
 
 from rich.panel import Panel
@@ -11,11 +11,12 @@ from rich.console import Console
 console = Console()
 app = typer.Typer()
 
+
 def getFileType(filename):
     """
     Returns the filetype by checking if it endswith .pdf
     """
-    return filename.lower().split('.')[-1]
+    return filename.lower().split(".")[-1]
 
 
 def getFileBaseName(fileStr):
@@ -31,6 +32,7 @@ def getFileDirName(fileStr):
     """
     return os.path.dirname(fileStr)
 
+
 def returnStrPath(folderpath, filename):
     return os.path.join(folderpath, filename)
 
@@ -43,7 +45,7 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     # Calculate estimated size of the merge
     fileSize = 0
     for i in itemsList:
-        fileSize+=(os.path.getsize(i) / (1024*1024))
+        fileSize += os.path.getsize(i) / (1024 * 1024)
 
     console.print(Panel(f"""
 [u]Files to be merged[/u]: {itemsList}
@@ -53,7 +55,7 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     """, title="OVERVIEW", border_style="blue", expand=False))
 
     if not preserve_files:
-        print("Caution! Preserving of files is off. Files will be deleted after merging")
+        console.print("[red underline]CAUTION! Preserving of files is OFF. Files will be deleted after merging.[/red underline]")
 
     choice = typer.confirm("\nAre you certain you want to continue?")
     if not choice:
@@ -85,7 +87,7 @@ def validateListForPDF(items, exclude, mimeCheck):
         list: Validated list of PDF files
     """
 
-    valid_items=[]
+    valid_items = []
     for item in items:
         # Include item in valid list if
         # 1. It exists on the system via os.path.exists(item)
@@ -108,7 +110,6 @@ def validateListForPDF(items, exclude, mimeCheck):
     if len(valid_items) <= 1:
         raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
 
-
     return valid_items
 
 
@@ -121,7 +122,7 @@ def validateWorkingDirectory(target_file_path):
 
     Returns a validated folder path as str
     """
-    trueFolderPath = getFileDirName(target_file_path) # in case someone throws a directory of a file
+    trueFolderPath = getFileDirName(target_file_path)  # in case someone throws a directory of a file
     doesPathExist = os.path.isdir(trueFolderPath)
 
     if not doesPathExist:
@@ -169,7 +170,7 @@ def validateFileName(target_file_path):
                 continue
         break
 
-    return getFileBaseName(filename) # This function will return basename only. Path dir is not accepted.
+    return getFileBaseName(filename)  # This function will return basename only. Path dir is not accepted.
 
 
 def validateOutputFileName(target_file_path):
@@ -183,7 +184,9 @@ def validateOutputFileName(target_file_path):
     """
     # if user passes . then the working directory will be folder path
     # Otherwise, saving directory will say "" in confirmTask()
-    folder_path = os.getcwd() if getFileDirName(target_file_path) == "" else getFileDirName(target_file_path)
+    folder_path = (
+        os.getcwd() if getFileDirName(target_file_path) == ""
+        else getFileDirName(target_file_path))
     final_filename = ""
     while True:
         final_filename = validateFileName(target_file_path)
@@ -210,13 +213,13 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
         doc.save(outputFileName)
         print(f"File Saved as '{getFileBaseName(outputFileName)}' over '{getFileDirName(outputFileName)}'")
 
-    except Exception as e: # If output directory specified doesn't exist
+    except Exception as e:  # If output directory specified doesn't exist
         raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
 
 
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....")]=None,
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....")]=[None],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF file mime check. Files that failed the check will be removed from selection.")]=False,
     preserve: Annotated[bool, typer.Option(help="Preserve the files after merging..")] = True,
     output: Annotated[str, typer.Option(help="Save output file name. Can Accept a folder directory as well.")]="merged.pdf"):
@@ -225,7 +228,7 @@ def merge(
     # List will include all files in the current working directory
     for item in items:
         if item == ".":
-            items.extend(os.listdir(os.getcwd())) # Adds two lists into 1
+            items.extend(os.listdir(os.getcwd()))  # Adds two lists into 1
 
     accepted_file_list = validateListForPDF(items, exclude, mimecheck)
     validated_output_filename = ""
