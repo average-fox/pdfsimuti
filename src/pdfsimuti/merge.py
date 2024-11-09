@@ -57,18 +57,15 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     if not preserve_files:
         console.print("[red underline]CAUTION! Preserving of files is OFF. Files will be deleted after merging.[/red underline]")
 
-    choice = typer.confirm("\nAre you certain you want to continue?")
-    if not choice:
-        # if user created the custom saving directory, delete the newly created directory.
-        # It assumes that the saving directory is not the working directory.
-        # Directories can be created from validateOutputFileName()
-        try:
-            if os.getcwd() != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
-                print(f"Cleaning created directory ({outputFileFolder})....")
+    if not typer.confirm("\nAre you certain you want to continue?"):
+        if os.getcwd() != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
+            try:
+                print(f"Deleted temporary directory ({outputFileFolder})....")
                 os.rmdir(outputFileFolder)
-        except Exception as e:
-            print(e)
+            except Exception as e:
+                console.print(f"[red]Error deleting temporary directory: {e}[/red]")
         raise typer.Abort()
+
     return True
 
 
@@ -89,11 +86,6 @@ def validateListForPDF(items, exclude, mimeCheck):
 
     valid_items = []
     for item in items:
-        # Include item in valid list if
-        # 1. It exists on the system via os.path.exists(item)
-        # 3. It has a filetype of "pdf"
-        # 2. It is not already a directory of some folders
-        # 4. It is not already included in items as duplicate
         if not os.path.isdir(item) and os.path.exists(item) and getFileType(item) == "pdf" and item not in valid_items:
             valid_items.append(item)
 
@@ -154,8 +146,8 @@ def validateFileName(target_file_path):
     filename = getFileBaseName(target_file_path)
     folderpath = getFileDirName(target_file_path)
     while True:
-        # if file is not a pdf format
         # WARNING: If filename is only 'pdf' then it will pass the checks. That is not accepted. Solution: Advanced search using mimetypes
+        # if file is not a pdf format
         if getFileType(filename) != "pdf":
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
             filename = typer.prompt("Enter saving filename: ")
@@ -226,23 +218,15 @@ def merge(
 
     # In case the user passes "." as current working directory
     # List will include all files in the current working directory
-    for item in items:
-        if item == ".":
-            items.extend(os.listdir(os.getcwd()))  # Adds two lists into 1
+    items.extend(os.listdir(os.getcwd()) if "." in items else items)
 
     accepted_file_list = validateListForPDF(items, exclude, mimecheck)
     validated_output_filename = ""
 
-    # If normal output is not "merged.pdf" then perform extensive validation checks
-    if output != "merged.pdf":
-        validated_output_filename = validateOutputFileName(output)
-
-    # In case that the user passes --mimecheck after --output and not adding anything
-    # For example: pdfsimuti merge . --output --mimecheck
-    elif output == "--mimecheck":
-        raise typer.BadParameter("--output takes no option. What are you doing?")
-    else:
-        validated_output_filename = "merged.pdf"
+    if output == "--mimecheck":
+        raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
+    # if output is specified explicitly then it will trigger its validation process
+    validated_output_filename = validateOutputFileName(output) if output != "merged.pdf" else "merged.pdf"
 
     if confirmTask(accepted_file_list, validated_output_filename, preserve):
         merge_runtime(accepted_file_list, validated_output_filename, preserve)
