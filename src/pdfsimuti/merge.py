@@ -10,7 +10,7 @@ from rich.console import Console
 
 console = Console()
 app = typer.Typer()
-
+global_currentDirectory = os.getcwd() # use this var on functions that calls os.getcwd() more than once
 
 def getFileType(filename):
     """
@@ -41,7 +41,10 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     """
     Overview of the entire task before the start of the job
     """
-    outputFileFolder = getFileDirName(outputFileName)
+    local_currentDirectory = global_currentDirectory
+
+    outputFileFolder = local_currentDirectory if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
+
     # Calculate estimated size of the merge
     fileSize = 0
     for i in itemsList:
@@ -58,7 +61,7 @@ def confirmTask(itemsList, outputFileName, preserve_files):
         console.print("[red underline]CAUTION! Preserving of files is OFF. Files will be deleted after merging.[/red underline]")
 
     if not typer.confirm("\nAre you certain you want to continue?"):
-        if os.getcwd() != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
+        if local_currentDirectory != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
             try:
                 print(f"Deleted temporary directory ({outputFileFolder})....")
                 os.rmdir(outputFileFolder)
@@ -203,7 +206,10 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
                 os.remove(file)
 
         doc.save(outputFileName)
-        print(f"File Saved as '{getFileBaseName(outputFileName)}' over '{getFileDirName(outputFileName)}'")
+        console.print(Panel(f"""
+File name: [i]{getFileBaseName(outputFileName)}[/i]
+Folder: [i]{getFileDirName(outputFileName)}[/i]
+""", title="MERGE COMPLETED", border_style="green", expand=False))
 
     except Exception as e:  # If output directory specified doesn't exist
         raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
