@@ -149,9 +149,8 @@ def validateFileName(target_file_path):
     filename = getFileBaseName(target_file_path)
     folderpath = getFileDirName(target_file_path)
     while True:
-        # WARNING: If filename is only 'pdf' then it will pass the checks. That is not accepted. Solution: Advanced search using mimetypes
         # if file is not a pdf format
-        if getFileType(filename) != "pdf":
+        if getFileType(filename) != "pdf" or filename == "pdf":
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
             filename = typer.prompt("Enter saving filename: ")
             continue
