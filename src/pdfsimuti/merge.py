@@ -147,7 +147,6 @@ def validateFileName(target_file_path):
     folderpath = getFileDirName(target_file_path)
     while True:
         # if file is not a pdf format
-        print(os.path.exists(returnStrPath(folderpath, filename)))
         if getFileType(filename) != "pdf" or filename == "pdf":
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
             filename = typer.prompt("Enter saving filename: ")
@@ -209,11 +208,10 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
             if not preserve_files:
                 os.remove(file)
         doc.save(outputFileName)
-        printSuccessfulMerge(outputFileName)
-
+        printSuccessfulMerge(outputFileName) # Print success
 
     except Exception as e:  # If output directory specified doesn't exist
-        raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
+        raise typer.BadParameter(f"Error. \n{e}")
 
 
 def merge(
@@ -221,19 +219,30 @@ def merge(
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....", rich_help_panel="Additonal")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
+    confirm: Annotated[bool, typer.Option("--confirm/--no-confirm", "-c/-nc", help="Enable confirmation of Job before execution", rich_help_panel="Feature Behavior")] = True,
+    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
     output: Annotated[str, typer.Option(help="Save output file name. Can Accept a folder directory as well.", rich_help_panel="Options")]="merged.pdf"):
 
     # In case the user passes "." as current working directory
     # List will include all files in the current working directory
-    items.extend(os.listdir(workingDir) if "." in items else items)
+    if "." in items:
+        items.extend(os.listdir(workingDir))
+        items.remove(".")
 
-    accepted_file_list = validateListForPDF(items, exclude, mimecheck)
-    validated_output_filename = ""
-
-    if output == "--mimecheck":
+    if output == "--mimecheck" or output == "-m":
         raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
-    # if output is specified explicitly then it will trigger its validation process
-    validated_output_filename = validateOutputFileName(output) if output != "merged.pdf" or os.path.exists(output) else "merged.pdf"
 
-    if confirmTask(accepted_file_list, validated_output_filename, preserve):
+    # conditional validation
+    if validate:
+        accepted_file_list = validateListForPDF(items, exclude, mimecheck)
+        # if output is specified explicitly then it will trigger its validation process
+        validated_output_filename = validateOutputFileName(output) if output != "merged.pdf" or os.path.exists(output) else "merged.pdf"
+    else:
+        accepted_file_list, validated_output_filename = items, "merged.pdf"
+
+    # conditional confirmation
+    if confirm:
+        if confirmTask(accepted_file_list, validated_output_filename, preserve):
+            merge_runtime(accepted_file_list, validated_output_filename, preserve)
+    else:
         merge_runtime(accepted_file_list, validated_output_filename, preserve)
