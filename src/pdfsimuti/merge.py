@@ -10,7 +10,7 @@ from rich.console import Console
 
 console = Console()
 app = typer.Typer()
-global_currentDirectory = os.getcwd() # use this var on functions that calls os.getcwd() more than once
+workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
 
 def getFileType(filename):
     """
@@ -41,9 +41,7 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     """
     Overview of the entire task before the start of the job
     """
-    local_currentDirectory = global_currentDirectory
-
-    outputFileFolder = local_currentDirectory if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
+    outputFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
 
     # Calculate estimated size of the merge
     fileSize = 0
@@ -61,7 +59,7 @@ def confirmTask(itemsList, outputFileName, preserve_files):
         console.print("CAUTION! Preserving of files is OFF. Files will be deleted after merging.", style="underline bold red")
 
     if not typer.confirm("\nAre you certain you want to continue?"):
-        if local_currentDirectory != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
+        if workingDir != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
             try:
                 print(f"Deleted temporary directory ({outputFileFolder})....")
                 os.rmdir(outputFileFolder)
@@ -128,7 +126,7 @@ def validateWorkingDirectory(target_file_path):
             os.makedirs(trueFolderPath, exist_ok=True)
         else:
             print("\nCustom folder path creation aborted. Working directory will be the saving directory")
-            trueFolderPath = os.getcwd()
+            trueFolderPath = workingDir
 
     return trueFolderPath
 
@@ -180,7 +178,7 @@ def validateOutputFileName(target_file_path):
     # if user passes . then the working directory will be folder path
     # Otherwise, saving directory will say "" in confirmTask()
     folder_path = (
-        os.getcwd() if getFileDirName(target_file_path) == ""
+        workingDir if getFileDirName(target_file_path) == ""
         else getFileDirName(target_file_path))
     final_filename = ""
     while True:
@@ -194,7 +192,7 @@ def validateOutputFileName(target_file_path):
 def printSuccessfulMerge(outputFileName):
     console.print(Panel(f"""
 File name: [i]{getFileBaseName(outputFileName)}[/i]
-Folder: [i]{os.getcwd() if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)}[/i]
+Folder: [i]{workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)}[/i]
 """, title="MERGE COMPLETED", border_style="green", expand=False))
 
 
@@ -203,7 +201,6 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
     Takes 2 arguments, input_file_list and outputFileName
     This handles the main pdf merging.
     """
-
     try:
         doc = fitz.open()
         for file in input_file_list:
@@ -228,7 +225,7 @@ def merge(
 
     # In case the user passes "." as current working directory
     # List will include all files in the current working directory
-    items.extend(os.listdir(os.getcwd()) if "." in items else items)
+    items.extend(os.listdir(workingDir) if "." in items else items)
 
     accepted_file_list = validateListForPDF(items, exclude, mimecheck)
     validated_output_filename = ""
@@ -237,7 +234,6 @@ def merge(
         raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
     # if output is specified explicitly then it will trigger its validation process
     validated_output_filename = validateOutputFileName(output) if output != "merged.pdf" or os.path.exists(output) else "merged.pdf"
-
 
     if confirmTask(accepted_file_list, validated_output_filename, preserve):
         merge_runtime(accepted_file_list, validated_output_filename, preserve)
