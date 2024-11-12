@@ -137,10 +137,7 @@ def validateOverWrite(target_dir):
     """
     Prompts y/n as bool to get permission either to overwrite existing file or not
     """
-    filename = getFileBaseName(target_dir)
-    if os.path.exists(target_dir):
-        return typer.confirm(f"\n{filename} already exists. Do you want to overwrite this file?")
-    return False
+    return typer.confirm(f"\n{getFileBaseName(target_dir)} already exists. Do you want to overwrite this file?")
 
 
 def validateFileName(target_file_path):
@@ -152,6 +149,7 @@ def validateFileName(target_file_path):
     folderpath = getFileDirName(target_file_path)
     while True:
         # if file is not a pdf format
+        print(os.path.exists(returnStrPath(folderpath, filename)))
         if getFileType(filename) != "pdf" or filename == "pdf":
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
             filename = typer.prompt("Enter saving filename: ")
@@ -162,6 +160,7 @@ def validateFileName(target_file_path):
             #  and AGAIN make the same mistake like before, prompt them again!
             print(f"\nChanged file name ({filename}) already exists")
             if not validateOverWrite(returnStrPath(folderpath, filename)):
+                print("Filename cannot be same if overwrite isn't allowed.")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
         break
@@ -237,7 +236,8 @@ def merge(
     if output == "--mimecheck":
         raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
     # if output is specified explicitly then it will trigger its validation process
-    validated_output_filename = validateOutputFileName(output) if output != "merged.pdf" else "merged.pdf"
+    validated_output_filename = validateOutputFileName(output) if output != "merged.pdf" or os.path.exists(output) else "merged.pdf"
+
 
     if confirmTask(accepted_file_list, validated_output_filename, preserve):
         merge_runtime(accepted_file_list, validated_output_filename, preserve)
