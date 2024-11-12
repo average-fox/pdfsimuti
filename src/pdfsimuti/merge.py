@@ -58,7 +58,7 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     """, title="OVERVIEW", border_style="blue", expand=False))
 
     if not preserve_files:
-        console.print("[red underline]CAUTION! Preserving of files is OFF. Files will be deleted after merging.[/red underline]")
+        console.print("CAUTION! Preserving of files is OFF. Files will be deleted after merging.", style="underline bold red")
 
     if not typer.confirm("\nAre you certain you want to continue?"):
         if local_currentDirectory != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
@@ -66,7 +66,7 @@ def confirmTask(itemsList, outputFileName, preserve_files):
                 print(f"Deleted temporary directory ({outputFileFolder})....")
                 os.rmdir(outputFileFolder)
             except Exception as e:
-                console.print(f"[red]Error deleting temporary directory: {e}[/red]")
+                console.print(f"Error deleting temporary directory: {e}", style="red")
         raise typer.Abort()
 
     return True
@@ -93,11 +93,13 @@ def validateListForPDF(items, exclude, mimeCheck):
             valid_items.append(item)
 
     if mimeCheck:
-        print("\nmimecheck is enabled.\n")
+        console.print("\nmimecheck enabled.\n", style="green")
         for item in valid_items:
             if magic.detect_from_filename(item).mime_type != "application/pdf":
                 print(f"Caution! Automatic Ignore. {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
                 valid_items.remove(item)
+    else:
+        console.print("\nmimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n", style="dark_orange")
 
     valid_items = [i for i in valid_items if i not in exclude]
 
@@ -215,11 +217,11 @@ Folder: [i]{getFileDirName(outputFileName)}[/i]
 
 
 def merge(
-    items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.")],
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....")]=[None],
-    mimecheck: Annotated[bool, typer.Option(help="Performs a PDF file mime check. Files that failed the check will be removed from selection.")]=False,
-    preserve: Annotated[bool, typer.Option(help="Preserve the files after merging..")] = True,
-    output: Annotated[str, typer.Option(help="Save output file name. Can Accept a folder directory as well.")]="merged.pdf"):
+    items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.", rich_help_panel="Required")],
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....", rich_help_panel="Additonal")]=[None],
+    mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
+    preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
+    output: Annotated[str, typer.Option(help="Save output file name. Can Accept a folder directory as well.", rich_help_panel="Options")]="merged.pdf"):
 
     # In case the user passes "." as current working directory
     # List will include all files in the current working directory
