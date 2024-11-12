@@ -192,6 +192,13 @@ def validateOutputFileName(target_file_path):
     return returnStrPath(working_dir, final_filename)
 
 
+def printSuccessfulMerge(outputFileName):
+    console.print(Panel(f"""
+File name: [i]{getFileBaseName(outputFileName)}[/i]
+Folder: [i]{os.getcwd() if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)}[/i]
+""", title="MERGE COMPLETED", border_style="green", expand=False))
+
+
 def merge_runtime(input_file_list, outputFileName, preserve_files):
     """
     Takes 2 arguments, input_file_list and outputFileName
@@ -205,12 +212,9 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
             # Remove files if preserve is removed
             if not preserve_files:
                 os.remove(file)
-
         doc.save(outputFileName)
-        console.print(Panel(f"""
-File name: [i]{getFileBaseName(outputFileName)}[/i]
-Folder: [i]{getFileDirName(outputFileName)}[/i]
-""", title="MERGE COMPLETED", border_style="green", expand=False))
+        printSuccessfulMerge(outputFileName)
+
 
     except Exception as e:  # If output directory specified doesn't exist
         raise typer.BadParameter(f"Error. {e}. \nRecommended to run `pdfsimuti merge` with --mimecheck mode. \nIt will ignore all files that are not PDF by mime.")
