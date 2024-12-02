@@ -93,7 +93,7 @@ def validateListForPDF(items, exclude, mimeCheck):
     if mimeCheck:
         console.print("\nmimecheck enabled.\n", style="green")
         for item in valid_items:
-            if magic.detect_from_filename(item).mime_type != "application/pdf":
+            if magic.Magic(mime=True).from_file(item) != "application/pdf":
                 print(f"Caution! Automatic Ignore. {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
                 valid_items.remove(item)
     else:
