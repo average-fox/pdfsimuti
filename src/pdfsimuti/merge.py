@@ -215,7 +215,7 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
 
 
 def merge(
-    items: Annotated[List[str], typer.Argument(help="PDF files to merge. Can accept file paths. Tip: Pass '.' to include current directory.", rich_help_panel="Required")],
+    items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....", rich_help_panel="Additonal")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
