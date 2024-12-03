@@ -4,6 +4,7 @@ import magic
 import os
 from typing import List  # Needed for getting more than 1 argument in command-line
 from typing_extensions import Annotated
+from enum import Enum
 
 from rich.panel import Panel
 from rich.console import Console
@@ -214,14 +215,39 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
         raise typer.BadParameter(f"Error. \n{e}")
 
 
+class SortOrder(str, Enum):
+    name = "name"
+    name_reverse = "name_reverse"
+    modified = "modified"
+    
+
+def sortList(sort_type, items):
+    """
+    Sorts a list of items based on the specified sort type.
+
+    Args:
+        sort_type (str): The type of sort to perform.
+        items (list): The list of items to sort.
+    """
+    # Dictionary-Based Approach
+    sort_methods = {
+        "name": lambda: items.sort(),
+        "name_reverse": lambda: items.sort(reverse=True),
+        "modified": lambda: items.sort()
+    }
+    sort_methods.get(sort_type)()
+    return items
+
+
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....", rich_help_panel="Additonal")]=[None],
+    sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     confirm: Annotated[bool, typer.Option("--confirm/--no-confirm", "-c/-nc", help="Enable confirmation of Job before execution", rich_help_panel="Feature Behavior")] = True,
     validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
-    output: Annotated[str, typer.Option(help="Save output file name. Can Accept a folder directory as well.", rich_help_panel="Options")]="merged.pdf"):
+    output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
 
     # In case the user passes "." as current working directory
     # List will include all files in the current working directory
@@ -231,7 +257,7 @@ def merge(
 
     if output == "--mimecheck" or output == "-m":
         raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
-
+    
     # conditional validation
     if validate:
         accepted_file_list = validateListForPDF(items, exclude, mimecheck)
@@ -240,9 +266,14 @@ def merge(
     else:
         accepted_file_list, validated_output_filename = items, "merged.pdf"
 
+    # If user passes a sort order, update the previous list
+    # Needs to happen after validated list
+    if sort: accepted_file_list = sortList(sort, accepted_file_list)
+
     # conditional confirmation
     if confirm:
         if confirmTask(accepted_file_list, validated_output_filename, preserve):
             merge_runtime(accepted_file_list, validated_output_filename, preserve)
     else:
         merge_runtime(accepted_file_list, validated_output_filename, preserve)
+
