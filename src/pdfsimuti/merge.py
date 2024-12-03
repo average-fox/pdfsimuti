@@ -7,9 +7,11 @@ from typing_extensions import Annotated
 from enum import Enum
 
 from rich.panel import Panel
+from rich.table import Table
 from rich.console import Console
 
 console = Console()
+
 app = typer.Typer()
 workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
 
@@ -43,29 +45,29 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     Overview of the entire task before the start of the job
     """
     outputFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
+    table = Table(show_header=False, show_lines=True)
 
     # Calculate estimated size of the merge
     fileSize = 0
     for i in itemsList:
         fileSize += os.path.getsize(i) / (1024 * 1024)
 
-    console.print(Panel(f"""
-[u]Files to be merged[/u]: {itemsList}
-[u]Output file[/u]: {getFileBaseName(outputFileName)}
-[u]Saving directory[/u]: {outputFileFolder}
-[u]Estimated Size[/u]: >{fileSize: .2f} MB
-    """, title="OVERVIEW", border_style="blue", expand=False))
+    table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", f"{", ".join(itemsList)}")
+    table.add_row("[bold][u]Output file[/u][/bold]:" , f"{getFileBaseName(outputFileName)}")
+    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[link]{outputFileFolder}[/link]")
+    table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
+    console.print(Panel(table, subtitle="[i]OVERVIEW[/i]", border_style="blue", expand=False))
 
     if not preserve_files:
-        console.print("CAUTION! Preserving of files is OFF. Files will be deleted after merging.", style="underline bold red")
+        console.print("WARNING CAUTION! Preserving of files is OFF. Files will be deleted after merging.", style="underline bold red")
 
-    if not typer.confirm("\nAre you certain you want to continue?"):
+    if not typer.confirm("\nDo you want to continue with these settings?"):
         if workingDir != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
             try:
                 print(f"Deleted temporary directory ({outputFileFolder})....")
                 os.rmdir(outputFileFolder)
             except Exception as e:
-                console.print(f"Error deleting temporary directory: {e}", style="red")
+                console.print(f"Error deleting temporary directory: {e} \nTarget path: [link]{outputFileFolder}[/link]", style="red")
         raise typer.Abort()
 
     return True
@@ -95,7 +97,7 @@ def validateListForPDF(items, exclude, mimeCheck):
         console.print("\nmimecheck enabled.\n", style="green")
         for item in valid_items:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
-                print(f"Caution! Automatic Ignore. {item} is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'")
+                console.print(f"CAUTION! Automatic Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'", style="yellow")
                 valid_items.remove(item)
     else:
         console.print("\nmimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n", style="dark_orange")
@@ -122,11 +124,11 @@ def validateWorkingDirectory(target_file_path):
     doesPathExist = os.path.isdir(trueFolderPath)
 
     if not doesPathExist:
-        folder_creation_choice = typer.confirm(f"\nWarning! folder path {trueFolderPath} doesn't exist\nDo you wish to create it?")
+        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{trueFolderPath}' doesn't exist\nDo you wish to create it?")
         if folder_creation_choice:
             os.makedirs(trueFolderPath, exist_ok=True)
         else:
-            print("\nCustom folder path creation aborted. Working directory will be the saving directory")
+            console.print("\nCustom folder path creation aborted. Working directory will be the saving directory.")
             trueFolderPath = workingDir
 
     return trueFolderPath
@@ -233,7 +235,7 @@ def sortList(sort_type, items):
     sort_methods = {
         "name": lambda: items.sort(),
         "name_reverse": lambda: items.sort(reverse=True),
-        "modified": lambda: items.sort()
+        "modified": lambda: sorted(items, key= lambda x: os.path.getmtime(x))
     }
     sort_methods.get(sort_type)()
     return items
@@ -241,6 +243,7 @@ def sortList(sort_type, items):
 
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
+    # folders: Annotated[List[str], typer.]
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
