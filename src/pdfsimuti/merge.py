@@ -40,28 +40,28 @@ def returnStrPath(folderpath, filename):
     return os.path.join(folderpath, filename)
 
 
-def confirmTask(itemsList, outputFileName, preserve_files):
+def confirmTask(itemsList, outputFileName, preserve_files, sort):
     """
     Overview of the entire task before the start of the job
     """
     outputFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
     table = Table(show_header=False, show_lines=True)
+    ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{getFileBaseName(item)}[/blue] | DIRECTORY: [yellow]{getFileDirName(item)}[/yellow]" for index, item in enumerate(itemsList))}"
 
     # Calculate estimated size of the merge
     fileSize = 0
-    for i in itemsList:
-        fileSize += os.path.getsize(i) / (1024 * 1024)
-
-    table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", f"{", ".join(itemsList)}")
+    for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
+    table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
     table.add_row("[bold][u]Output file[/u][/bold]:" , f"{getFileBaseName(outputFileName)}")
     table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[link]{outputFileFolder}[/link]")
+    table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort}")
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
     console.print(Panel(table, subtitle="[i]OVERVIEW[/i]", border_style="blue", expand=False))
 
     if not preserve_files:
         console.print("WARNING CAUTION! Preserving of files is OFF. Files will be deleted after merging.", style="underline bold red")
 
-    if not typer.confirm("\nDo you want to continue with these settings?"):
+    if not typer.confirm("\nContinue with these settings?"):
         if workingDir != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
             try:
                 print(f"Deleted temporary directory ({outputFileFolder})....")
@@ -81,7 +81,7 @@ def getPDFfromDirectory(directory):
     pdf_files = []
     for folder_item in os.listdir(directory):
         folder_path = returnStrPath(directory, folder_item)
-        if ifFilePDF(folder_path): pdf_files.append(os.path.abspath(folder_path))
+        if ifFilePDF(folder_path): pdf_files.append(folder_path)
     return pdf_files
 
 
@@ -99,8 +99,6 @@ def validateListForPDF(items, exclude, mimeCheck):
     Returns:
         list: Validated list of PDF files
     """
-    # if "." in items: items.extend(os.path.abspath(item) for item in os.listdir(workingDir) if item != ".")
-
     valid_items = []
     for item in items:
         if item not in valid_items and ifFilePDF(item): valid_items.append(os.path.abspath(item))
@@ -112,6 +110,7 @@ def validateListForPDF(items, exclude, mimeCheck):
 
     # Remove duplicates if the user passes the same value more than once
     valid_items = list(set(valid_items))
+    print(valid_items)
     if mimeCheck:
         console.print("\nmimecheck enabled.", style="green")
         for item in valid_items:
@@ -266,7 +265,7 @@ def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     # folders: Annotated[List[str], typer.]
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging.... You must specify exact file path if you have added a folder directory", rich_help_panel="Additional Options")]=[None],
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     confirm: Annotated[bool, typer.Option("--confirm/--no-confirm", "-c/-nc", help="Enable confirmation of Job before execution", rich_help_panel="Feature Behavior")] = True,
@@ -295,7 +294,7 @@ def merge(
 
     # conditional confirmation
     if confirm:
-        if confirmTask(accepted_file_list, validated_output_filename, preserve):
+        if confirmTask(accepted_file_list, validated_output_filename, preserve, sort):
             merge_runtime(accepted_file_list, validated_output_filename, preserve)
     else:
         merge_runtime(accepted_file_list, validated_output_filename, preserve)
