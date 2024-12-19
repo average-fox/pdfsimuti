@@ -15,11 +15,11 @@ console = Console()
 app = typer.Typer()
 workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
 
-def getFileType(filename):
+def ifFilePDF(filename):
     """
     Returns the filetype by checking if it endswith .pdf
     """
-    return filename.lower().split(".")[-1]
+    return filename.lower().split(".")[-1] == "pdf"
 
 
 def getFileBaseName(fileStr):
@@ -73,6 +73,18 @@ def confirmTask(itemsList, outputFileName, preserve_files):
     return True
 
 
+def getPDFfromDirectory(directory):
+    """
+    Gets PDFs from a directory. Only used in the validateListForPDF when the user passes a directory address instead of the filename
+    """
+    directory = os.getcwd() if directory == "." else directory
+    pdf_files = []
+    for folder_item in os.listdir(directory):
+        folder_path = returnStrPath(directory, folder_item)
+        if ifFilePDF(folder_path): pdf_files.append(os.path.abspath(folder_path))
+    return pdf_files
+
+
 def validateListForPDF(items, exclude, mimeCheck):
     """List Validation of eligible PDF files
 
@@ -87,14 +99,21 @@ def validateListForPDF(items, exclude, mimeCheck):
     Returns:
         list: Validated list of PDF files
     """
+    # if "." in items: items.extend(os.path.abspath(item) for item in os.listdir(workingDir) if item != ".")
 
     valid_items = []
     for item in items:
-        if not os.path.isdir(item) and os.path.exists(item) and getFileType(item) == "pdf" and item not in valid_items:
-            valid_items.append(item)
+        if item not in valid_items and ifFilePDF(item): valid_items.append(os.path.abspath(item))
+        elif os.path.isdir(item):
+            print(f"NOTICE! ADDDING FOLDER: {"<CURRENT DIRECTORY>" if item == "." else item}")
+            # Note: "." is actually an address to the current directory
+            valid_items.extend(getPDFfromDirectory(item))
+        else: console.print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
+    # Remove duplicates if the user passes the same value more than once
+    valid_items = list(set(valid_items))
     if mimeCheck:
-        console.print("\nmimecheck enabled.\n", style="green")
+        console.print("\nmimecheck enabled.", style="green")
         for item in valid_items:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
                 console.print(f"CAUTION! Automatic Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'", style="yellow")
@@ -102,6 +121,7 @@ def validateListForPDF(items, exclude, mimeCheck):
     else:
         console.print("\nmimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n", style="dark_orange")
 
+    # Remove excluded items if included in the exclude
     valid_items = [i for i in valid_items if i not in exclude]
 
     # List needs to be more than 1 validated pdf to work with merge
@@ -145,13 +165,14 @@ def validateFileName(target_file_path):
     """
     Checks the filetype of the target directory filename.
     this will keep causing a prompt if the filetype doesn't match the correct type or the filename is SUS.
+    Only runs if the user wants to add a custom filename instead of the default.
     """
     filename = getFileBaseName(target_file_path)
     folderpath = getFileDirName(target_file_path)
     while True:
         # if file is not a pdf format
-        if getFileType(filename) != "pdf" or filename == "pdf":
-            print(f"\nInvalid FileType name. Expected 'pdf'. Got {getFileType(filename)}")
+        if not ifFilePDF(filename) or filename == "pdf":
+            print(f"\nInvalid FileType name. Expected 'pdf'. Got {filename.lower().split(".")[-1]}")
             filename = typer.prompt("Enter saving filename: ")
             continue
 
@@ -245,7 +266,7 @@ def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     # folders: Annotated[List[str], typer.]
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging....", rich_help_panel="Additional Options")]=[None],
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging.... You must specify exact file path if you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     confirm: Annotated[bool, typer.Option("--confirm/--no-confirm", "-c/-nc", help="Enable confirmation of Job before execution", rich_help_panel="Feature Behavior")] = True,
@@ -254,9 +275,8 @@ def merge(
 
     # In case the user passes "." as current working directory
     # List will include all files in the current working directory
-    if "." in items:
-        items.extend(os.listdir(workingDir))
-        items.remove(".")
+    # if "." in items: items.extend(os.path.abspath(item) for item in os.listdir(workingDir) if item != ".")
+
 
     if output == "--mimecheck" or output == "-m":
         raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
