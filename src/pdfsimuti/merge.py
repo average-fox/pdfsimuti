@@ -9,6 +9,7 @@ from enum import Enum
 from rich.panel import Panel
 from rich.table import Table
 from rich.console import Console
+from rich import print
 
 console = Console()
 
@@ -37,6 +38,9 @@ def getFileDirName(fileStr):
 
 
 def returnStrPath(folderpath, filename):
+    """
+    Returns absolute path of a file using os.path.join
+    """
     return os.path.join(folderpath, filename)
 
 
@@ -45,21 +49,22 @@ def confirmTask(itemsList, outputFileName, preserve_files, sort):
     Overview of the entire task before the start of the job
     """
     outputFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
-    table = Table(show_header=False, show_lines=True)
+    table = Table(show_header=False, show_lines=True, highlight=True)
+    # Nothing special here
     ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{getFileBaseName(item)}[/blue] | DIRECTORY: [yellow]{getFileDirName(item)}[/yellow]" for index, item in enumerate(itemsList))}"
 
     # Calculate estimated size of the merge
     fileSize = 0
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
     table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
-    table.add_row("[bold][u]Output file[/u][/bold]:" , f"{getFileBaseName(outputFileName)}")
-    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[link]{outputFileFolder}[/link]")
-    table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort}")
+    table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{getFileBaseName(outputFileName)}[/i]")
+    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[i][link][yellow]{outputFileFolder}[/yellow][/link][/i]")
+    table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} [i]({sort.description()})[/i]")
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
-    console.print(Panel(table, subtitle="[i]OVERVIEW[/i]", border_style="blue", expand=False))
+    console.print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
-    if not preserve_files:
-        console.print("WARNING CAUTION! Preserving of files is OFF. Files will be deleted after merging.", style="underline bold red")
+    # Warn user of immediate deletion if preserve is off
+    if not preserve_files: console.print("ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging!", style="underline bold red")
 
     if not typer.confirm("\nContinue with these settings?"):
         if workingDir != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
@@ -110,7 +115,7 @@ def validateListForPDF(items, exclude, mimeCheck):
     for item in items:
         if item not in valid_items and ifFilePDF(item): valid_items.append(os.path.abspath(item))
         elif os.path.isdir(item):
-            print(f"NOTICE! ADDDING FOLDER: {"<CURRENT DIRECTORY>" if item == "." else item}")
+            console.print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item}[/yellow]")
             # Note: "." is actually an address to the current directory
             valid_items.extend(getPDFfromDirectory(item))
         else: console.print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
@@ -120,10 +125,10 @@ def validateListForPDF(items, exclude, mimeCheck):
     valid_items = [i for i in removeDuplicates(valid_items) if i not in exclude]
 
     if mimeCheck:
-        console.print("\nmimecheck enabled.", style="green")
+        console.print("\nFile mimechecking enabled.", style="green")
         for item in valid_items:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
-                console.print(f"CAUTION! Automatic Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'", style="yellow")
+                console.print(f"CAUTION! Automatic Merge Target Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'", style="yellow")
                 valid_items.remove(item)
     else:
         console.print("\nmimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n", style="dark_orange")
@@ -246,6 +251,17 @@ class SortOrder(str, Enum):
     name = "name"
     name_reverse = "name_reverse"
     modified = "modified"
+
+    def __str__(self):  
+        return self.name.replace("_", " ").capitalize() # Get the name of the class value
+    
+    def description(self):
+        description = {
+            SortOrder.name : "Files are arranged alphabetically",
+            SortOrder.name_reverse : "Files are arranged alphabetically reversed",
+            SortOrder.modified : "Files are arranged based on their modified dates"
+        }
+        return description.get(self, "Error: No descriptions found")
     
 
 def sortList(sort_type, items):
