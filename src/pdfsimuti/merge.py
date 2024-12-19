@@ -72,16 +72,23 @@ def confirmTask(itemsList, outputFileName, preserve_files, sort):
 
     return True
 
+def removeDuplicates(listItems):
+    filteredList = []
+    for item in listItems:
+        if item not in filteredList: filteredList.append(item)
+    return filteredList
 
 def getPDFfromDirectory(directory):
     """
     Gets PDFs from a directory. Only used in the validateListForPDF when the user passes a directory address instead of the filename
     """
-    directory = os.getcwd() if directory == "." else directory
+    directory = os.getcwd() if "." in directory else directory
     pdf_files = []
     for folder_item in os.listdir(directory):
         folder_path = returnStrPath(directory, folder_item)
         if ifFilePDF(folder_path): pdf_files.append(folder_path)
+
+    pdf_files.sort()
     return pdf_files
 
 
@@ -109,8 +116,9 @@ def validateListForPDF(items, exclude, mimeCheck):
         else: console.print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
     # Remove duplicates if the user passes the same value more than once
-    valid_items = list(set(valid_items))
-    print(valid_items)
+    # Also remove excluded items if included in the exclude
+    valid_items = [i for i in removeDuplicates(valid_items) if i not in exclude]
+
     if mimeCheck:
         console.print("\nmimecheck enabled.", style="green")
         for item in valid_items:
@@ -119,9 +127,6 @@ def validateListForPDF(items, exclude, mimeCheck):
                 valid_items.remove(item)
     else:
         console.print("\nmimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n", style="dark_orange")
-
-    # Remove excluded items if included in the exclude
-    valid_items = [i for i in valid_items if i not in exclude]
 
     # List needs to be more than 1 validated pdf to work with merge
     if len(valid_items) <= 1:
