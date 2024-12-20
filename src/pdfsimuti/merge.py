@@ -10,7 +10,6 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-
 app = typer.Typer()
 workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
 
@@ -46,7 +45,7 @@ def displayConfirmTaskView(itemsList, outputFileName, preserve_files, sort):
     """
     Overview of the entire task before the start of the job
     """
-    outputFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
+    savingFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
     table = Table(show_header=False, show_lines=True, highlight=True)
     # Nothing special here
     ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{getFileBaseName(item)}[/blue] | DIRECTORY: [yellow]{getFileDirName(item)}[/yellow]" for index, item in enumerate(itemsList))}"
@@ -56,7 +55,7 @@ def displayConfirmTaskView(itemsList, outputFileName, preserve_files, sort):
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
     table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
     table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{getFileBaseName(outputFileName)}[/i]")
-    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[italic yellow]{outputFileFolder}[italic yellow]")
+    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[italic yellow]{savingFileFolder}[italic yellow]")
     table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} ([i]{"No active sorting" if sort == None else sort.description() }[/i]) ")
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
@@ -66,12 +65,16 @@ def displayConfirmTaskView(itemsList, outputFileName, preserve_files, sort):
 
     if not typer.confirm("\nContinue with these settings?"):
         #BUG: Please taste the below line and modify the behavior if needed
-        if workingDir != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '.' which is the working directory
+        print(workingDir)
+        print(savingFileFolder)
+
+        # If the user crea
+        if not (workingDir == savingFileFolder and os.path.isdir(savingFileFolder)): 
             try:
-                print(f"Deleted temporary directory ({outputFileFolder})....")
-                os.rmdir(outputFileFolder)
+                print(f"Deleted temporary directory ({savingFileFolder})....")
+                os.rmdir(savingFileFolder)
             except Exception as e:
-                print(f"[red]Error deleting temporary directory: {e} \nTarget path:{outputFileFolder}[/red]")
+                print(f"[red]Error deleting temporary directory: {e} \nTarget path:{savingFileFolder}[/red]")
         raise typer.Abort()
 
     return True
@@ -156,7 +159,7 @@ def validateWorkingDirectory(target_file_path):
         if folder_creation_choice:
             os.makedirs(trueFolderPath, exist_ok=True)
         else:
-            print("\nCustom folder path creation aborted. Working directory will be the saving directory.")
+            print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
             trueFolderPath = workingDir
 
     return trueFolderPath
@@ -208,11 +211,8 @@ def validateOutputFileName(target_file_path):
     """
     # if user passes . then the working directory will be folder path
     # Otherwise, saving directory will say "" in displayConfirmTaskView()
-    #BUG: If user passes a custom saving directory such as D:\Repo\Mergeless.pdf then the code sets the working directory as the saving directory
-    folder_path = (
-        workingDir if getFileDirName(target_file_path) == ""
-        else getFileDirName(target_file_path))
     final_filename = ""
+    folder_path = (workingDir if getFileDirName(target_file_path) == "" else getFileDirName(target_file_path))
     while True:
         final_filename = validateFileName(target_file_path)
         working_dir = validateWorkingDirectory(returnStrPath(folder_path, final_filename))
@@ -300,7 +300,7 @@ def merge(
     if validate:
         mergeFileList = validateListForPDF(items, exclude, mimecheck)
         # if output is specified explicitly then it will trigger its validation process
-        outputFileName = validateOutputFileName(output) if (output != "merged.pdf" and os.path.exists(output)) else "merged.pdf"
+        outputFileName = validateOutputFileName(output) if (output != "merged.pdf" and not os.path.exists(output)) else "merged.pdf"
     else:
         mergeFileList, outputFileName = items, "merged.pdf"
 
@@ -309,6 +309,10 @@ def merge(
     if sort: mergeFileList = sortList(sort, mergeFileList)
 
     # conditional confirmation
-    if not (confirm and displayConfirmTaskView(mergeFileList, outputFileName, preserve, sort)):
-        merge_runtime(mergeFileList, outputFileName, preserve)
-
+    # if not (confirm and displayConfirmTaskView(mergeFileList, outputFileName, preserve, sort)):
+    #     merge_runtime(mergeFileList, outputFileName, preserve)
+    # else:
+    if confirm:
+        if displayConfirmTaskView(mergeFileList, outputFileName, preserve, sort):
+            merge_runtime(mergeFileList, outputFileName, preserve)
+    else: merge_runtime(mergeFileList, outputFileName, preserve)
