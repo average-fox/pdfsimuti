@@ -41,7 +41,7 @@ def returnStrPath(folderpath, filename):
     return os.path.join(folderpath, filename)
 
 
-def displayConfirmTaskView(itemsList, outputFileName, preserve_files, sort):
+def confirmTaskJob(itemsList, outputFileName, preserve_files, sort):
     """
     Overview of the entire task before the start of the job
     """
@@ -210,7 +210,7 @@ def validateOutputFileName(target_file_path):
         validated_target_file_path (str): validated/corrected directory str to save the file
     """
     # if user passes . then the working directory will be folder path
-    # Otherwise, saving directory will say "" in displayConfirmTaskView()
+    # Otherwise, saving directory will say "" in confirmTaskJob()
     final_filename = ""
     folder_path = (workingDir if getFileDirName(target_file_path) == "" else getFileDirName(target_file_path))
     while True:
@@ -288,8 +288,7 @@ def merge(
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
-    confirm: Annotated[bool, typer.Option("--confirm/--no-confirm", "-c/-nc", help="Enable confirmation of Job before execution", rich_help_panel="Feature Behavior")] = True,
-    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
+    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
 
     # in case someone is stupid to pass --mimencheck as --output
@@ -299,7 +298,7 @@ def merge(
     # conditional validation
     if validate:
         mergeFileList = validateListForPDF(items, exclude, mimecheck)
-        # if output is specified explicitly then it will trigger its validation process
+        # if outputFileName or filepath is not default then it will trigger its validation process
         outputFileName = validateOutputFileName(output) if (output != "merged.pdf" and not os.path.exists(output)) else "merged.pdf"
     else:
         mergeFileList, outputFileName = items, "merged.pdf"
@@ -309,10 +308,6 @@ def merge(
     if sort: mergeFileList = sortList(sort, mergeFileList)
 
     # conditional confirmation
-    # if not (confirm and displayConfirmTaskView(mergeFileList, outputFileName, preserve, sort)):
-    #     merge_runtime(mergeFileList, outputFileName, preserve)
-    # else:
-    if confirm:
-        if displayConfirmTaskView(mergeFileList, outputFileName, preserve, sort):
-            merge_runtime(mergeFileList, outputFileName, preserve)
-    else: merge_runtime(mergeFileList, outputFileName, preserve)
+    if confirmTaskJob(mergeFileList, outputFileName, preserve, sort):
+        merge_runtime(mergeFileList, outputFileName, preserve)
+
