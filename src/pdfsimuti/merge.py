@@ -8,10 +8,8 @@ from enum import Enum
 
 from rich.panel import Panel
 from rich.table import Table
-from rich.console import Console
 from rich import print
 
-console = Console()
 
 app = typer.Typer()
 workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
@@ -44,7 +42,7 @@ def returnStrPath(folderpath, filename):
     return os.path.join(folderpath, filename)
 
 
-def confirmTask(itemsList, outputFileName, preserve_files, sort):
+def displayConfirmTaskView(itemsList, outputFileName, preserve_files, sort):
     """
     Overview of the entire task before the start of the job
     """
@@ -58,21 +56,22 @@ def confirmTask(itemsList, outputFileName, preserve_files, sort):
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
     table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
     table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{getFileBaseName(outputFileName)}[/i]")
-    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[i][link][yellow]{outputFileFolder}[/yellow][/link][/i]")
-    table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} [i]({sort.description()})[/i]")
+    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[italic yellow]{outputFileFolder}[italic yellow]")
+    table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} ([i]{"No active sorting" if sort == None else sort.description() }[/i]) ")
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
-    console.print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
+    print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
     # Warn user of immediate deletion if preserve is off
-    if not preserve_files: console.print("ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging!", style="underline bold red")
+    if not preserve_files: print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
 
     if not typer.confirm("\nContinue with these settings?"):
-        if workingDir != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '' which is the working directory
+        #BUG: Please taste the below line and modify the behavior if needed
+        if workingDir != outputFileFolder and outputFileFolder != "": # No need to delete a directory over '.' which is the working directory
             try:
                 print(f"Deleted temporary directory ({outputFileFolder})....")
                 os.rmdir(outputFileFolder)
             except Exception as e:
-                console.print(f"Error deleting temporary directory: {e} \nTarget path: [link]{outputFileFolder}[/link]", style="red")
+                print(f"[red]Error deleting temporary directory: {e} \nTarget path:{outputFileFolder}[/red]")
         raise typer.Abort()
 
     return True
@@ -115,23 +114,23 @@ def validateListForPDF(items, exclude, mimeCheck):
     for item in items:
         if item not in valid_items and ifFilePDF(item): valid_items.append(os.path.abspath(item))
         elif os.path.isdir(item):
-            console.print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item}[/yellow]")
+            print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item}[/yellow]")
             # Note: "." is actually an address to the current directory
             valid_items.extend(getPDFfromDirectory(item))
-        else: console.print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
+        else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
     # Remove duplicates if the user passes the same value more than once
     # Also remove excluded items if included in the exclude
     valid_items = [i for i in removeDuplicates(valid_items) if i not in exclude]
 
     if mimeCheck:
-        console.print("\nFile mimechecking enabled.", style="green")
+        print("\n[green]File mimechecking enabled.[/green]")
         for item in valid_items:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
-                console.print(f"CAUTION! Automatic Merge Target Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'", style="yellow")
+                print(f"[yellow]CAUTION! Automatic Merge Target Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
                 valid_items.remove(item)
     else:
-        console.print("\nmimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n", style="dark_orange")
+        print("\n[orange]mimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n[/orange]")
 
     # List needs to be more than 1 validated pdf to work with merge
     if len(valid_items) <= 1:
@@ -157,7 +156,7 @@ def validateWorkingDirectory(target_file_path):
         if folder_creation_choice:
             os.makedirs(trueFolderPath, exist_ok=True)
         else:
-            console.print("\nCustom folder path creation aborted. Working directory will be the saving directory.")
+            print("\nCustom folder path creation aborted. Working directory will be the saving directory.")
             trueFolderPath = workingDir
 
     return trueFolderPath
@@ -208,7 +207,8 @@ def validateOutputFileName(target_file_path):
         validated_target_file_path (str): validated/corrected directory str to save the file
     """
     # if user passes . then the working directory will be folder path
-    # Otherwise, saving directory will say "" in confirmTask()
+    # Otherwise, saving directory will say "" in displayConfirmTaskView()
+    #BUG: If user passes a custom saving directory such as D:\Repo\Mergeless.pdf then the code sets the working directory as the saving directory
     folder_path = (
         workingDir if getFileDirName(target_file_path) == ""
         else getFileDirName(target_file_path))
@@ -222,7 +222,7 @@ def validateOutputFileName(target_file_path):
 
 
 def printSuccessfulMerge(outputFileName):
-    console.print(Panel(f"""
+    print(Panel(f"""
 File name: [i]{getFileBaseName(outputFileName)}[/i]
 Folder: [i]{workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)}[/i]
 """, title="MERGE COMPLETED", border_style="green", expand=False))
@@ -243,9 +243,9 @@ def merge_runtime(input_file_list, outputFileName, preserve_files):
         doc.save(outputFileName)
         printSuccessfulMerge(outputFileName) # Print success
 
-    except Exception as e:  # If output directory specified doesn't exist
-        raise typer.BadParameter(f"Error. \n{e}")
-
+    # If output directory specified doesn't exist
+    except Exception as e:  raise typer.BadParameter(f"Error. \n{e}")
+    except FileNotFoundError: raise typer.BadParameter(f"Error: File not found for merging!!")
 
 class SortOrder(str, Enum):
     name = "name"
@@ -261,7 +261,7 @@ class SortOrder(str, Enum):
             SortOrder.name_reverse : "Files are arranged alphabetically reversed",
             SortOrder.modified : "Files are arranged based on their modified dates"
         }
-        return description.get(self, "Error: No descriptions found")
+        return description.get(self)
     
 
 def sortList(sort_type, items):
@@ -284,7 +284,6 @@ def sortList(sort_type, items):
 
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
-    # folders: Annotated[List[str], typer.]
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
@@ -293,30 +292,23 @@ def merge(
     validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
 
-    # In case the user passes "." as current working directory
-    # List will include all files in the current working directory
-    # if "." in items: items.extend(os.path.abspath(item) for item in os.listdir(workingDir) if item != ".")
-
-
+    # in case someone is stupid to pass --mimencheck as --output
     if output == "--mimecheck" or output == "-m":
         raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
     
     # conditional validation
     if validate:
-        accepted_file_list = validateListForPDF(items, exclude, mimecheck)
+        mergeFileList = validateListForPDF(items, exclude, mimecheck)
         # if output is specified explicitly then it will trigger its validation process
-        validated_output_filename = validateOutputFileName(output) if output != "merged.pdf" or os.path.exists(output) else "merged.pdf"
+        outputFileName = validateOutputFileName(output) if (output != "merged.pdf" and os.path.exists(output)) else "merged.pdf"
     else:
-        accepted_file_list, validated_output_filename = items, "merged.pdf"
+        mergeFileList, outputFileName = items, "merged.pdf"
 
     # If user passes a sort order, update the previous list
     # Needs to happen after validated list
-    if sort: accepted_file_list = sortList(sort, accepted_file_list)
+    if sort: mergeFileList = sortList(sort, mergeFileList)
 
     # conditional confirmation
-    if confirm:
-        if confirmTask(accepted_file_list, validated_output_filename, preserve, sort):
-            merge_runtime(accepted_file_list, validated_output_filename, preserve)
-    else:
-        merge_runtime(accepted_file_list, validated_output_filename, preserve)
+    if not (confirm and displayConfirmTaskView(mergeFileList, outputFileName, preserve, sort)):
+        merge_runtime(mergeFileList, outputFileName, preserve)
 
