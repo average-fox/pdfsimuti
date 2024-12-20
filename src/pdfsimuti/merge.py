@@ -157,6 +157,8 @@ def validateWorkingDirectory(target_file_path):
 
     Returns a validated folder path as str
     """
+    # TODO: One of the best practices of Python is to create the folder right before the start of the merging. This doesn't follow that logic.
+    # TODO: If the new folders are created right before the generateMergePdf() then logic can be better followed. 
     trueFolderPath = getFileDirName(target_file_path)  # in case someone throws a directory of a file
     doesPathExist = os.path.isdir(trueFolderPath)
 
@@ -187,7 +189,6 @@ def validateFileName(target_file_path):
     filename = getFileBaseName(target_file_path)
     folderpath = getFileDirName(target_file_path)
     while True:
-        #TODO: Refactor this codeline below yourself. Reduce it.
         if not hasPdfExtension(filename):
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {filename.lower().split(".")[-1]}")
             filename = typer.prompt("Enter saving filename: ")
@@ -236,12 +237,14 @@ Folder: [i]{workingDir if getFileDirName(outputFileName) == "" else getFileDirNa
 def deleteTemporaryCreatedFolder(savingFileFolder):
     # Allow user to delete their newly-created saving directory
     # Since we created this during process, we can delete it before the program ends
-    if not (workingDir == savingFileFolder): 
+    # The idea is that this directory if created is still empty. We have not transferrred anything here yet.
+    if not (workingDir == savingFileFolder) and len(os.listdir(savingFileFolder)) == 0: 
         try:
-            print(f"Deleted temporary directory ({savingFileFolder})....")
+            print(f"Deleting temporary directory ({savingFileFolder})....")
             os.rmdir(savingFileFolder)
+            print("Deletion completed.")
         except Exception as e:
-            print(f"[red]Error deleting temporary directory: {e} \nTarget path:{savingFileFolder}[/red]")
+            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {savingFileFolder}[/red]")
 
 
 def displayMergeOverview(itemsList, outputFileName, savingFileFolder, preserveFiles, sort):
@@ -286,6 +289,9 @@ def generateMergedPdfs(itemsList, outputFileName, preserveFiles):
 
 
 def mergeRuntime(itemsList, outputFileName, preserveFiles, sort):
+    """
+    Main runtime
+    """
     savingFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
     print(getFileBaseName(outputFileName))
 
@@ -304,27 +310,25 @@ def merge(
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
-    output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
+    outputPath: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
 
     # in case someone is stupid to pass --mimencheck as --output
-    if output == "--mimecheck" or output == "-m":
+    if outputPath == "--mimecheck" or outputPath == "-m":
         raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
 
     # conditional validation
-    #TODO: The following if/else statemetns are bad! Fix them.
     if validate:
         mergeFileList = validateListForPDF(items, exclude, mimecheck)
         # if outputFileName or filepath is not default then it will trigger its validation process
-        outputFileName = validateOutputFileName(output) if (output != "merged.pdf" and not os.path.exists(output)) else "merged.pdf"
+        outputFileName = validateOutputFileName(outputPath) if outputPath != "merged.pdf" else "merged.pdf"
         
     else:
         mergeFileList, outputFileName = items, "merged.pdf"
 
-    print(outputFileName, output)
 
     # If user passes a sort order, update the previous list
     # Needs to happen after validated list
     if sort: mergeFileList = sortList(sort, mergeFileList)
-    print(output)
+    print(outputPath)
     print(outputFileName)
     mergeRuntime(mergeFileList, outputFileName, preserve, sort)
