@@ -80,17 +80,6 @@ def getFileFullPath(folderpath, filename):
     return os.path.join(folderpath, filename)
 
 
-def removeDuplicates(listItems):
-    """
-    This function removes the duplicates from the list using list comprehension
-    This doesn't use something like list(set()) because that will randomize the list arrangment
-    """
-    filteredList = []
-    for item in listItems:
-        if item not in filteredList: filteredList.append(item)
-    return filteredList
-
-
 def getPDFfromDirectory(directory):
     """
     Gets PDFs from a directory. Only used in the validateListForPDF when the user passes a directory address instead of the filename
@@ -101,7 +90,6 @@ def getPDFfromDirectory(directory):
         folder_path = getFileFullPath(directory, folder_item)
         if hasPdfExtension(folder_path): pdf_files.append(folder_path)
 
-    pdf_files.sort()
     return pdf_files
 
 
@@ -123,14 +111,14 @@ def validateListForPDF(items, exclude, mimeCheck):
     for item in items:
         if item not in validFileItems and hasPdfExtension(item): validFileItems.append(os.path.abspath(item))
         elif os.path.isdir(item):
-            print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item}[/yellow]")
+            print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
             # Note: "." is actually an address to the current directory
             validFileItems.extend(getPDFfromDirectory(item))
         else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
-    # Remove duplicates if the user passes the same value more than once
-    # Also remove excluded items if included in the exclude
-    validFileItems = [i for i in removeDuplicates(validFileItems) if i not in exclude]
+    # Sorts the list previously from set to remove duplicates and checks for exclude to remove. 
+    # [] is for NoneType to allow iteration of list
+    validFileItems = sorted(list(set([i for i in validFileItems or [] if i not in (exclude or [])])))
 
     if mimeCheck:
         print("\n[green]File mimechecking enabled.[/green]")
@@ -251,6 +239,7 @@ def displayMergeOverview(itemsList, outputFileName, savingFileFolder, preserveFi
     """
     Overview of the entire task before the start of the job
     """
+    # TODO: outputFileName and savingFileFolder are often the same. Just use output. Get rid of savingFileFolder and mutate output directory from merge() 
     fileSize = 0
     table = Table(show_header=False, show_lines=True, highlight=True)
     ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{getFileBaseName(item)}[/blue] | DIRECTORY: [yellow]{getFileDirName(item)}[/yellow]" for index, item in enumerate(itemsList))}"
@@ -293,7 +282,6 @@ def mergeRuntime(itemsList, outputFileName, preserveFiles, sort):
     Main runtime
     """
     savingFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
-    print(getFileBaseName(outputFileName))
 
     displayMergeOverview(itemsList, outputFileName, savingFileFolder ,preserveFiles, sort)
     if typer.confirm("\nContinue with these settings?"): 
@@ -321,14 +309,10 @@ def merge(
         mergeFileList = validateListForPDF(items, exclude, mimecheck)
         # if outputFileName or filepath is not default then it will trigger its validation process
         outputFileName = validateOutputFileName(outputPath) if outputPath != "merged.pdf" else "merged.pdf"
-        
     else:
         mergeFileList, outputFileName = items, "merged.pdf"
-
 
     # If user passes a sort order, update the previous list
     # Needs to happen after validated list
     if sort: mergeFileList = sortList(sort, mergeFileList)
-    print(outputPath)
-    print(outputFileName)
     mergeRuntime(mergeFileList, outputFileName, preserve, sort)
