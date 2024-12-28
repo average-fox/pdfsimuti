@@ -1,5 +1,5 @@
 import typer
-from pdfsimuti import merge, compress
+from pdfsimuti import merge
 
 app = typer.Typer(
     no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich"
@@ -12,7 +12,8 @@ def callback():
     """
 
 
-# See: https://github.com/fastapi/typer/issues/178 
+# See: https://github.com/fastapi/typer/issues/178
+
 app.command(
     short_help="Merges several PDFs into a super PDF",
     help="""
