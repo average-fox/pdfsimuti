@@ -12,7 +12,7 @@ def callback():
     """
 
 
-# why app.command()(app.app)? See: https://github.com/fastapi/typer/issues/178 
+# See: https://github.com/fastapi/typer/issues/178 
 app.command(
     short_help="Merges several PDFs into a super PDF",
     help="""
@@ -22,9 +22,9 @@ app.command(
     """
     )(merge.merge)
 
-app.command(
-    epilog="""
-    Inspiration taken from [link=https://github.com/theeko74/pdfc]pdfc by theeko[/link]\n
-    Be sure to [yellow]stargraze[/yellow] their repository!""",
-    help="[red][DOESN'T WORK YET][/red] Compression of PDF files",
-    )(compress.compress)
+# app.command(
+#     epilog="""
+#     Inspiration taken from [link=https://github.com/theeko74/pdfc]pdfc by theeko[/link]\n
+#     Be sure to [yellow]stargraze[/yellow] their repository!""",
+#     help="[red][DOESN'T WORK YET][/red] Compression of PDF files",
+#     )(compress.compress)
