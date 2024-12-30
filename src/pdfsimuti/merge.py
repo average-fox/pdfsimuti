@@ -227,27 +227,27 @@ def displaySuccessfulMerge(outputFileName):
     print(Panel(f"""
 File name: [i]{getFileBaseName(outputFileName)}[/i]
 Folder: [i]{workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)}[/i]
-""", title="MERGE COMPLETED", border_style="green", expand=False))
+""", subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
-def deleteTemporaryCreatedFolder(savingFileFolder):
+def deleteTemporaryCreatedFolder(outputSavingDirectory):
     # Allow user to delete their newly-created saving directory
     # Since we created this during process, we can delete it before the program ends
     # The idea is that this directory if created is still empty. We have not transferrred anything here yet.
-    if not (workingDir == savingFileFolder) and len(os.listdir(savingFileFolder)) == 0: 
+    if not (workingDir == outputSavingDirectory) and len(os.listdir(outputSavingDirectory)) == 0: 
         try:
-            print(f"Deleting temporary directory ({savingFileFolder})....")
-            os.rmdir(savingFileFolder)
+            print(f"Deleting temporary directory ({outputSavingDirectory})....")
+            os.rmdir(outputSavingDirectory)
             print("Deletion completed.")
         except Exception as e:
-            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {savingFileFolder}[/red]")
+            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {outputSavingDirectory}[/red]")
 
 
-def displayMergeOverview(itemsList, outputFileName, savingFileFolder, preserveFiles, sort):
+def displayMergeOverview(itemsList, outputPath, preserveFiles, sort):
     """
     Overview of the entire task before the start of the job
     """
-    # TODO: outputFileName and savingFileFolder are often the same. Just use output. Get rid of savingFileFolder and mutate output directory from merge() 
+    # TODO: outputPath and outputSavingDirectory are often the same. Just use outputPath. Get rid of outputSavingDirectory and mutate output directory from merge() 
     fileSize = 0
     table = Table(show_header=False, show_lines=True, highlight=True)
     ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{getFileBaseName(item)}[/blue] | DIRECTORY: [yellow]{getFileDirName(item)}[/yellow]" for index, item in enumerate(itemsList))}"
@@ -255,8 +255,8 @@ def displayMergeOverview(itemsList, outputFileName, savingFileFolder, preserveFi
     # Calculate estimated size of the merge
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
     table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
-    table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{getFileBaseName(outputFileName)}[/i]")
-    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[italic yellow]{savingFileFolder}[italic yellow]")
+    table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{getFileBaseName(outputPath)}[/i]")
+    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[italic yellow]{getFileDirName(outputPath)}[italic yellow]")
     table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} ([i]{"No active sorting" if sort == None else sort.description() }[/i]) ")
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
@@ -265,7 +265,7 @@ def displayMergeOverview(itemsList, outputFileName, savingFileFolder, preserveFi
     if not preserveFiles: print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
 
 
-def generateMergedPdfs(itemsList, outputFileName, preserveFiles):
+def generateMergedPdfs(itemsList, outputFile, preserveFiles):
     """
     This handles the main pdf merging.
     pdf files are accepted from list
@@ -277,24 +277,24 @@ def generateMergedPdfs(itemsList, outputFileName, preserveFiles):
             # Remove files if preserve is removed
             if not preserveFiles:
                 os.remove(file)
-        doc.save(outputFileName)
-        displaySuccessfulMerge(outputFileName) # Print success
+        doc.save(outputFile)
+        displaySuccessfulMerge(outputFile) # Print success
 
     # If output directory specified doesn't exist
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
-def mergeRuntime(itemsList, outputFileName, preserveFiles, sort):
+def mergeRuntime(itemsList, outputPath, preserveFiles, sort):
     """
     Main runtime
     """
-    savingFileFolder = workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)
+    print(outputPath)
+    displayMergeOverview(itemsList, outputPath ,preserveFiles, sort)
 
-    displayMergeOverview(itemsList, outputFileName, savingFileFolder ,preserveFiles, sort)
-    if typer.confirm("\nContinue with these settings?"): 
-        generateMergedPdfs(itemsList, outputFileName, preserveFiles)
+    if typer.confirm("\nContinue with these settings?"):
+        generateMergedPdfs(itemsList, outputPath, preserveFiles)
     else: 
-        deleteTemporaryCreatedFolder(savingFileFolder)
+        deleteTemporaryCreatedFolder(getFileDirName(outputPath))
         raise typer.Abort()
 
 
@@ -310,16 +310,15 @@ def merge(
     # in case someone is stupid to pass --mimencheck as --output
     if outputPath == "--mimecheck" or outputPath == "-m":
         raise PrettyErrorDisplay("--mimecheck mode can't be used with --output. Use --output to specify output file.")
-
+    
     # conditional validation
     if validate:
-        mergeFileList = validateListForPDF(items, exclude, mimecheck)
+        items = validateListForPDF(items, exclude, mimecheck)
         # if outputFileName or filepath is not default then it will trigger its validation process
-        outputFileName = validateOutputFileName(outputPath) if outputPath != "merged.pdf" else "merged.pdf"
-    else:
-        mergeFileList, outputFileName = items, "merged.pdf"
+        outputPath = validateOutputFileName(outputPath) if outputPath != "merged.pdf" else "merged.pdf"
+
 
     # If user passes a sort order, update the previous list
     # Needs to happen after validated list
-    if sort: mergeFileList = sortList(sort, mergeFileList)
-    mergeRuntime(mergeFileList, outputFileName, preserve, sort)
+    if sort: items = sortList(sort, items)
+    mergeRuntime(items, outputPath, preserve, sort)
