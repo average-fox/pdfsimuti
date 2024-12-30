@@ -1,4 +1,5 @@
 import typer
+from click.exceptions import ClickException
 import fitz  # fitz is actually PyMuPDF
 import magic
 import os
@@ -13,6 +14,12 @@ from rich import print
 
 app = typer.Typer()
 workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
+
+
+class PrettyErrorDisplay(ClickException):
+    """
+    Raised when the program does something it wasn't supposed to. Imports from Click.exceptions.ClickException
+    """
 
 
 class SortOrder(str, Enum):
@@ -102,7 +109,7 @@ def validateListForPDF(items, exclude, mimeCheck):
         mimeCheck (bool): Mimecheck of files using bool
 
     Raises:
-        typer.BadParameter: Typer Exception if list has less than 2 PDF files
+        PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files
 
     Returns:
         list: Validated list of PDF files
@@ -120,6 +127,7 @@ def validateListForPDF(items, exclude, mimeCheck):
     # [] is for NoneType to allow iteration of list
     validFileItems = sorted(list(set([i for i in validFileItems or [] if i not in (exclude or [])])))
 
+    # Performs mimechecking of the file. Changes the list
     if mimeCheck:
         print("\n[green]File mimechecking enabled.[/green]")
         for item in validFileItems:
@@ -127,11 +135,11 @@ def validateListForPDF(items, exclude, mimeCheck):
                 print(f"[yellow]CAUTION! Automatic Merge Target Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
                 validFileItems.remove(item)
     else:
-        print("\n[orange]mimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n[/orange]")
+        print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking \n[/orange]")
 
     # List needs to be more than 1 validated pdf to work with merge
     if len(validFileItems) <= 1:
-        raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
+        raise PrettyErrorDisplay(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
 
     return validFileItems
 
@@ -273,8 +281,7 @@ def generateMergedPdfs(itemsList, outputFileName, preserveFiles):
         displaySuccessfulMerge(outputFileName) # Print success
 
     # If output directory specified doesn't exist
-    except Exception as e:  raise typer.BadParameter(f"Error. \n{e}")
-    except FileNotFoundError: raise typer.BadParameter(f"Error: File not found for merging!!")
+    except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
 def mergeRuntime(itemsList, outputFileName, preserveFiles, sort):
@@ -302,7 +309,7 @@ def merge(
 
     # in case someone is stupid to pass --mimencheck as --output
     if outputPath == "--mimecheck" or outputPath == "-m":
-        raise typer.BadParameter("--mimecheck mode can't be used with --output. Use --output to specify output file.")
+        raise PrettyErrorDisplay("--mimecheck mode can't be used with --output. Use --output to specify output file.")
 
     # conditional validation
     if validate:
