@@ -3,29 +3,46 @@ import magic
 import fitz
 import os
 
+from click.exceptions import ClickException
 from typing_extensions import Annotated
 from typing import List
 from rich import print
+from rich.table import Table
+
 
 app = typer.Typer()
 workingDir = os.getcwd()
 
 
-def hasPdfExtension(filename: str):
+class PrettyErrorDisplay(ClickException):
+    """
+    Raised when the program does something it wasn't supposed to.
+     
+    Imports from Click.exceptions.ClickException
+    """
+
+
+def hasPdfExtension(item) -> bool:
     """
     Returns the filetype by checking if it endswith .pdf
+    Doesn't use name.endswith("pdf") because files like file/pdf returns True if used.
+    Will return false if the item is just "pdf" and nothing else
     """
-    return filename.lower().split(".")[-1]
+    return item.lower().split(".")[-1] == "pdf" and item != "pdf"
 
 
-def getFileFullPath(folderpath, filename):
+def getFileFullPath(folderpath, filename) -> str:
     """
     Returns absolute path of a file using os.path.join
     """
     return os.path.join(folderpath, filename)
 
 
-def getPDFfromDirectory(directory):
+def getFilesSize(itemList):
+    return [os.path.getsize(item)/ (1024 * 1024) for item in itemList]
+
+
+def getPDFfromDirectory(directory) -> list:
     """
     Gets PDFs from a directory. Only used in the validateListForPDF when the user passes a directory address instead of the filename
     """
@@ -38,16 +55,16 @@ def getPDFfromDirectory(directory):
     return pdf_files
 
 
-def validateListForPDF(items: list, mimeCheck: bool, exclude: list = None):
+def validateListForPDF(items, mimecheck, exclude = None):
     """List Validation of eligible PDF files
 
     Args:
         items (list): Unchecked list of str as file path
         exclude (list) : List of excluded files that will remove from items
-        mimeCheck (bool): Mimecheck of files using bool
+        mimecheck (bool): mimecheck of files using bool
 
     Raises:
-        typer.BadParameter: Typer Exception if list has less than 2 PDF files
+        PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files
 
     Returns:
         list: Validated list of PDF files
@@ -65,47 +82,68 @@ def validateListForPDF(items: list, mimeCheck: bool, exclude: list = None):
     # Sorts the list previously from set to remove duplicates and checks for exclude to remove. 
     # [] is for NoneType to allow iteration of list
     validFileItems = sorted(list(set([i for i in validFileItems or [] if i not in (exclude or [])])))
-
-    if mimeCheck:
+    # Performs mimechecking of the file. Changes the list
+    if mimecheck:
         print("\n[green]File mimechecking enabled.[/green]")
         for item in validFileItems:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
                 print(f"[yellow]CAUTION! Automatic Merge Target Ignore. [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
                 validFileItems.remove(item)
     else:
-        print("\n[orange]mimecheck not enabled. Fake PDF files cannot be detected. Use '-m' to enable. \n[/orange]")
+        print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking \n[/orange]")
 
     # List needs to be more than 1 validated pdf to work with merge
     if len(validFileItems) <= 1:
-        raise typer.BadParameter(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
+        raise PrettyErrorDisplay(f"Searched over {len(items)} items. Insufficient values for compress")
 
     return validFileItems
 
 
-def confirm(itemPDF) -> bool:
-    pass
+def confirm() -> bool:
+    return typer.confirm("Do you want to continue with this settings?")
 
 
 def compressPdf(itemList: list):
-    for item in itemList:
-        with fitz.open(item) as doc:
-            # temp files created to solve incremental saving issue
-            temp_file = item + ".temp"
-            doc.save(temp_file, garbage=4, deflate=True)
-        os.replace(temp_file, item)
-        
+    try:
+        for item in itemList:
+            with fitz.open(item) as doc:
+                # temp files created to solve incremental saving issue
+                temp_file = item + ".temp"
+                doc.save(temp_file, garbage=4, deflate=True)
+            os.replace(temp_file, item)
+    except Exception as e: raise PrettyErrorDisplay(f"Program failed to run without errors. \n{e}")
 
-def display_after_actions_report(): pass
+
+def display_after_actions_report(infoList):
+    table = Table(show_lines=True, highlight=True)
+    table.add_column("SI")
+    table.add_column("Name")
+    table.add_column("Before")
+    table.add_column("After")
+    # table.add_column("Outcome")
+
+    for index, item in enumerate(infoList, 1):
+        itemName, before, after = item
+        table.add_row(str(index), itemName, str(before), str(after))
+    # table.add_row("Dec 20, 2019", "Star Wars: The Rise of Skywalker", "$952,110,690")
+    print(table)
+    # print(infoList)
 
 
 def compress_runtime(itemList: list):
+    initial_file_size = getFilesSize(itemList)
     compressPdf(itemList)
+    final_file_size = getFilesSize(itemList)
+    final = [(name, initial, final) for name, initial, final in zip(itemList, initial_file_size, final_file_size)]
+    display_after_actions_report(final)
 
 
 def compress(
-        item: Annotated[List[str], typer.Argument(help="PDF files to be compressed")],
-        mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
+    item: Annotated[List[str], typer.Argument(help="PDF files to be compressed")],
+    mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
+    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
+
 ):
-    valid_list = validateListForPDF(item, mimecheck)
-    compress_runtime(valid_list)
+    if validate: item = validateListForPDF(item, mimecheck)
+    compress_runtime(item)
 
