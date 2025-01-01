@@ -8,9 +8,10 @@ from typing_extensions import Annotated
 from typing import List
 from rich import print
 from rich.table import Table
-
+from rich.panel import Panel
 
 app = typer.Typer()
+table = Table()
 workingDir = os.getcwd()
 
 
@@ -55,7 +56,7 @@ def getPDFfromDirectory(directory) -> list:
     return pdf_files
 
 
-def validateListForPDF(items, mimecheck, exclude = None):
+def validateListForPDF(items, mimecheck, exclude) -> list:
     """List Validation of eligible PDF files
 
     Args:
@@ -99,8 +100,22 @@ def validateListForPDF(items, mimecheck, exclude = None):
     return validFileItems
 
 
-def confirm() -> bool:
+def display_overview_confirm(itemList: list) -> bool:
+    print(Panel("\n".join(str(item) for item in itemList), subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
     return typer.confirm("Do you want to continue with this settings?")
+
+
+def displayCompressOutcome(infoList : list):
+    table = Table(show_lines=True, highlight=True)
+    table.add_column("SI")
+    table.add_column("Name")
+    table.add_column("Before")
+    table.add_column("After")
+
+    for index, item in enumerate(infoList, 1):
+        itemName, before, after = item
+        table.add_row(str(index), itemName, str(before), str(after))
+    print(Panel(table, subtitle="Successful Compression", border_style="bright_green", expand=False))
 
 
 def compressPdf(itemList: list):
@@ -114,36 +129,23 @@ def compressPdf(itemList: list):
     except Exception as e: raise PrettyErrorDisplay(f"Program failed to run without errors. \n{e}")
 
 
-def display_after_actions_report(infoList):
-    table = Table(show_lines=True, highlight=True)
-    table.add_column("SI")
-    table.add_column("Name")
-    table.add_column("Before")
-    table.add_column("After")
-    # table.add_column("Outcome")
-
-    for index, item in enumerate(infoList, 1):
-        itemName, before, after = item
-        table.add_row(str(index), itemName, str(before), str(after))
-    # table.add_row("Dec 20, 2019", "Star Wars: The Rise of Skywalker", "$952,110,690")
-    print(table)
-    # print(infoList)
-
-
 def compress_runtime(itemList: list):
+    # 1st Size capture
     initial_file_size = getFilesSize(itemList)
     compressPdf(itemList)
+    # 2nd Size Capture
     final_file_size = getFilesSize(itemList)
+    # Create a list combining itemList, Initial Size & Final Size
     final = [(name, initial, final) for name, initial, final in zip(itemList, initial_file_size, final_file_size)]
-    display_after_actions_report(final)
+    displayCompressOutcome(final)
 
 
 def compress(
     item: Annotated[List[str], typer.Argument(help="PDF files to be compressed")],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
-
 ):
-    if validate: item = validateListForPDF(item, mimecheck)
-    compress_runtime(item)
+    if validate: item = validateListForPDF(item, mimecheck, exclude)
+    if display_overview_confirm(item): compress_runtime(item)
 
