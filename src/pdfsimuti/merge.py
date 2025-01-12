@@ -249,6 +249,7 @@ def validateFileName(target_file_path):
     """
     filename = getFileBaseName(target_file_path)
     folderpath = getFileDirName(target_file_path)
+    print(filename, folderpath)
     while True:
         if not hasPdfExtension(filename):
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {filename.lower().split(".")[-1]}")
@@ -315,8 +316,6 @@ def deleteTemporaryCreatedFolder(outputPath: str):
         PrettyErrorDisplay: If the merge runtime comes to an error.
     """
     outputSavingFolder = getFileDirName(outputPath)
-    print(workingDir == outputSavingFolder)
-    print(outputSavingFolder)
     if not (workingDir == outputSavingFolder) and len(os.listdir(outputSavingFolder)) == 0: 
         try:
             print(f"Deleting temporary directory ({outputSavingFolder})....")
@@ -340,7 +339,6 @@ def displayMergeOverview(itemsList:list, outputPath:str, sort:str):
     ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{getFileBaseName(item)}[/blue] | DIRECTORY: [yellow]{getFileDirName(item)}[/yellow]" for index, item in enumerate(itemsList))}"
 
     # Calculate estimated size of the merge
-    print(outputPath)
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
     table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
     table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{getFileBaseName(outputPath)}[/i]")
@@ -348,7 +346,6 @@ def displayMergeOverview(itemsList:list, outputPath:str, sort:str):
     table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} ([i]{"No active sorting" if sort == None else sort.description() }[/i]) ")
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
-
 
 
 def generateMergedPdfs(itemsList:list, outputFile:str, preserveFiles:bool):
@@ -393,14 +390,18 @@ def mergeRuntime(itemsList:list, output:str, preserveFiles:bool, sort:str):
         # Warn user of immediate deletion if preserve is off
     if not preserveFiles: 
         print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
-    displayMergeOverview(itemsList, output, sort)
 
+    # TODO: You used syntax like workingDir if ... more than 3 times. Find a way to refactor this code.
+    savingFileFolder = workingDir if getFileDirName(output) == "" else getFileDirName(output)
+    outputFilePath = getFileFullPath(savingFileFolder, output)
+
+    displayMergeOverview(itemsList, outputFilePath, sort)
+    
     if typer.confirm("\nContinue with these settings?"):
-        generateMergedPdfs(itemsList, output, preserveFiles)
-        displaySuccessfulMerge(output) # Print success
+        generateMergedPdfs(itemsList, outputFilePath, preserveFiles)
+        displaySuccessfulMerge(outputFilePath) # Print success
     else:
-        deleteTemporaryCreatedFolder(output)
-        raise PrettyErrorDisplay("Program exited without merging.")
+        deleteTemporaryCreatedFolder(outputFilePath)
 
 
 def merge(
