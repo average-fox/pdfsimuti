@@ -23,6 +23,16 @@ class PrettyErrorDisplay(ClickException):
 
 
 class SortOrder(str, Enum):
+    """
+    Contains function that handles the sorting of 
+
+    Args:
+        str : sort type
+        Enum (list): sort type options. Specific to Typer.
+
+    Returns:
+        str: sort type and its description
+    """
     name = "name"
     name_reverse = "name_reverse"
     modified = "modified"
@@ -46,6 +56,9 @@ def sortList(sort_type, items):
     Args:
         sort_type (str): The type of sort to perform.
         items (list): The list of items to sort.
+    
+    Returns:
+        items (list): Sorted List
     """
     # Dictionary-Based Approach
     sort_methods = {
@@ -57,40 +70,73 @@ def sortList(sort_type, items):
     return items
 
 
-def hasPdfExtension(item):
+def hasPdfExtension(item: str) -> bool:
     """
     Returns the filetype by checking if it endswith .pdf
     Doesn't use name.endswith("pdf") because files like file/pdf returns True if used.
     Will return false if the item is just "pdf" and nothing else
+
+    Args:
+        item (str): filePath
+
+    Returns:
+        bool: Are you a PDF format? 
     """
     return item.lower().split(".")[-1] == "pdf" and item != "pdf"
 
 
-def getFileBaseName(fileStr):
+def getFileBaseName(item: str) -> str:
     """
-    Returns the directory basename of the file
+    Returns the basename of a filepath
+
+    Args:
+        item (str): filepath 
+
+    Returns:
+        str: basename of the filepath
     """
-    return os.path.basename(fileStr)
+    return os.path.basename(item)
 
 
-def getFileDirName(fileStr):
+def getFileDirName(item:str) -> str:
     """
     Returns the directory folder path of the file
+
+    Args:
+        item (str): filepath
+
+    Returns:
+        str: folder of the filepath
     """
-    return os.path.dirname(fileStr)
+    return os.path.dirname(item)
 
 
-def getFileFullPath(folderpath, filename):
+def getFileFullPath(folderpath:str, filename:str) -> str:
     """
-    Returns absolute path of a file using os.path.join
+    Returns absolute path of a file by combining folderpath and filename
+
+    Args:
+        folderpath (str): folder name
+        filename (str): file Name
+
+    Returns:
+        str: Full path of a file
     """
     return os.path.join(folderpath, filename)
 
 
-def getPDFfromDirectory(directory):
+def getPDFfromDirectory(directory: str) -> list:
     """
-    Gets PDFs from a directory. Only used in the validateListForPDF when the user passes a directory address instead of the filename
+    Gets PDFs from a directory. 
+    Only used in the validateListForPDF when the user passes a directory address instead of the filename
+
+    Args:
+        directory (str): Directory path
+
+    Returns:
+        list: Pdf files from the list
     """
+
     directory = workingDir if "." in directory else directory
     pdf_files = []
     for folder_item in os.listdir(directory):
@@ -101,7 +147,9 @@ def getPDFfromDirectory(directory):
 
 
 def validateListForPDF(items, exclude, mimeCheck):
-    """List Validation of eligible PDF files
+    """
+    List Validation of eligible PDF files.
+    Takes a list and removes incompatible item from the lists
 
     Args:
         items (list): Unchecked list of str as file path
@@ -120,6 +168,7 @@ def validateListForPDF(items, exclude, mimeCheck):
         elif os.path.isdir(item):
             print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
             # Note: "." is actually an address to the current directory
+            # TODO: check if the program can run if there is a fake pdf in the current directory
             validFileItems.extend(getPDFfromDirectory(item))
         else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
@@ -144,18 +193,21 @@ def validateListForPDF(items, exclude, mimeCheck):
     return validFileItems
 
 
-def validateWorkingDirectory(target_file_path):
+def validateWorkingDirectory(filePath):
     """
     Validation of the folder path
     Checks if a folder path exists.
     If it doesn't, then create a folder for that path. Otherwise, the working script directory will be the saving folder path.
     If the folder path exists then the target folder path will be the saving folder path.
 
-    Returns a validated folder path as str
+    Args:
+        filePath (str): Path of the file
+
+    Returns:
+        str: Validated File folder path
     """
-    # TODO: One of the best practices of Python is to create the folder right before the start of the merging. This doesn't follow that logic.
-    # TODO: If the new folders are created right before the generateMergePdf() then logic can be better followed. 
-    trueFolderPath = getFileDirName(target_file_path)  # in case someone throws a directory of a file
+
+    trueFolderPath = getFileDirName(filePath)  # in case someone throws a directory of a file
     doesPathExist = os.path.isdir(trueFolderPath)
 
     if not doesPathExist:
@@ -169,9 +221,16 @@ def validateWorkingDirectory(target_file_path):
     return trueFolderPath
 
 
-def validateOverWrite(target_dir):
+def validateOverWrite(target_dir:str) -> bool:
     """
-    Prompts y/n as bool to get permission either to overwrite existing file or not
+    Prompts y/n as bool to get permission either to overwrite existing file or not.
+    Uses Typer.confirm
+
+    Args:
+        target_dir (str): filepath of the saving directory
+
+    Returns:
+        bool: Do you want to overwrite or not?
     """
     return typer.confirm(f"\n{getFileBaseName(target_dir)} already exists. Do you want to overwrite this file?")
 
@@ -181,6 +240,12 @@ def validateFileName(target_file_path):
     Checks the filetype of the target directory filename.
     this will keep causing a prompt if the filetype doesn't match the correct type or the filename is SUS.
     Only runs if the user wants to add a custom filename instead of the default.
+
+    Args:
+        target_file_path (_type_): _description_
+
+    Returns:
+        _type_: _description_
     """
     filename = getFileBaseName(target_file_path)
     folderpath = getFileDirName(target_file_path)
@@ -203,7 +268,8 @@ def validateFileName(target_file_path):
 
 
 def validateOutputFileName(target_file_path):
-    """Extensive output file validation checker. Checks for filename first, then folder.
+    """
+    Extensive output file validation checker. Checks for filename first, then folder.
 
     Args:
         target_file_path (str): Directory address of the saving file on system
@@ -212,7 +278,6 @@ def validateOutputFileName(target_file_path):
         validated_target_file_path (str): validated/corrected directory str to save the file
     """
     # if user passes . then the working directory will be folder path
-    # Otherwise, saving directory will say "" in confirmTaskJob()
     outputFileName = ""
     folder_path = (workingDir if getFileDirName(target_file_path) == "" else getFileDirName(target_file_path))
     while True:
@@ -223,36 +288,59 @@ def validateOutputFileName(target_file_path):
     return getFileFullPath(working_dir, outputFileName)
 
 
-def displaySuccessfulMerge(outputFileName):
+def displaySuccessfulMerge(outputPath:str):
+    """
+    Display Successfull merge output. Shows output file location
+
+    Args:
+        outputPath (str) : saving directory of the file
+    """
+
     print(Panel(f"""
-File name: [i]{getFileBaseName(outputFileName)}[/i]
-Folder: [i]{workingDir if getFileDirName(outputFileName) == "" else getFileDirName(outputFileName)}[/i]
+File name: [i]{getFileBaseName(outputPath)}[/i]
+Folder: [i]{workingDir if getFileDirName(outputPath) == "" else getFileDirName(outputPath)}[/i]
 """, subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
-def deleteTemporaryCreatedFolder(outputSavingDirectory):
-    # Allow user to delete their newly-created saving directory
-    # Since we created this during process, we can delete it before the program ends
-    # The idea is that this directory if created is still empty. We have not transferrred anything here yet.
-    if not (workingDir == outputSavingDirectory) and len(os.listdir(outputSavingDirectory)) == 0: 
+def deleteTemporaryCreatedFolder(outputPath: str):
+    """
+    Allow user to delete their newly-created saving directory
+    Since we created this during process, we can delete it before the program ends
+    The idea is that this directory if created is still empty. We have not transferrred anything here yet.
+
+    Args:
+        outputPath (str): Saving folder of the output file
+
+    Raises:
+        PrettyErrorDisplay: If the merge runtime comes to an error.
+    """
+    outputSavingFolder = getFileDirName(outputPath)
+    print(workingDir == outputSavingFolder)
+    print(outputSavingFolder)
+    if not (workingDir == outputSavingFolder) and len(os.listdir(outputSavingFolder)) == 0: 
         try:
-            print(f"Deleting temporary directory ({outputSavingDirectory})....")
-            os.rmdir(outputSavingDirectory)
-            print("Deletion completed.")
+            print(f"Deleting temporary directory ({outputSavingFolder})....")
+            os.rmdir(outputSavingFolder)
         except Exception as e:
-            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {outputSavingDirectory}[/red]")
+            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {outputSavingFolder}[/red]")
 
 
-def displayMergeOverview(itemsList, outputPath, preserveFiles, sort):
+def displayMergeOverview(itemsList:list, outputPath:str, sort:str):
     """
-    Overview of the entire task before the start of the job
+    Overview of the entire task before the start of the job.
+    Uses Panel and Table from Rich.
+
+    Args:
+        itemsList (list): validated list of pdf filenames
+        outputFile (str): output file str
+        sort (str): sorting method of the list items
     """
-    # TODO: outputPath and outputSavingDirectory are often the same. Just use outputPath. Get rid of outputSavingDirectory and mutate output directory from merge() 
     fileSize = 0
     table = Table(show_header=False, show_lines=True, highlight=True)
     ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{getFileBaseName(item)}[/blue] | DIRECTORY: [yellow]{getFileDirName(item)}[/yellow]" for index, item in enumerate(itemsList))}"
 
     # Calculate estimated size of the merge
+    print(outputPath)
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
     table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
     table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{getFileBaseName(outputPath)}[/i]")
@@ -261,14 +349,19 @@ def displayMergeOverview(itemsList, outputPath, preserveFiles, sort):
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
-    # Warn user of immediate deletion if preserve is off
-    if not preserveFiles: print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
 
 
-def generateMergedPdfs(itemsList, outputFile, preserveFiles):
+def generateMergedPdfs(itemsList:list, outputFile:str, preserveFiles:bool):
     """
-    This handles the main pdf merging.
-    pdf files are accepted from list
+    Main engine of the pdf. Uses PyMuPDF to merge files
+
+    Args:
+        itemsList (list): validated list of pdf filenames
+        outputFile (str): output file str
+        preserveFiles (bool): preserving files after completion confirmation
+
+    Raises:
+        PrettyErrorDisplay: Display error if failed to merge
     """
     try:
         doc = fitz.open()
@@ -278,24 +371,36 @@ def generateMergedPdfs(itemsList, outputFile, preserveFiles):
             if not preserveFiles:
                 os.remove(file)
         doc.save(outputFile)
-        displaySuccessfulMerge(outputFile) # Print success
-
+        
     # If output directory specified doesn't exist
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
-def mergeRuntime(itemsList, outputPath, preserveFiles, sort):
+def mergeRuntime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     """
-    Main runtime
+    Runtime of the merge feature
+    Handles the arrangement of functions to handle merge functionality
+
+    Args:
+        itemsList (list): validated List of PDFs to merge
+        output (str): output name of the merged pdf
+        preserveFiles (bool): preserving files after completion confirmation
+        sort (str): sorting method of the list items
+
+    Raises:
+        PrettyErrorDisplay: Exit the runtime after played to confirm runtime
     """
-    print(outputPath)
-    displayMergeOverview(itemsList, outputPath ,preserveFiles, sort)
+        # Warn user of immediate deletion if preserve is off
+    if not preserveFiles: 
+        print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
+    displayMergeOverview(itemsList, output, sort)
 
     if typer.confirm("\nContinue with these settings?"):
-        generateMergedPdfs(itemsList, outputPath, preserveFiles)
-    else: 
-        deleteTemporaryCreatedFolder(getFileDirName(outputPath))
-        raise typer.Abort()
+        generateMergedPdfs(itemsList, output, preserveFiles)
+        displaySuccessfulMerge(output) # Print success
+    else:
+        deleteTemporaryCreatedFolder(output)
+        raise PrettyErrorDisplay("Program exited without merging.")
 
 
 def merge(
@@ -305,20 +410,20 @@ def merge(
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
-    outputPath: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
+    output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
 
     # in case someone is stupid to pass --mimencheck as --output
-    if outputPath == "--mimecheck" or outputPath == "-m":
+    if output == "--mimecheck" or output == "-m":
         raise PrettyErrorDisplay("--mimecheck mode can't be used with --output. Use --output to specify output file.")
     
     # conditional validation
     if validate:
         items = validateListForPDF(items, exclude, mimecheck)
         # if outputFileName or filepath is not default then it will trigger its validation process
-        outputPath = validateOutputFileName(outputPath) if outputPath != "merged.pdf" else "merged.pdf"
+        output = validateOutputFileName(output) if output != "merged.pdf" else "merged.pdf"
 
 
     # If user passes a sort order, update the previous list
     # Needs to happen after validated list
     if sort: items = sortList(sort, items)
-    mergeRuntime(items, outputPath, preserve, sort)
+    mergeRuntime(items, output, preserve, sort)
