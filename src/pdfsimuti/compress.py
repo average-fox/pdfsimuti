@@ -41,7 +41,7 @@ def getFileFullPath(folderpath, filename) -> str:
 
 
 def getFilesSize(itemList):
-    return [os.path.getsize(item)/ (1024 * 1024) for item in itemList]
+    return [round(os.path.getsize(item)/ (1024 * 1024), 2) for item in itemList]
 
 
 def getPDFfromDirectory(directory) -> list:
@@ -105,12 +105,14 @@ def displayCompressOutcome(infoList : list):
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI")
     table.add_column("Name")
-    table.add_column("Before")
-    table.add_column("After")
+    table.add_column("Before (MB)")
+    table.add_column("After (MB)")
+    table.add_column("Compression")
 
     for index, item in enumerate(infoList, 1):
         itemName, before, after = item
-        table.add_row(str(index), itemName, str(before), str(after))
+        compression_calculate = f'{(before - after)/before*100}%' if before > after else f'[red]{(before - after)/before*100}%[/red]'
+        table.add_row(str(index), itemName, str(before), str(after), compression_calculate)
     print(Panel(table, subtitle="Successful Compression", border_style="bright_green", expand=False))
 
 
