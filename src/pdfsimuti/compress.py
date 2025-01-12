@@ -10,6 +10,7 @@ from rich import print
 from rich.table import Table
 from rich.panel import Panel
 
+
 app = typer.Typer()
 table = Table()
 workingDir = os.getcwd()
@@ -92,11 +93,6 @@ def validateListForPDF(items, mimecheck, exclude) -> list:
                 validFileItems.remove(item)
     else:
         print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking \n[/orange]")
-
-    # List needs to be more than 1 validated pdf to work with merge
-    if len(validFileItems) <= 1:
-        raise PrettyErrorDisplay(f"Searched over {len(items)} items. Insufficient values for compress")
-
     return validFileItems
 
 
@@ -148,4 +144,3 @@ def compress(
 ):
     if validate: item = validateListForPDF(item, mimecheck, exclude)
     if display_overview_confirm(item): compress_runtime(item)
-
