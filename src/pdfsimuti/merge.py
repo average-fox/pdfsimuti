@@ -235,21 +235,20 @@ def validateOverWrite(target_dir:str) -> bool:
     return typer.confirm(f"\n{getFileBaseName(target_dir)} already exists. Do you want to overwrite this file?")
 
 
-def validateFileName(target_file_path):
+def validateOutputSavingFilename(target_file_path:str) -> str:
     """
     Checks the filetype of the target directory filename.
     this will keep causing a prompt if the filetype doesn't match the correct type or the filename is SUS.
     Only runs if the user wants to add a custom filename instead of the default.
 
     Args:
-        target_file_path (_type_): _description_
+        target_file_path (str): output file path
 
     Returns:
-        _type_: _description_
+        str_type_: File name of the validated file.
     """
     filename = getFileBaseName(target_file_path)
     folderpath = getFileDirName(target_file_path)
-    print(filename, folderpath)
     while True:
         if not hasPdfExtension(filename):
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {filename.lower().split(".")[-1]}")
@@ -283,7 +282,7 @@ def validateOutputFileName(target_file_path):
     folder_path = (workingDir if getFileDirName(target_file_path) == "" else getFileDirName(target_file_path))
     while True:
         # TODO: Functions are being used once. Try to refactor this.
-        outputFileName = validateFileName(target_file_path)
+        outputFileName = validateOutputSavingFilename(target_file_path)
         working_dir = validateWorkingDirectory(getFileFullPath(folder_path, outputFileName))
         break
 
