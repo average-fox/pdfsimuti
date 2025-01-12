@@ -276,12 +276,13 @@ def validateOutputFileName(target_file_path):
         target_file_path (str): Directory address of the saving file on system
 
     Returns:
-        validated_target_file_path (str): validated/corrected directory str to save the file
+        str: Abstract validated/corrected directory str to save the file
     """
     # if user passes . then the working directory will be folder path
     outputFileName = ""
     folder_path = (workingDir if getFileDirName(target_file_path) == "" else getFileDirName(target_file_path))
     while True:
+        # TODO: Functions are being used once. Try to refactor this.
         outputFileName = validateFileName(target_file_path)
         working_dir = validateWorkingDirectory(getFileFullPath(folder_path, outputFileName))
         break
@@ -421,8 +422,7 @@ def merge(
     if validate:
         items = validateListForPDF(items, exclude, mimecheck)
         # if outputFileName or filepath is not default then it will trigger its validation process
-        output = validateOutputFileName(output) if output != "merged.pdf" else "merged.pdf"
-
+        output = validateOutputFileName(output)
 
     # If user passes a sort order, update the previous list
     # Needs to happen after validated list
