@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pdfsimuti"
-version = "0.1.0"
+version = "0.2.5"
 description = ""
 authors = ["foxtbirdy <foxtbird7@gmail.com>"]
 readme = "README.md"
