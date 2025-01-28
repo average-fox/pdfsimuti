@@ -8,13 +8,13 @@ from rich import print
 from rich.table import Table
 from rich.panel import Panel
 
-from pdfsimuti.setting import *
+from pdfsimuti import setting
 
 app = typer.Typer()
 table = Table()
 
 
-def getFilesSize(itemList):
+def list_file_size(itemList):
     return [round(os.path.getsize(item)/ (1024 * 1024), 2) for item in itemList]
 
 
@@ -46,15 +46,15 @@ def compressPdf(itemList: list):
                 temp_file = item + ".temp"
                 doc.save(temp_file, garbage=4, deflate=True)
             os.replace(temp_file, item)
-    except Exception as e: raise PrettyErrorDisplay(f"Program failed to run without errors. \n{e}")
+    except Exception as e: raise setting.PrettyErrorDisplay(f"Program failed to run without errors. \n{e}")
 
 
 def compress_runtime(itemList: list):
     # 1st Size capture
-    initial_file_size = getFilesSize(itemList)
+    initial_file_size = list_file_size(itemList)
     compressPdf(itemList)
     # 2nd Size Capture
-    final_file_size = getFilesSize(itemList)
+    final_file_size = list_file_size(itemList)
     # Create a list combining itemList, Initial Size & Final Size
     final = [(name, initial, final) for name, initial, final in zip(itemList, initial_file_size, final_file_size)]
     displayCompressOutcome(final)
@@ -66,5 +66,5 @@ def compress(
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
 ):
-    if validate: item = validateListForPDF(item, mimecheck, exclude)
+    if validate: item = setting.validate_pdf_list(item, mimecheck, exclude)
     if display_overview_confirm(item): compress_runtime(item)
