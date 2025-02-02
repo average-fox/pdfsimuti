@@ -23,7 +23,7 @@ def display_overview_confirm(itemList: list) -> bool:
     return typer.confirm("Do you want to continue with this settings?")
 
 
-def displayCompressOutcome(infoList : list):
+def display_compress_outcome(infoList : list):
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI")
     table.add_column("Name")
@@ -38,7 +38,7 @@ def displayCompressOutcome(infoList : list):
     print(Panel(table, subtitle="Successful Compression", border_style="bright_green", expand=False))
 
 
-def compressPdf(itemList: list):
+def compress_pdf(itemList: list):
     try:
         for item in itemList:
             with fitz.open(item) as doc:
@@ -52,12 +52,12 @@ def compressPdf(itemList: list):
 def compress_runtime(itemList: list):
     # 1st Size capture
     initial_file_size = list_file_size(itemList)
-    compressPdf(itemList)
+    compress_pdf(itemList)
     # 2nd Size Capture
     final_file_size = list_file_size(itemList)
     # Create a list combining itemList, Initial Size & Final Size
     final = [(name, initial, final) for name, initial, final in zip(itemList, initial_file_size, final_file_size)]
-    displayCompressOutcome(final)
+    display_compress_outcome(final)
 
 
 def compress(

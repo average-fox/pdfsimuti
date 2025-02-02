@@ -1,5 +1,5 @@
 import typer
-import fitz  # fitz is actually PyMuPDF
+import fitz
 import os
 
 from typing import List  # Needed for getting more than 1 argument in command-line
@@ -10,7 +10,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.setting import *
+from pdfsimuti.setting import get_full_path, has_pdf_extension, validate_pdf_list  # Get common Function
+from pdfsimuti.setting import workingDir           # Get common Variable
+from pdfsimuti.setting import PrettyErrorDisplay   # Get common Class
 app = typer.Typer()
 
 
