@@ -16,6 +16,7 @@ from pdfsimuti.setting import workingDir           # Get common Variable
 from pdfsimuti.setting import PrettyErrorDisplay   # Get common Class
 app = typer.Typer()
 
+create_directory = False
 
 class SortOrder(str, Enum):
     """
@@ -106,12 +107,13 @@ def confirm_file_overwrite(target_dir:str) -> bool:
     return typer.confirm(f"\n{return_filepath_basename(target_dir)} already exists. Do you want to overwrite this file?")
 
 
-def designate_saving_dirname(filePath:str) -> str:
+def designate_saving_dirpath(filePath:str) -> str:
     """
     Designation of the folder path
     Checks if a folder path exists.
     If it doesn't, then create a folder for that path. Otherwise, the working script directory will be the saving folder path.
     Otherwise, the target Path will be the saving dir.
+
 
     Args:
         filePath (str): Path of the file
@@ -121,18 +123,21 @@ def designate_saving_dirname(filePath:str) -> str:
     """
 
     saving_dirname = return_filepath_dirname(filePath)  # in case someone throws a directory of a file
+    global create_directory
 
     # Start custom saving directory if only the saving directory won't be the working directory.
     if not os.path.isdir(saving_dirname):
 
-        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{saving_dirname}' doesn't exist\nDo you wish to create it?")
+        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder [blue]'{saving_dirname}'[/blue] doesn't exist\nDo you wish to create it?", prompt_suffix="\nDo not write reserved str or creation will be aborted!!")
+
         if folder_creation_choice:
             os.makedirs(saving_dirname, exist_ok=True)
+            create_directory = True
         else:
-            print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
+            print("\n[yellow]Custom folder path creation aborted. [/yellow] Working directory will be the saving directory.")
             saving_dirname = workingDir
 
-    return saving_dirname
+    return os.path.abspath(saving_dirname)
 
 
 def designate_saving_filename(target_file_path:str) -> str:
@@ -182,9 +187,11 @@ def designate_saving_filePath(target_file_path:str) -> str:
     folder_path = (workingDir if return_filepath_dirname(target_file_path) == "" else return_filepath_dirname(target_file_path))
     while True:
         outputFileName = designate_saving_filename(target_file_path)
-        working_dir = designate_saving_dirname(get_full_path(folder_path, outputFileName))
+        # TODO: designate_saving_dirpath only needs the dirpath. not the complete filepath.
+        # TODO: Get the full path of working_dir
+        working_dir = designate_saving_dirpath(get_full_path(folder_path, outputFileName))
         break
-
+    
     return get_full_path(working_dir, outputFileName)
 
 
@@ -215,9 +222,7 @@ def delete_temp_dir(folderOutputPath: str):
     Raises:
         PrettyErrorDisplay: If the merge runtime comes to an error.
     """
-    # print(folderOutputPath)
-    # outputSavingFolder = return_filepath_dirname(folderOutputPath)
-    if not (workingDir == folderOutputPath) and len(os.listdir(folderOutputPath)) == 0: 
+    if not (workingDir == folderOutputPath) and len(os.listdir(folderOutputPath)) == 0 and os.path.exists(folderOutputPath) and create_directory: 
         try:
             print(f"Deleting temporary directory [red]({folderOutputPath})[/red]")
             os.rmdir(folderOutputPath)
@@ -232,19 +237,19 @@ def view_merge_overview(itemsList:list, outputPath:str, sort:str):
 
     Args:
         itemsList (list): validated list of pdf filenames
-        outputFile (str): output file str
+        outputPath (str): output file str
         sort (str): sorting method of the list items
     """
     fileSize = 0
     table = Table(show_header=False, show_lines=True, highlight=True)
-    ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{return_filepath_basename(item)}[/blue] | DIRECTORY: [yellow]{return_filepath_dirname(item)}[/yellow]" for index, item in enumerate(itemsList))}"
+    ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{return_filepath_basename(item)}[/blue]\n   DIRECTORY: [yellow]{return_filepath_dirname(item)}[/yellow]" for index, item in enumerate(itemsList))}"
 
     # Calculate estimated size of the merge
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
     table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
     table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
     table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
-    table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} ([i]{"No active sorting" if sort == None else sort.description() }[/i]) ")
+    table.add_row("[bold][u]Sort Order Mode (Optional)[/bold]", f"{sort} ([i]{"No active sorting" if sort == None else sort.description() }[/i]) ")
     table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
@@ -292,16 +297,13 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     if not preserveFiles: 
         print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
 
-    saving_folder = workingDir if return_filepath_dirname(output) == "" else os.path.abspath(return_filepath_dirname(output))
-
-    outputPath = get_full_path(saving_folder, output)
-    view_merge_overview(itemsList, outputPath, sort)
+    view_merge_overview(itemsList, output, sort)
     
     if typer.confirm("\nContinue with current settings"):
-        generate_merged_pdf(itemsList, outputPath, preserveFiles)
-        show_successful_merge_outcome(outputPath) # Print success
+        generate_merged_pdf(itemsList, output, preserveFiles)
+        show_successful_merge_outcome(output) # Print success
     else:
-        delete_temp_dir(saving_folder)
+        delete_temp_dir(return_filepath_dirname(output))
 
 
 def merge(
@@ -317,7 +319,6 @@ def merge(
         raise PrettyErrorDisplay("--mimecheck mode can't be used with --output. Use --output to specify output file.")
     
     items = validate_pdf_list(items, exclude, mimecheck)
-    # if outputFileName or filepath is not default then perform validation of the saving filepath
     output = designate_saving_filePath(output)
 
     # If user passes a sort order, update the previous list
