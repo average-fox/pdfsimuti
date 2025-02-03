@@ -1,6 +1,7 @@
 import typer
 import fitz
 import os
+import re
 
 from typing import List  # Needed for getting more than 1 argument in command-line
 from typing_extensions import Annotated
@@ -105,7 +106,7 @@ def confirm_file_overwrite(target_dir:str) -> bool:
     return typer.confirm(f"\n{return_filepath_basename(target_dir)} already exists. Do you want to overwrite this file?")
 
 
-def designate_saving_dirname(filePath):
+def designate_saving_dirname(filePath:str) -> str:
     """
     Designation of the folder path
     Checks if a folder path exists.
@@ -119,17 +120,19 @@ def designate_saving_dirname(filePath):
         str: Validated File folder path
     """
 
-    saving_dir = return_filepath_dirname(filePath)  # in case someone throws a directory of a file
+    saving_dirname = return_filepath_dirname(filePath)  # in case someone throws a directory of a file
 
-    if not os.path.isdir(saving_dir):
-        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{saving_dir}' doesn't exist\nDo you wish to create it?")
+    # Start custom saving directory if only the saving directory won't be the working directory.
+    if not os.path.isdir(saving_dirname):
+
+        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{saving_dirname}' doesn't exist\nDo you wish to create it?")
         if folder_creation_choice:
-            os.makedirs(saving_dir, exist_ok=True)
+            os.makedirs(saving_dirname, exist_ok=True)
         else:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
-            saving_dir = workingDir
+            saving_dirname = workingDir
 
-    return saving_dir
+    return saving_dirname
 
 
 def designate_saving_filename(target_file_path:str) -> str:
@@ -164,7 +167,7 @@ def designate_saving_filename(target_file_path:str) -> str:
     return return_filepath_basename(filename)  # This function will return basename only. Path dir is not accepted.
 
 
-def designate_saving_filePath(target_file_path):
+def designate_saving_filePath(target_file_path:str) -> str:
     """
     Extensive output file validation checker. Checks for filename first, then folder.
 
@@ -199,7 +202,7 @@ Folder: [i]{workingDir if return_filepath_dirname(outputPath) == "" else return_
 """, subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
-def delete_temp_dir_folder(outputPath: str):
+def delete_temp_dir(folderOutputPath: str):
     """
     Allow user to delete their newly-created saving directory.
     Takes a path and gets the dirname from it.
@@ -207,18 +210,19 @@ def delete_temp_dir_folder(outputPath: str):
     If the dirname isn't the working dir or the dir isn't empty; delete the dir.
 
     Args:
-        outputPath (str): Saving folder of the output file
+        folderOutputPath (str): Saving folder of the output file
 
     Raises:
         PrettyErrorDisplay: If the merge runtime comes to an error.
     """
-    outputSavingFolder = return_filepath_dirname(outputPath)
-    if not (workingDir == outputSavingFolder) and len(os.listdir(outputSavingFolder)) == 0: 
+    # print(folderOutputPath)
+    # outputSavingFolder = return_filepath_dirname(folderOutputPath)
+    if not (workingDir == folderOutputPath) and len(os.listdir(folderOutputPath)) == 0: 
         try:
-            print(f"Deleting temporary directory ({outputSavingFolder})....")
-            os.rmdir(outputSavingFolder)
+            print(f"Deleting temporary directory [red]({folderOutputPath})[/red]")
+            os.rmdir(folderOutputPath)
         except Exception as e:
-            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {outputSavingFolder}[/red]")
+            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {folderOutputPath}[/red]")
 
 
 def view_merge_overview(itemsList:list, outputPath:str, sort:str):
@@ -288,17 +292,16 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     if not preserveFiles: 
         print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
 
-    # TODO: You used syntax like workingDir if ... more than 3 times. Find a way to refactor this code.
-    saving_folder = workingDir if return_filepath_dirname(output) == "" else return_filepath_dirname(output)
-    outputPath = get_full_path(saving_folder, output)
+    saving_folder = workingDir if return_filepath_dirname(output) == "" else os.path.abspath(return_filepath_dirname(output))
 
+    outputPath = get_full_path(saving_folder, output)
     view_merge_overview(itemsList, outputPath, sort)
     
     if typer.confirm("\nContinue with current settings"):
         generate_merged_pdf(itemsList, outputPath, preserveFiles)
         show_successful_merge_outcome(outputPath) # Print success
     else:
-        delete_temp_dir_folder(outputPath)
+        delete_temp_dir(saving_folder)
 
 
 def merge(
@@ -307,18 +310,15 @@ def merge(
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
-    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
 
     # in case someone is stupid to pass --mimencheck as --output
     if output == "--mimecheck" or output == "-m":
         raise PrettyErrorDisplay("--mimecheck mode can't be used with --output. Use --output to specify output file.")
     
-    # conditional validation
-    if validate:
-        items = validate_pdf_list(items, exclude, mimecheck)
-        # if outputFileName or filepath is not default then it will trigger its validation process
-        output = designate_saving_filePath(output)
+    items = validate_pdf_list(items, exclude, mimecheck)
+    # if outputFileName or filepath is not default then perform validation of the saving filepath
+    output = designate_saving_filePath(output)
 
     # If user passes a sort order, update the previous list
     # Needs to happen after validated list
