@@ -107,6 +107,20 @@ def confirm_file_overwrite(target_dir:str) -> bool:
     return typer.confirm(f"\n{return_filepath_basename(target_dir)} already exists. Do you want to overwrite this file?")
 
 
+def has_reserved_char(string: str) -> bool:
+    """
+    Checks a given str for possible reserved str in common OS (Windows, Linux etc.)
+    Uses a regex expression for this
+    Args:
+        string (str) : given str for checking
+
+    Returns:
+        bool: result of checking
+    """
+    return re.search(r'[\"#$|<>:?*/(\)\\\"]', string)
+
+
+
 def designate_saving_dirpath(filePath:str) -> str:
     """
     Designation of the folder path
@@ -116,21 +130,21 @@ def designate_saving_dirpath(filePath:str) -> str:
 
 
     Args:
-        filePath (str): Path of the file
+        filePath (str): Path of the fileas
 
     Returns:
         str: Validated File folder path
     """
-
+    print(filePath)
     saving_dirname = return_filepath_dirname(filePath)  # in case someone throws a directory of a file
     global create_directory
 
     # Start custom saving directory if only the saving directory won't be the working directory.
     if not os.path.isdir(saving_dirname):
 
-        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder [blue]'{saving_dirname}'[/blue] doesn't exist\nDo you wish to create it?", prompt_suffix="\nDo not write reserved str or creation will be aborted!!")
+        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{saving_dirname}' doesn't exist\nDo you wish to create it?", prompt_suffix="\nDo not write reserved str or creation will be aborted!!")
 
-        if folder_creation_choice:
+        if folder_creation_choice and not has_reserved_char:
             os.makedirs(saving_dirname, exist_ok=True)
             create_directory = True
         else:
@@ -168,6 +182,12 @@ def designate_saving_filename(target_file_path:str) -> str:
                 print("Filename cannot be same if overwrite isn't allowed.")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
+
+        elif has_reserved_char(filename):
+            print("Filename has reserved characters. That's not allowed.")
+            filename = typer.prompt("Enter saving filename again: ")
+            continue
+            
         break
     return return_filepath_basename(filename)  # This function will return basename only. Path dir is not accepted.
 
@@ -187,8 +207,6 @@ def designate_saving_filePath(target_file_path:str) -> str:
     folder_path = (workingDir if return_filepath_dirname(target_file_path) == "" else return_filepath_dirname(target_file_path))
     while True:
         outputFileName = designate_saving_filename(target_file_path)
-        # TODO: designate_saving_dirpath only needs the dirpath. not the complete filepath.
-        # TODO: Get the full path of working_dir
         working_dir = designate_saving_dirpath(get_full_path(folder_path, outputFileName))
         break
     
@@ -224,7 +242,7 @@ def delete_temp_dir(folderOutputPath: str):
     """
     if not (workingDir == folderOutputPath) and len(os.listdir(folderOutputPath)) == 0 and os.path.exists(folderOutputPath) and create_directory: 
         try:
-            print(f"Deleting temporary directory [red]({folderOutputPath})[/red]")
+            print(f"Deleted temporary directory [red]({folderOutputPath})[/red]")
             os.rmdir(folderOutputPath)
         except Exception as e:
             print(f"[red]Error deleting temporary directory: {e} \nTarget path: {folderOutputPath}[/red]")
