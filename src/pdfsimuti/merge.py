@@ -135,7 +135,6 @@ def designate_saving_dirpath(filePath:str) -> str:
     Returns:
         str: Validated File folder path
     """
-    print(filePath)
     saving_dirname = return_filepath_dirname(filePath)  # in case someone throws a directory of a file
     global create_directory
 
@@ -143,10 +142,11 @@ def designate_saving_dirpath(filePath:str) -> str:
     if not os.path.isdir(saving_dirname):
 
         folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{saving_dirname}' doesn't exist\nDo you wish to create it?", prompt_suffix="\nDo not write reserved str or creation will be aborted!!")
-
-        if folder_creation_choice and not has_reserved_char:
-            os.makedirs(saving_dirname, exist_ok=True)
-            create_directory = True
+        if folder_creation_choice and has_reserved_char != None:
+            try:
+                os.makedirs(saving_dirname, exist_ok=True)
+                create_directory = True
+            except OSError as e: raise PrettyErrorDisplay(f"Critital error while creating folder\n{e}")
         else:
             print("\n[yellow]Custom folder path creation aborted. [/yellow] Working directory will be the saving directory.")
             saving_dirname = workingDir

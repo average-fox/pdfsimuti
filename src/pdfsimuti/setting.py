@@ -76,7 +76,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
     """
     valid_file_list = []
     for item in items:
-        if item not in valid_file_list and has_pdf_extension(item): valid_file_list.append(os.path.abspath(item))
+        if item not in valid_file_list and has_pdf_extension(item) and os.path.exists(item): valid_file_list.append(os.path.abspath(item))
         elif os.path.isdir(item):
             print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
             # Note: "." is actually an address to the current directory
