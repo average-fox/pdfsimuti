@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.setting import get_full_path, has_pdf_extension, validate_pdf_list  # Get common Function
+from pdfsimuti.setting import get_combined_path, has_pdf_extension, validate_pdf_list  # Get common Function
 from pdfsimuti.setting import workingDir           # Get common Variable
 from pdfsimuti.setting import PrettyErrorDisplay   # Get common Class
 app = typer.Typer()
@@ -174,11 +174,11 @@ def designate_saving_filename(target_file_path:str) -> str:
             filename = typer.prompt("Enter saving filename: ")
             continue
 
-        elif os.path.exists(get_full_path(folderpath, filename)):
+        elif os.path.exists(get_combined_path(folderpath, filename)):
             # if the output already leads to an existing file and then user doesn't want to overwrite so they add another file
             #  and AGAIN make the same mistake like before, prompt them again!
             print(f"\nChanged file name ({filename}) already exists")
-            if not confirm_file_overwrite(get_full_path(folderpath, filename)):
+            if not confirm_file_overwrite(get_combined_path(folderpath, filename)):
                 print("Filename cannot be same if overwrite isn't allowed.")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
@@ -207,10 +207,10 @@ def designate_saving_filePath(target_file_path:str) -> str:
     folder_path = (workingDir if return_filepath_dirname(target_file_path) == "" else return_filepath_dirname(target_file_path))
     while True:
         outputFileName = designate_saving_filename(target_file_path)
-        working_dir = designate_saving_dirpath(get_full_path(folder_path, outputFileName))
+        working_dir = designate_saving_dirpath(get_combined_path(folder_path, outputFileName))
         break
     
-    return get_full_path(working_dir, outputFileName)
+    return get_combined_path(working_dir, outputFileName)
 
 
 def show_successful_merge_outcome(outputPath:str):
