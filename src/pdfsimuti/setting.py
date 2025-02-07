@@ -23,9 +23,10 @@ def has_pdf_extension(item) -> bool:
     return item.lower().split(".")[-1] == "pdf" and item != "pdf"
 
 
-def get_full_path(folderpath:str, filename:str) -> str:
+def get_combined_path(folderpath:str, filename:str) -> str:
     """
-    Returns absolute path of a file by combining folder path and file name
+    Returns combined path of a file by combining folder path and file name.
+    Used to create the filepath str that may also not exist yet.
 
     Args:
         folderpath (str): folder name
@@ -52,13 +53,13 @@ def get_pdf_from_dir(directory: str) -> list:
     directory = workingDir if "." in directory else directory
     pdf_files = []
     for folder_item in os.listdir(directory):
-        folder_path = get_full_path(directory, folder_item)
+        folder_path = get_combined_path(directory, folder_item)
         if has_pdf_extension(folder_path): pdf_files.append(folder_path)
 
     return pdf_files
 
 
-def validate_pdf_list(items, exclude, mimeCheck):
+def validate_pdf_list(items: list, exclude: list, mimeCheck: bool) -> list:
     """
     List Validation of eligible PDF files.
     Takes a list and removes incompatible item from the lists
@@ -75,13 +76,21 @@ def validate_pdf_list(items, exclude, mimeCheck):
         list: Validated list of PDF files
     """
     valid_file_list = []
+    exclude = [os.path.abspath(item) for item in exclude]
+    items = [os.path.abspath(item) for item in items]
+
+    print("\n") # For getting good display output
     for item in items:
-        if item not in valid_file_list and has_pdf_extension(item): valid_file_list.append(os.path.abspath(item))
+        if item not in valid_file_list and has_pdf_extension(item) and os.path.exists(item): 
+            valid_file_list.append(item)
         elif os.path.isdir(item):
             print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
             # Note: "." is actually an address to the current directory
             valid_file_list.extend(get_pdf_from_dir(item))
-        else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
+        else: print(f"[red]CAUTION![/red] FOLDER/FILE not found: [i] [yellow]{item}[/yellow][/i]")
+
+    for item in exclude:
+        if not os.path.exists(item): print(f"[yellow]IGNORED:[/yellow] FILE doesn't exist -> [i][yellow]{item}[/yellow][/i]")
 
     # Sorts the list previously from set to remove duplicates and checks for exclude to remove. 
     # [] is for NoneType to allow iteration of list
@@ -89,10 +98,10 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
     # Performs mimechecking of the file. Changes the list
     if mimeCheck:
-        print("\n[green]File mimechecking enabled.[/green]")
+        print("\n[green]File mimechecking enabled.[/green]\n")
         for item in valid_file_list:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
-                print(f"[yellow]CAUTION! Automatic Merge Target Ignore. \n[bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
+                print(f"[yellow]IGNORED: [bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
                 valid_file_list.remove(item)
     else:
         print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking \n[/orange]")
