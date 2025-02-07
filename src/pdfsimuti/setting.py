@@ -79,6 +79,7 @@ def validate_pdf_list(items: list, exclude: list, mimeCheck: bool) -> list:
     exclude = [os.path.abspath(item) for item in exclude]
     items = [os.path.abspath(item) for item in items]
 
+    print("\n") # For getting good display output
     for item in items:
         if item not in valid_file_list and has_pdf_extension(item) and os.path.exists(item): 
             valid_file_list.append(item)
@@ -86,7 +87,10 @@ def validate_pdf_list(items: list, exclude: list, mimeCheck: bool) -> list:
             print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
             # Note: "." is actually an address to the current directory
             valid_file_list.extend(get_pdf_from_dir(item))
-        else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
+        else: print(f"[red]CAUTION![/red] FOLDER/FILE not found: [i] [yellow]{item}[/yellow][/i]")
+
+    for item in exclude:
+        if not os.path.exists(item): print(f"[yellow]IGNORED:[/yellow] FILE doesn't exist -> [i][yellow]{item}[/yellow][/i]")
 
     # Sorts the list previously from set to remove duplicates and checks for exclude to remove. 
     # [] is for NoneType to allow iteration of list
