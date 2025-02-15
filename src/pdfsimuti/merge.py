@@ -116,20 +116,17 @@ def designate_saving_dirname(filePath):
         filePath (str): Path of the file
 
     Returns:
-        str: Validated File folder path
+        str: Validated File folder path. Path is absolute path.
     """
-
-    saving_dir = return_filepath_dirname(filePath)  # in case someone throws a directory of a file
-
-    if not os.path.isdir(saving_dir):
-        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{saving_dir}' doesn't exist\nDo you wish to create it?")
+    if not os.path.isdir(filePath):
+        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{filePath}' doesn't exist\nDo you wish to create it?")
         if folder_creation_choice:
-            os.makedirs(saving_dir, exist_ok=True)
+            os.makedirs(filePath, exist_ok=True)
         else:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
-            saving_dir = workingDir
+            filePath = workingDir
 
-    return saving_dir
+    return os.path.abspath(filePath)
 
 
 def designate_saving_filename(target_file_path:str) -> str:
@@ -177,13 +174,11 @@ def designate_saving_filePath(target_file_path):
     """
     # if user passes . then the working directory will be folder path
     # Todo: Make outputFileName be incorporated in designate_saving_dirname. Then remove it from codeline.
-    outputFileName = ""
     target_file_basename = return_filepath_basename(target_file_path)
     target_file_dirname = return_filepath_dirname(target_file_path)
-    
-    folder_path = (workingDir if target_file_dirname == "" else target_file_dirname)
+    folder_path = workingDir if target_file_dirname == "" else target_file_dirname
     while True:
-        working_dir = designate_saving_dirname(get_full_path(folder_path, outputFileName))
+        working_dir = designate_saving_dirname(folder_path)
         outputFileName = designate_saving_filename(get_full_path(working_dir, target_file_basename))
         break
 
@@ -220,7 +215,7 @@ def delete_temp_dir_folder(outputPath: str):
     outputSavingFolder = return_filepath_dirname(outputPath)
     if not (workingDir == outputSavingFolder) and len(os.listdir(outputSavingFolder)) == 0: 
         try:
-            print(f"Deleting temporary directory ({outputSavingFolder})....")
+            print(f"Deleting temporary directory [i]({outputSavingFolder})[/i]....")
             os.rmdir(outputSavingFolder)
         except Exception as e:
             print(f"[red]Error deleting temporary directory: {e} \nTarget path: {outputSavingFolder}[/red]")
@@ -293,17 +288,13 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     if not preserveFiles: 
         print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
 
-    # TODO: You used syntax like workingDir if ... more than 3 times. Find a way to refactor this code.
-    saving_folder = workingDir if return_filepath_dirname(output) == "" else return_filepath_dirname(output)
-    outputPath = get_full_path(saving_folder, output)
-
-    view_merge_overview(itemsList, outputPath, sort)
+    view_merge_overview(itemsList, output, sort)
     
     if typer.confirm("\nContinue with current settings"):
-        generate_merged_pdf(itemsList, outputPath, preserveFiles)
-        show_successful_merge_outcome(outputPath) # Print success
+        generate_merged_pdf(itemsList, output, preserveFiles)
+        show_successful_merge_outcome(output) # Print success
     else:
-        delete_temp_dir_folder(outputPath)
+        delete_temp_dir_folder(output)
 
 
 def merge(
