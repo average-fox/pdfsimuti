@@ -142,7 +142,7 @@ def designate_saving_filename(target_file_path:str) -> str:
         target_file_path (str): output file path
 
     Returns:
-        str_type_: File name of the validated file.
+        str: File name of the validated file.
     """
     filename = return_filepath_basename(target_file_path)
     folderpath = return_filepath_dirname(target_file_path)
@@ -152,12 +152,13 @@ def designate_saving_filename(target_file_path:str) -> str:
             filename = typer.prompt("Enter saving filename: ")
             continue
 
-        elif os.path.exists(get_full_path(folderpath, filename)):
-            # if the output already leads to an existing file and then user doesn't want to overwrite so they add another file
-            #  and AGAIN make the same mistake like before, prompt them again!
+        elif os.path.exists(get_full_path(folderpath, filename)): # Takes the updated filename only. Check above
+
+            # if the output already leads to an existing file and then user doesn't want to overwrite so if they add another file
+            #  and AGAIN make the same mistake like before then prompt them again!
             print(f"\nChanged file name ({filename}) already exists")
             if not confirm_file_overwrite(get_full_path(folderpath, filename)):
-                print("Filename cannot be same if overwrite isn't allowed.")
+                print("Filename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
         break
@@ -175,11 +176,15 @@ def designate_saving_filePath(target_file_path):
         str: Abstract validated/corrected directory str to save the file
     """
     # if user passes . then the working directory will be folder path
+    # Todo: Make outputFileName be incorporated in designate_saving_dirname. Then remove it from codeline.
     outputFileName = ""
-    folder_path = (workingDir if return_filepath_dirname(target_file_path) == "" else return_filepath_dirname(target_file_path))
+    target_file_basename = return_filepath_basename(target_file_path)
+    target_file_dirname = return_filepath_dirname(target_file_path)
+    
+    folder_path = (workingDir if target_file_dirname == "" else target_file_dirname)
     while True:
-        outputFileName = designate_saving_filename(target_file_path)
         working_dir = designate_saving_dirname(get_full_path(folder_path, outputFileName))
+        outputFileName = designate_saving_filename(get_full_path(working_dir, target_file_basename))
         break
 
     return get_full_path(working_dir, outputFileName)
