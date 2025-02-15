@@ -83,10 +83,9 @@ def validate_pdf_list(items, exclude, mimeCheck):
             valid_file_list.extend(get_pdf_from_dir(item))
         else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
-    # Sorts the list previously from set to remove duplicates and checks for exclude to remove. 
     # [] is for NoneType to allow iteration of list
-    valid_file_list = sorted(list(set([i for i in valid_file_list or [] if i not in (exclude or [])])))
-
+    valid_file_list = list(dict.fromkeys([i for i in valid_file_list or [] if i not in (exclude or [])]))
+    
     # Performs mimechecking of the file. Changes the list
     if mimeCheck:
         print("\n[green]File mimechecking enabled.[/green]")
