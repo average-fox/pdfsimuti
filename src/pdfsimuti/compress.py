@@ -64,8 +64,7 @@ def compress(
     item: Annotated[List[str], typer.Argument(help="PDF files to be compressed")],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
-    # validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
+    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
 ):
-    # if validate: item = setting.validate_pdf_list(item, mimecheck, exclude)
-    item = setting.validate_pdf_list(item, mimecheck, exclude)
+    if validate: item = setting.validate_pdf_list(item, mimecheck, exclude)
     if display_overview_confirm(item): compress_runtime(item)
