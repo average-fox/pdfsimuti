@@ -91,7 +91,7 @@ def return_filepath_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def confirm_file_overwrite(target_dir:str) -> bool:
+def confirm_file_overwrite() -> bool:
     """
     Prompts y/n as bool to get permission either to overwrite existing file or not.
     Uses Typer.confirm
@@ -102,7 +102,7 @@ def confirm_file_overwrite(target_dir:str) -> bool:
     Returns:
         bool: Do you want to overwrite or not?
     """
-    return typer.confirm(f"\n{return_filepath_basename(target_dir)} already exists. Do you want to overwrite this file?")
+    return typer.confirm("Do you wish to overwrite this file?")
 
 
 def designate_saving_dirname(filePath):
@@ -119,9 +119,11 @@ def designate_saving_dirname(filePath):
         str: Validated File folder path. Path is absolute path.
     """
     if not os.path.isdir(filePath):
-        folder_creation_choice = typer.confirm(f"\nCaution! Saving folder '{filePath}' doesn't exist\nDo you wish to create it?")
+        print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
+        folder_creation_choice = typer.confirm(f"Do you wish to create it?")
         if folder_creation_choice:
             os.makedirs(filePath, exist_ok=True)
+            print(f"[green]Creating new directory: [green]{os.path.abspath(filePath)}")
         else:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
             filePath = workingDir
@@ -153,8 +155,8 @@ def designate_saving_filename(target_file_path:str) -> str:
 
             # if the output already leads to an existing file and then user doesn't want to overwrite so if they add another file
             #  and AGAIN make the same mistake like before then prompt them again!
-            print(f"\nChanged file name ({filename}) already exists")
-            if not confirm_file_overwrite(get_full_path(folderpath, filename)):
+            print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
+            if not confirm_file_overwrite():
                 print("Filename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
@@ -215,13 +217,13 @@ def delete_temp_dir_folder(outputPath: str):
     outputSavingFolder = return_filepath_dirname(outputPath)
     if not (workingDir == outputSavingFolder) and len(os.listdir(outputSavingFolder)) == 0: 
         try:
-            print(f"Deleting temporary directory [i]({outputSavingFolder})[/i]....")
+            print(f"Deleting temporary directory [i]'{outputSavingFolder}'[/i]")
             os.rmdir(outputSavingFolder)
         except Exception as e:
-            print(f"[red]Error deleting temporary directory: {e} \nTarget path: {outputSavingFolder}[/red]")
+            print(f"[red]Error deleting temporary directory: '{e}' \nTarget path: {outputSavingFolder}[/red]")
 
 
-def view_merge_overview(itemsList:list, outputPath:str, sort:str):
+def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, sort:str):
     """
     Overview of the entire task before the start of the job.
     Uses Panel and Table from Rich.
@@ -233,15 +235,16 @@ def view_merge_overview(itemsList:list, outputPath:str, sort:str):
     """
     fileSize = 0
     table = Table(show_header=False, show_lines=True, highlight=True)
-    ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{return_filepath_basename(item)}[/blue] | DIRECTORY: [yellow]{return_filepath_dirname(item)}[/yellow]" for index, item in enumerate(itemsList))}"
+    ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{return_filepath_basename(item)}[/blue]\n   DIRECTORY: [yellow]{return_filepath_dirname(item)}[/yellow]" for index, item in enumerate(itemsList))}"
 
     # Calculate estimated size of the merge
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
-    table.add_row("[bold][u]Files to be merged[/u][/bold]:\n(as merge order)", ordered_file_list_view)
-    table.add_row("[bold][u]Output file[/u][/bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
-    table.add_row("[bold][u]Saving directory[/u][/bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
-    table.add_row("[bold][u]Sort Order Mode (Optional)", f"{sort} ([i]{"No active sorting" if sort == None else sort.description() }[/i]) ")
-    table.add_row("[bold][u]Estimated Size[/u][/bold]:", f">{fileSize: .2f} MB")
+    table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", ordered_file_list_view)
+    table.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
+    table.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
+    table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"No active sorting" if sort == None else sort.description() })[/i] ")
+    table.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserve_Files else "[red]Preserve OFF![/red] PDF files will be deleted after merging."}[italic bold]")
+    table.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
 
@@ -284,11 +287,7 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     Raises:
         PrettyErrorDisplay: Exit the runtime after played to confirm runtime
     """
-        # Warn user of immediate deletion if preserve is off
-    if not preserveFiles: 
-        print("[underline bold red]ACTIONS CAUTION! Preserving of files is OFF. Original merging files will be deleted after merging![/underline bold red]")
-
-    view_merge_overview(itemsList, output, sort)
+    view_merge_overview(itemsList, output, preserveFiles, sort)
     
     if typer.confirm("\nContinue with current settings"):
         generate_merged_pdf(itemsList, output, preserveFiles)

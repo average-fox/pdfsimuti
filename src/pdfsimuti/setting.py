@@ -88,7 +88,6 @@ def validate_pdf_list(items, exclude, mimeCheck):
     
     # Performs mimechecking of the file. Changes the list
     if mimeCheck:
-        print("\n[green]File mimechecking enabled.[/green]")
         for item in valid_file_list:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
                 print(f"[yellow]CAUTION! Automatic Merge Target Ignore. \n[bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
