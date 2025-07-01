@@ -10,9 +10,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.setting import get_full_path, has_pdf_extension, validate_pdf_list  # Get common Function
-from pdfsimuti.setting import workingDir           # Get common Variable
-from pdfsimuti.setting import PrettyErrorDisplay   # Get common Class
+from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list  # Get common Function
+from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         # Get common Variable
+from pdfsimuti.utils import PrettyErrorDisplay                          # Get common Class
 app = typer.Typer()
 
 
@@ -143,12 +143,14 @@ def designate_saving_filename(target_file_path:str) -> str:
     Returns:
         str: File name of the validated file.
     """
-    filename = return_filepath_basename(target_file_path)
+    # if user gives something like folder/ then the filename will be default or otherwise it will be '' which is bad.
+    filename = DEFAULT_SAVE_PDF_FILENAME if return_filepath_basename(target_file_path) == "" else return_filepath_basename(target_file_path) 
     folderpath = return_filepath_dirname(target_file_path)
+    
     while True:
         if not has_pdf_extension(filename):
             print(f"\nInvalid FileType name. Expected 'pdf'. Got {filename.lower().split(".")[-1]}")
-            filename = typer.prompt("Enter saving filename: ")
+            filename = typer.prompt(f"Enter saving filename (such as {DEFAULT_SAVE_PDF_FILENAME}): ")
             continue
 
         elif os.path.exists(get_full_path(folderpath, filename)): # Takes the updated filename only. Check above
@@ -242,7 +244,7 @@ def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, so
     table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", ordered_file_list_view)
     table.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
     table.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
-    table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"No active sorting" if sort == None else sort.description() })[/i] ")
+    table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
     table.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserve_Files else "[red]Preserve OFF![/red] PDF files will be deleted after merging."}[italic bold]")
     table.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
@@ -303,7 +305,7 @@ def merge(
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
-    output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Can Accept a folder directory as well like folder/filename.pdf", rich_help_panel="Options")]="merged.pdf"):
+    output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_SAVE_PDF_FILENAME):
 
     # in case someone is stupid to pass --mimencheck as --output
     if output == "--mimecheck" or output == "-m":

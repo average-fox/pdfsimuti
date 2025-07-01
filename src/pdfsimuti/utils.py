@@ -3,9 +3,12 @@ import magic
 from rich import print
 
 from click.exceptions import ClickException
+
+### FIXED VARIBLES
 workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
+DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
-
+### SHARED FUNCTIONS
 class PrettyErrorDisplay(ClickException):
     """
     Raised when the program does something it wasn't supposed to.
