@@ -1,5 +1,5 @@
 import os
-import magic
+import importlib
 from rich import print
 
 from click.exceptions import ClickException
@@ -79,7 +79,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
     """
     valid_file_list = []
     for item in items:
-        if item not in valid_file_list and has_pdf_extension(item) and os.path.exists(item): valid_file_list.append(os.path.abspath(item))
+        if item not in valid_file_list and has_pdf_extension(item) and os.path.exists(item): valid_file_list.append(os.path.abspath(item)) # ensures duplicates are not found.
         elif os.path.isdir(item):
             print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
             # Note: "." is actually an address to the current directory
@@ -89,14 +89,15 @@ def validate_pdf_list(items, exclude, mimeCheck):
     # [] is for NoneType to allow iteration of list
     valid_file_list = list(dict.fromkeys([i for i in valid_file_list or [] if i not in (exclude or [])]))
     
-    # Performs mimechecking of the file. Changes the list
+    # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
     if mimeCheck:
+        magic = importlib.import_module('magic')
         for item in valid_file_list:
             if magic.Magic(mime=True).from_file(item) != "application/pdf":
                 print(f"[yellow]CAUTION! Automatic Merge Target Ignore. \n[bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
                 valid_file_list.remove(item)
     else:
-        print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking \n[/orange]")
+        print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
 
     # List needs to be more than 1 validated pdf to work with merge
     if len(valid_file_list) <= 1: 
