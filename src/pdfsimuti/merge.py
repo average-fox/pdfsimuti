@@ -176,8 +176,7 @@ def designate_saving_filePath(target_file_path):
     Returns:
         str: Abstract validated/corrected directory str to save the file
     """
-    # if user passes . then the working directory will be folder path
-    # Todo: Make outputFileName be incorporated in designate_saving_dirname. Then remove it from codeline.
+    # if user passes . then the working directory will be folder path for scanning
     target_file_basename = return_filepath_basename(target_file_path)
     target_file_dirname = return_filepath_dirname(target_file_path)
     folder_path = workingDir if target_file_dirname == "" else target_file_dirname
@@ -279,7 +278,7 @@ def generate_merged_pdf(itemsList:list, outputFile:str, preserveFiles:bool):
 def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     """
     Runtime of the merge feature
-    Handles the arrangement of functions to handle merge functionality
+    Handles the arrangement of functions for merging
 
     Args:
         itemsList (list): validated List of PDFs to merge
@@ -316,10 +315,8 @@ def merge(
     if validate:
         items = validate_pdf_list(items, exclude, mimecheck)
         display_rejected_files()
-        # if outputFileName or filepath is not default then it will trigger its validation process
-        output = designate_saving_filePath(output)
+        output = designate_saving_filePath(output) # if output not default then trigger its validation process
 
-    # If user passes a sort order, update the previous list
-    # Needs to happen after validated list
+    # If user passes a sort order, update the previous list. Will happen after list validation
     if sort: items = sort_list(sort, items)
     merge_runtime(items, output, preserve, sort)

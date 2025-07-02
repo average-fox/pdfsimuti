@@ -63,6 +63,20 @@ def get_pdf_from_dir(directory: str) -> list:
     return pdf_files
 
 
+def mimecheck_update_rejected_file_list(fileList: list):
+    """
+    Mimecheck assisted updater to the rejected file lists.
+
+    Args:
+        fileList (list): PDF filepaths in a list
+    """
+    magic = importlib.import_module('magic')
+    for item in fileList:
+        file_mimecheck_result = magic.Magic(mime=True).from_file(item)
+        if file_mimecheck_result != "application/pdf":
+            rejected_file_list[item] = file_mimecheck_result
+            
+
 def validate_pdf_list(items, exclude, mimeCheck):
     """
     List Validation of eligible PDF files.
@@ -91,11 +105,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
     # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
     if mimeCheck:
-        magic = importlib.import_module('magic')
-        for item in valid_file_list:
-            file_mimecheck_result = magic.Magic(mime=True).from_file(item)
-            if file_mimecheck_result != "application/pdf":
-                rejected_file_list[item] = file_mimecheck_result            
+        mimecheck_update_rejected_file_list(valid_file_list)
     else:
         print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
 
@@ -109,9 +119,10 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
     return valid_file_list
 
-
 def display_rejected_files() -> None:
-    
+    """
+    Display the rejected files to the user in a table manner
+    """
     if len(rejected_file_list) != 0:
         # display rejected files
         print(f"\n[yellow]CAUTION![/yellow] The following files have been ignored")
@@ -124,4 +135,3 @@ def display_rejected_files() -> None:
             table.add_row(str(index+1), filename, f'[red]{filetype}[/red]')
         
         print(table)
-            
