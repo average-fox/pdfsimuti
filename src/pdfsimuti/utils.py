@@ -1,12 +1,14 @@
 import os
 import importlib
 from rich import print
+from rich.table import Table
 
 from click.exceptions import ClickException
 
 ### FIXED VARIBLES
 workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
 DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
+rejected_file_list = {}
 
 ### SHARED FUNCTIONS
 class PrettyErrorDisplay(ClickException):
@@ -78,6 +80,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
         list: Validated list of PDF files
     """
     valid_file_list = []
+    
     for item in items:
         if item not in valid_file_list and has_pdf_extension(item) and os.path.exists(item): valid_file_list.append(os.path.abspath(item)) # ensures duplicates are not found.
         elif os.path.isdir(item):
@@ -86,21 +89,39 @@ def validate_pdf_list(items, exclude, mimeCheck):
             valid_file_list.extend(get_pdf_from_dir(item))
         else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
-    # [] is for NoneType to allow iteration of list
-    valid_file_list = list(dict.fromkeys([i for i in valid_file_list or [] if i not in (exclude or [])]))
-    
     # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
     if mimeCheck:
         magic = importlib.import_module('magic')
         for item in valid_file_list:
-            if magic.Magic(mime=True).from_file(item) != "application/pdf":
-                print(f"[yellow]CAUTION! Automatic Merge Target Ignore. \n[bold red]{item}[/bold red] is not an PDF. Expected: 'application/pdf'. Got: '{magic.from_file(item)}'[/yellow]")
-                valid_file_list.remove(item)
+            file_mimecheck_result = magic.Magic(mime=True).from_file(item)
+            if file_mimecheck_result != "application/pdf":
+                rejected_file_list[item] = file_mimecheck_result            
     else:
         print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
+
+    # [] is for NoneType to allow iteration of list
+    valid_file_list = list(dict.fromkeys([i for i in valid_file_list or [] if i not in ((exclude and rejected_file_list) or [])]))
+    
 
     # List needs to be more than 1 validated pdf to work with merge
     if len(valid_file_list) <= 1: 
         raise PrettyErrorDisplay(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
 
     return valid_file_list
+
+
+def display_rejected_files() -> None:
+    
+    if len(rejected_file_list) != 0:
+        # display rejected files
+        print(f"\n[yellow]CAUTION![/yellow] The following files have been ignored")
+        table = Table(show_lines=True, highlight=True)
+        table.add_column("File No.", justify = "center", no_wrap=True)
+        table.add_column("File Name", justify = "center", no_wrap=True)
+        table.add_column("Received Type\n[i]Instead of 'PDF'[/i]", justify = "center", no_wrap=True)
+        
+        for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
+            table.add_row(str(index+1), filename, f'[red]{filetype}[/red]')
+        
+        print(table)
+            

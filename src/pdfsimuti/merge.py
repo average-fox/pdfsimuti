@@ -10,9 +10,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list  # Get common Function
-from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         # Get common Variable
-from pdfsimuti.utils import PrettyErrorDisplay                          # Get common Class
+from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list, display_rejected_files  
+from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         
+from pdfsimuti.utils import PrettyErrorDisplay                         
 app = typer.Typer()
 
 
@@ -198,8 +198,9 @@ def show_successful_merge_outcome(outputPath:str):
     """
 
     print(Panel(f"""
-File name: [i]{return_filepath_basename(outputPath)}[/i]
+Filename: [i]{return_filepath_basename(outputPath)}[/i]
 Folder: [i]{workingDir if return_filepath_dirname(outputPath) == "" else return_filepath_dirname(outputPath)}[/i]
+Fullpath: [i]{outputPath}[/i]
 """, subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
@@ -314,6 +315,7 @@ def merge(
     # conditional validation
     if validate:
         items = validate_pdf_list(items, exclude, mimecheck)
+        display_rejected_files()
         # if outputFileName or filepath is not default then it will trigger its validation process
         output = designate_saving_filePath(output)
 
