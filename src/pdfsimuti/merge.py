@@ -10,9 +10,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list  # Get common Function
-from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         # Get common Variable
-from pdfsimuti.utils import PrettyErrorDisplay                          # Get common Class
+from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list, display_rejected_files  
+from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         
+from pdfsimuti.utils import PrettyErrorDisplay                         
 app = typer.Typer()
 
 
@@ -176,8 +176,7 @@ def designate_saving_filePath(target_file_path):
     Returns:
         str: Abstract validated/corrected directory str to save the file
     """
-    # if user passes . then the working directory will be folder path
-    # Todo: Make outputFileName be incorporated in designate_saving_dirname. Then remove it from codeline.
+    # if user passes . then the working directory will be folder path for scanning
     target_file_basename = return_filepath_basename(target_file_path)
     target_file_dirname = return_filepath_dirname(target_file_path)
     folder_path = workingDir if target_file_dirname == "" else target_file_dirname
@@ -198,8 +197,9 @@ def show_successful_merge_outcome(outputPath:str):
     """
 
     print(Panel(f"""
-File name: [i]{return_filepath_basename(outputPath)}[/i]
+Filename: [i]{return_filepath_basename(outputPath)}[/i]
 Folder: [i]{workingDir if return_filepath_dirname(outputPath) == "" else return_filepath_dirname(outputPath)}[/i]
+Fullpath: [i]{outputPath}[/i]
 """, subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
@@ -278,7 +278,7 @@ def generate_merged_pdf(itemsList:list, outputFile:str, preserveFiles:bool):
 def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     """
     Runtime of the merge feature
-    Handles the arrangement of functions to handle merge functionality
+    Handles the arrangement of functions for merging
 
     Args:
         itemsList (list): validated List of PDFs to merge
@@ -314,10 +314,9 @@ def merge(
     # conditional validation
     if validate:
         items = validate_pdf_list(items, exclude, mimecheck)
-        # if outputFileName or filepath is not default then it will trigger its validation process
-        output = designate_saving_filePath(output)
+        display_rejected_files()
+        output = designate_saving_filePath(output) # if output not default then trigger its validation process
 
-    # If user passes a sort order, update the previous list
-    # Needs to happen after validated list
+    # If user passes a sort order, update the previous list. Will happen after list validation
     if sort: items = sort_list(sort, items)
     merge_runtime(items, output, preserve, sort)
