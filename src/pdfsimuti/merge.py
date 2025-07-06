@@ -5,6 +5,7 @@ import os
 from typing import List  # Needed for getting more than 1 argument in command-line
 from typing_extensions import Annotated
 from enum import Enum
+from pathlib import Path
 
 from rich.panel import Panel
 from rich.table import Table
@@ -16,8 +17,8 @@ from pdfsimuti.utils import PrettyErrorDisplay
 
                     
 app = typer.Typer()
-create_new_directory = False
 
+# TODO: Optimize the code between output designation + merge_runtime and try to change all os.path with pathlib (check performance comparison first) 
 
 class SortOrder(str, Enum):
     """
@@ -108,12 +109,13 @@ def confirm_file_overwrite() -> bool:
     return typer.confirm("Do you wish to overwrite this file?")
 
 
-def designate_saving_dirname(filePath):
+def designate_saving_dirname(filePath) -> str:
     """
     Designation of the folder path
     Checks if a folder path exists.
-    If it doesn't, then create a folder for that path. Otherwise, the working script directory will be the saving folder path.
-    Otherwise, the target Path will be the saving dir.
+    If it doesn't, then confirm the user of new folder creation.
+    
+    If the user denies that, folder will be the same as given before and be created later on in `merge_runtime()`
 
     Args:
         filePath (str): Path of the file
@@ -124,12 +126,13 @@ def designate_saving_dirname(filePath):
     if not os.path.isdir(filePath):
         print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
         folder_creation_choice = typer.confirm(f"Do you wish to create it?")
-        if folder_creation_choice:
-            create_new_directory = True
-
-        else:
+        if not folder_creation_choice:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
             filePath = workingDir
+            
+        # if you are wondering where the os.makedirs is happening, its not here but rather on the merge_runtime()
+        # if you are to create it here, either overview had to be scrapped or you cannot notify the user of new folder creation 
+        # or you have to use a global variable
 
     return os.path.abspath(filePath)
 
@@ -166,6 +169,7 @@ def designate_saving_filename(target_file_path:str) -> str:
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
         break
+    
     return return_filepath_basename(filename)  # This function will return basename only. Path dir is not accepted.
 
 
@@ -183,10 +187,9 @@ def designate_saving_filePath(target_file_path):
     target_file_basename = return_filepath_basename(target_file_path)
     target_file_dirname = return_filepath_dirname(target_file_path)
     folder_path = workingDir if target_file_dirname == "" else target_file_dirname
-    while True:
-        working_dir = designate_saving_dirname(folder_path)
-        outputFileName = designate_saving_filename(get_full_path(working_dir, target_file_basename))
-        break
+    
+    working_dir = designate_saving_dirname(folder_path)
+    outputFileName = designate_saving_filename(get_full_path(working_dir, target_file_basename))
 
     return get_full_path(working_dir, outputFileName)
 
@@ -204,31 +207,6 @@ Filename: [i]{return_filepath_basename(outputPath)}[/i]
 Folder: [i]{workingDir if return_filepath_dirname(outputPath) == "" else return_filepath_dirname(outputPath)}[/i]
 Fullpath: [i]{outputPath}[/i]
 """, subtitle="MERGE COMPLETED", border_style="green", expand=False))
-
-
-def delete_temp_dir_folder(outputPath: str):
-    """
-    Allow user to delete their newly-created saving directory.
-    Takes a path and gets the dirname from it.
-    
-    If the dirname isn't the working dir or the dir isn't empty; delete the dir.
-
-    Args:
-        outputPath (str): Saving folder of the output file
-
-    Raises:
-        PrettyErrorDisplay: If the merge runtime comes to an error.
-    """
-    try:
-        outputSavingFolder = return_filepath_dirname(outputPath)
-        if not (workingDir == outputSavingFolder) and not len(os.listdir(outputSavingFolder)) == 0: 
-            print(f"Deleting temporary directory [i]'{outputSavingFolder}'[/i]")
-            os.rmdir(outputSavingFolder)
-        elif create_new_directory:
-            print("\n[yellow]Folder created during program not deleted due to folder not being empty.\n[/yellow]")
-    
-    except Exception as e:
-        raise PrettyErrorDisplay(f"Error deleting temporary directory.\n{e}")
 
 
 def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, sort:str):
@@ -295,13 +273,13 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
         sort (str): sorting method of the list items
 
     """
+    output = designate_saving_filePath(output)
     view_merge_overview(itemsList, output, preserveFiles, sort)
     
     if typer.confirm("\nContinue with current settings"):
+        if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
         generate_merged_pdf(itemsList, output, preserveFiles)
         show_successful_merge_outcome(output) # Print success
-    else:
-        delete_temp_dir_folder(output)
 
 
 def merge(
@@ -321,8 +299,8 @@ def merge(
     if validate:
         items = validate_pdf_list(items, exclude, mimecheck)
         display_rejected_files()
-        output = designate_saving_filePath(output) # if output not default then trigger its validation process
 
+    
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort: items = sort_list(sort, items)
     merge_runtime(items, output, preserve, sort)
