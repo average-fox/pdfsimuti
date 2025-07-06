@@ -93,31 +93,31 @@ def validate_pdf_list(items, exclude, mimeCheck):
     Returns:
         list: Validated list of PDF files
     """
-    valid_file_list = []
+    fileList = []
     
     for item in items:
-        if item not in valid_file_list and has_pdf_extension(item) and os.path.exists(item): valid_file_list.append(os.path.abspath(item)) # ensures duplicates are not found.
+        if item not in fileList and has_pdf_extension(item) and os.path.exists(item): fileList.append(os.path.abspath(item)) # ensures duplicates are not found.
         elif os.path.isdir(item):
             print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
             # Note: "." is actually an address to the current directory
-            valid_file_list.extend(get_pdf_from_dir(item))
+            fileList.extend(get_pdf_from_dir(item))
         else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
 
     # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
     if mimeCheck:
-        mimecheck_update_rejected_file_list(valid_file_list)
+        mimecheck_update_rejected_file_list(fileList)
     else:
         print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
 
     # [] is for NoneType to allow iteration of list
-    valid_file_list = list(dict.fromkeys([i for i in valid_file_list or [] if i not in ((exclude and rejected_file_list) or [])]))
+    fileList = list(dict.fromkeys([i for i in fileList or [] if i not in ((exclude and rejected_file_list) or [])]))
     
 
     # List needs to be more than 1 validated pdf to work with merge
-    if len(valid_file_list) <= 1: 
+    if len(fileList) <= 1: 
         raise PrettyErrorDisplay(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
 
-    return valid_file_list
+    return fileList
 
 def display_rejected_files() -> None:
     """
@@ -126,10 +126,10 @@ def display_rejected_files() -> None:
     if len(rejected_file_list) != 0:
         # display rejected files
         print(f"\n[yellow]CAUTION![/yellow] The following files have been ignored")
-        table = Table(show_lines=True, highlight=True)
+        table = Table(show_lines=True, highlight=True, expand=True)
         table.add_column("File No.", justify = "center", no_wrap=True)
         table.add_column("File Name", justify = "center", no_wrap=True)
-        table.add_column("Received Type\n[i]Instead of 'PDF'[/i]", justify = "center", no_wrap=True)
+        table.add_column("Received Type\n[i]Instead of 'application/PDF'[/i]", justify = "center", no_wrap=True)
         
         for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
             table.add_row(str(index+1), filename, f'[red]{filetype}[/red]')

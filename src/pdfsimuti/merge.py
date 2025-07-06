@@ -12,8 +12,11 @@ from rich import print
 
 from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list, display_rejected_files  
 from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         
-from pdfsimuti.utils import PrettyErrorDisplay                         
+from pdfsimuti.utils import PrettyErrorDisplay     
+
+                    
 app = typer.Typer()
+create_new_directory = False
 
 
 class SortOrder(str, Enum):
@@ -122,8 +125,8 @@ def designate_saving_dirname(filePath):
         print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
         folder_creation_choice = typer.confirm(f"Do you wish to create it?")
         if folder_creation_choice:
-            os.makedirs(filePath, exist_ok=True)
-            print(f"[green]Creating new directory: [green]{os.path.abspath(filePath)}")
+            create_new_directory = True
+
         else:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
             filePath = workingDir
@@ -216,13 +219,16 @@ def delete_temp_dir_folder(outputPath: str):
     Raises:
         PrettyErrorDisplay: If the merge runtime comes to an error.
     """
-    outputSavingFolder = return_filepath_dirname(outputPath)
-    if not (workingDir == outputSavingFolder) and len(os.listdir(outputSavingFolder)) == 0: 
-        try:
+    try:
+        outputSavingFolder = return_filepath_dirname(outputPath)
+        if not (workingDir == outputSavingFolder) and not len(os.listdir(outputSavingFolder)) == 0: 
             print(f"Deleting temporary directory [i]'{outputSavingFolder}'[/i]")
             os.rmdir(outputSavingFolder)
-        except Exception as e:
-            print(f"[red]Error deleting temporary directory: '{e}' \nTarget path: {outputSavingFolder}[/red]")
+        elif create_new_directory:
+            print("\n[yellow]Folder created during program not deleted due to folder not being empty.\n[/yellow]")
+    
+    except Exception as e:
+        raise PrettyErrorDisplay(f"Error deleting temporary directory.\n{e}")
 
 
 def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, sort:str):
@@ -236,7 +242,7 @@ def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, so
         sort (str): sorting method of the list items
     """
     fileSize = 0
-    table = Table(show_header=False, show_lines=True, highlight=True)
+    table = Table(show_header=False, show_lines=True, highlight=True, expand=True)
     ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{return_filepath_basename(item)}[/blue]\n   DIRECTORY: [yellow]{return_filepath_dirname(item)}[/yellow]" for index, item in enumerate(itemsList))}"
 
     # Calculate estimated size of the merge
@@ -247,7 +253,9 @@ def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, so
     table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
     table.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserve_Files else "[red]Preserve OFF![/red] PDF files will be deleted after merging."}[italic bold]")
     table.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
-    print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
+    
+    print("\nPlease confirm the job.")
+    print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=True))
 
 
 def generate_merged_pdf(itemsList:list, outputFile:str, preserveFiles:bool):
@@ -286,8 +294,6 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
         preserveFiles (bool): preserving files after completion confirmation
         sort (str): sorting method of the list items
 
-    Raises:
-        PrettyErrorDisplay: Exit the runtime after played to confirm runtime
     """
     view_merge_overview(itemsList, output, preserveFiles, sort)
     
