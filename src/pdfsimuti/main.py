@@ -1,7 +1,9 @@
 import typer
 import importlib.metadata
+
 from typing import Optional
 from typing_extensions import Annotated
+
 from pdfsimuti import merge, compress
 
 app = typer.Typer(
