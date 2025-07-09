@@ -95,20 +95,6 @@ def return_filepath_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def confirm_file_overwrite() -> bool:
-    """
-    Prompts y/n as bool to get permission either to overwrite existing file or not.
-    Uses Typer.confirm
-
-    Args:
-        target_dir (str): filepath of the saving directory
-
-    Returns:
-        bool: Do you want to overwrite or not?
-    """
-    return typer.confirm("Do you wish to overwrite this file?")
-
-
 def designate_saving_dirname(filePath) -> str:
     """
     Designation of the folder path
@@ -164,7 +150,8 @@ def designate_saving_filename(target_file_path:str) -> str:
             # if the output already leads to an existing file and then user doesn't want to overwrite so if they add another file
             #  and AGAIN make the same mistake like before then prompt them again!
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
-            if not confirm_file_overwrite():
+            
+            if not typer.confirm("Do you wish to overwrite this file?"):    
                 print("Filename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
