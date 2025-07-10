@@ -119,6 +119,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
     return fileList
 
+
 def display_rejected_files() -> None:
     """
     Display the rejected files to the user in a table manner

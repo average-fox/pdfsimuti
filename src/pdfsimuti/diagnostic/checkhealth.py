@@ -27,7 +27,7 @@ Used as the main package for merging the files. Also have features to provide si
         """
 Used for checking if the file is actually the file format it claims to be. It checks for their mimecheck type.
 Without this, you cannot do something like the following~
-[code]pdfsimuti merge --no-validate FILE1.pdf FILE2.pdf[/code] 
+[code]pdfsimuti merge --no-mimecheck FILE1.pdf FILE2.pdf[/code] 
         """
     ]
 }
