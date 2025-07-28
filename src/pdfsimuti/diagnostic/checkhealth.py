@@ -10,7 +10,7 @@ from rich.table import Table
 import typer
 from typing_extensions import Annotated
 
-console = Console()
+console = Console(highlight=True)
 
 packages_dict = {
     'pymupdf' : [
@@ -47,28 +47,22 @@ def verbose_level_2():
     for package, item in packages_dict.items():
         table.add_row(package, "[green]Installed[/green]" if item[0] else "[red]Not Found[/red]", str("/n".join(item[0].submodule_search_locations)) if item[0] is not None else "[red]Not found[/red]")
     
-    console.print(Panel(table, title="pdfSimUti checkhealth"))
+    console.print(Panel(table, title="[#00ffef]pdfSimUti checkhealth[/#00ffef]", padding=1))
 
 
 def verbose_level_3():
     for package, item in packages_dict.items():
-        console.rule(f"'{package}' description")
-        console.print(f"""
-[u]Package name[/u]: {package}
-[u]Package version[/u]: {item[1]}
-[u]Package ModuleSpec[/u]: {item[0]}
+        console.print(Panel(f"""
+[u]Package name[/u]: [#00ffef]{package}[/#00ffef]
+[u]Package version[/u]: [bold green]{item[1]}[/bold green]
+[u]Package Origin[/u]: [#a2a2d0]{item[0].origin or None}[/#a2a2d0]
+[u]Package Search[/u]: [#ff9f00]{"".join(item[0].submodule_search_locations)}[/#ff9f00]
 
 [u]Description[/u]: {item[2]}
-""")
+"""),markup=True)
 
-# Option 1: Create an alternate screen using Python Rich library and display the health. Press 'q' to exit
-# Option 2: Just print it on terminal.
-# EXTRA: Verbose levels. Level 1: True/False, Level 2: Origin, Level 3: Everything
-# EXTRA: Do something like 'exists at ....location'
 
-## NOTE: You should do Option 1 because it gives a vibe like Neovim.
-
-def checkhealth(verbose: Annotated[int, typer.Option("--verbose", "-v", count=True, max=3, help="Verbose level")] = 1):
+def checkhealth(verbose: Annotated[int, typer.Option("--verbose", "-v", "-V", count=True, max=3, help="Verbose level")] = 1):
     
     match verbose:
         case 1: verbose_level_1()
