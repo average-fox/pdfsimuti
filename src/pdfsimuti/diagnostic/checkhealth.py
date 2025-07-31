@@ -1,8 +1,12 @@
 import sys
-import textwrap # for not making this a cursed code for outputs.
+import os
+import textwrap # used for triple quote with indent without facing consequences
+import shutil # used for getting ghostscriptapplication PATH variables
+import struct # WINDOWS + ghostScript only. Required to get CPU bit since gswin64c and gswin32c exists
+import subprocess 
 
 import importlib.util
-from importlib.metadata import version
+from importlib.metadata import version # for checking packages versions
 
 from rich.console import Console
 from rich.panel import Panel
@@ -12,7 +16,26 @@ import typer
 from typing_extensions import Annotated
 
 console = Console()
+gs_name = "gs"+"win" if sys.platform == "win32" else ""+"64c" if 8*struct.calcsize("P") == 64 and sys.platform == "win32"  else "32c"
 
+
+def get_gs_detail():
+    gs_name = "gs"
+    if sys.platform == "win32":
+        gs_name+="win"
+        if 8*struct.calcsize("P"): gs_name+="64c" 
+        else: gs_name+="32c"
+        
+    result = subprocess.run([gs_name, '--version'], capture_output=True, text=True)
+    
+    if result.stdout:
+        bin_loc = shutil.which(gs_name)
+        packages_dict["ghostscript"]["version"] = result.stdout.rstrip()
+        packages_dict["ghostscript"]["origin"] = os.path.dirname(bin_loc)
+        packages_dict["ghostscript"]["searchLoc"] = bin_loc
+        packages_dict["ghostscript"]["installed"] = True
+            
+            
 packages_dict = {
     'pymupdf' : {
         "version": None, 
@@ -22,7 +45,6 @@ packages_dict = {
         "description" : """
         Used as the main package for merging the files. Also have features to provide simple compressions.
         """},
-    
     
     'magic' : {
         "version": None, 
@@ -46,28 +68,29 @@ packages_dict = {
         instead of the default compression by "PyMuPDF", complete the setup below~
         
         [b][u]Installation[/u][/b]
-        1. Run 'pip install ghostscript'
-        2. Run 'pip install setuptools'
-        3. ([strong]IMPORTANT[/strong]) Go to [link=https://ghostscript.com/releases/gsdnld.html]gsdnld.html[/link] and download your ghostscript package
-        4. Install your GhostScript package. 
-        5. If you're on Windows, be sure to add your ghostscript package's "bin" directory to your PATH environments.
+        1. Go to [link=https://ghostscript.com/releases/gsdnld.html]gsdnld.html[/link] and download your ghostscript package
+        2. Install your GhostScript package. 
+        3. If you're on Windows, be sure to add your ghostscript package's "bin" directory to your PATH environments.
         
         [b][u]Verification[/u][/b]
-        Traditionally, you cannot do '--version' for this feature. Follow the steps below~
+        1. If you are on windows, run [code]gswin64c[/code] ([i]assuming you're on 64 bit[/i])
+        2. If you are on linux, run [code]gs[/code] 
+        3. If you are on something else, [link=https://github.com/foxtbirdy/PDFsimuti/issues/new]open an issue[/link]
         
-        1. If you have cloned the repo, navigate to [i]pdfSimUti/samples/[/i] and [code]python run gs_sample.py[/code]
-        2. If you have not cloned the repo, go to [link=https://pypi.org/project/ghostscript/]ghostscript's pypi[/link] and test out one of the examples.
-        3. Alternatively, you can copy and run this code from [link=https://gitlab.com/pdftools/python-ghostscript/-/blob/develop/test/test_lowlevel.py?ref_type=heads]python-ghostscript[/link]"""
+        """
         }
     
 }
 
-def update_packages_dict():
+def update_packages_dict(*args):
     for package, item in packages_dict.items():
+        if package not in args:
+            pass
         
         spec = importlib.util.find_spec(package)
         if package == "magic" and spec != None: item["version"] = version('python-magic-bin' if sys.platform == "win32" else 'python-magic')
         # whoever decided magic should have different package names should be hanged.
+        # this code is important because importlib don't understand 'magic' but version do. 
         
         if spec:
             if not item["version"]: item["version"] = version(package)
@@ -106,7 +129,8 @@ def verbose_level_3():
 
 def checkhealth(verbose: Annotated[int, typer.Option("--verbose", "-v", "-V", count=True, max=3, help="Verbose level")] = 1):
     
-    update_packages_dict() # wrote this otherwise the code would have been ugly
+    update_packages_dict('pymupdf', 'magic') # wrote this otherwise the code would have been ugly
+    get_gs_detail()
     match verbose:
         case 1: verbose_level_1()
         case 2: verbose_level_2()
