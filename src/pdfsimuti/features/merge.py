@@ -95,20 +95,6 @@ def return_filepath_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def confirm_file_overwrite() -> bool:
-    """
-    Prompts y/n as bool to get permission either to overwrite existing file or not.
-    Uses Typer.confirm
-
-    Args:
-        target_dir (str): filepath of the saving directory
-
-    Returns:
-        bool: Do you want to overwrite or not?
-    """
-    return typer.confirm("Do you wish to overwrite this file?")
-
-
 def designate_saving_dirname(filePath) -> str:
     """
     Designation of the folder path
@@ -164,7 +150,8 @@ def designate_saving_filename(target_file_path:str) -> str:
             # if the output already leads to an existing file and then user doesn't want to overwrite so if they add another file
             #  and AGAIN make the same mistake like before then prompt them again!
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
-            if not confirm_file_overwrite():
+            
+            if not typer.confirm("Do you wish to overwrite this file?"):    
                 print("Filename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
@@ -288,18 +275,14 @@ def merge(
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
-    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_SAVE_PDF_FILENAME):
 
     # in case someone is stupid to pass --mimencheck as --output
-    if output == "--mimecheck" or output == "-m":
-        raise PrettyErrorDisplay("--mimecheck mode can't be used with --output. Use --output to specify output file.")
+    if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":
+        raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
-    # conditional validation
-    if validate:
-        items = validate_pdf_list(items, exclude, mimecheck)
-        display_rejected_files()
-
+    items = validate_pdf_list(items, exclude, mimecheck)
+    display_rejected_files()
     
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort: items = sort_list(sort, items)
