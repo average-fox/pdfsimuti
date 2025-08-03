@@ -49,6 +49,8 @@ def display_compress_outcome(infoList : list):
     Args:
         infoList (list): list of the PDFs
     """
+    print(infoList)
+    
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI")
     table.add_column("Name")
@@ -63,7 +65,7 @@ def display_compress_outcome(infoList : list):
     print(Panel(table, subtitle="Successful Compression", border_style="bright_green", expand=False))
 
 
-def compress_pdf(itemList: list):
+def compress_pdf_list(itemList: list):
     """
     Compress pdf main function
 
@@ -83,29 +85,47 @@ def compress_pdf(itemList: list):
     except Exception as e: raise PrettyErrorDisplay(f"Program Failed To Run Properly. \n{e}")
 
 
-def compress_runtime(itemList: list):
+def compress_runtime(fileList: list, mimecheck: bool, excludeList):
     """
     Compress runtime
     Captures list file size two times (before, after) for comparison
 
     Args:
-        itemList (list): list of the files
+        fileList (list): list of the files to be compressed (unvalidated)
+        mimecheck: bool enable mimechecking
+        excludeList (list): list of files to be excluded (unvalidated) (don't need validation)
     """
-    # 1st Size capture
-    initial_file_size = list_file_size(itemList)
-    compress_pdf(itemList)
-    # 2nd Size Capture
-    final_file_size = list_file_size(itemList)
-    # Create a list combining itemList, Initial Size & Final Size
-    final = [(name, initial, final) for name, initial, final in zip(itemList, initial_file_size, final_file_size)]
-    display_compress_outcome(final)
+    validated_file_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
+    
+    if display_overview_confirm(validated_file_list):
+        # 1st Size capture
+        initial_file_size = list_file_size(fileList)
+        compress_pdf_list(fileList)
+        # 2nd Size Capture
+        final_file_size = list_file_size(fileList)
+        # Create a list combining PDFitems, Initial Size & Final Size
+        outcomeFileList = [(name, initial, final) for name, initial, final in zip(fileList, initial_file_size, final_file_size)]
+        display_compress_outcome(outcomeFileList)
+    else:
+        print("[red]Job terminated.[/red]")
 
 
 def compress(
-    item: Annotated[List[str], typer.Argument(help="PDF files to be compressed")],
+    filelist: Annotated[List[str], typer.Argument(help="PDF files to be compressed. Can be single or multiple")],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
-    validate: Annotated[bool, typer.Option("--validate/--no-validate", "-v/-nv", help="Enable/Disable validation of PDF files before execution", rich_help_panel="Feature Behavior")] = True,
-):
-    if validate: item = validate_pdf_list(item, mimecheck, exclude)
-    if display_overview_confirm(item): compress_runtime(item)
+    ):    
+    compress_runtime(filelist, mimecheck, exclude)
+
+    
+# TODO: Get rid of validate from compress. Prioritize mimecheck boolean only
+# TODO: tidy up the codebase a bit. it's ancient
+# TODO: do some designings to the compress. be sure to add display_rejected_files from utils.py as well
+# TODO: create flag for compression. PyMuPDf by default, ghostscript or gs as option
+# TODO: use case statement between ghostscript and pymupdf. Both needs to have their own function and is called from compress_runtime. 
+# compress_runtime will handle the passing of the fileList to compression mode
+# TODO: explore new methods on how to 
+# TODO: research preserve-files mode. (for users in case their compression choice gets them fucked up)
+# TODO: preserve-files mode needs to be able to save files as PDFSIMUTI-COMPRESSED_filename.pdf
+# TODO: final code tidying up
+# TODO: get rid of this todo 

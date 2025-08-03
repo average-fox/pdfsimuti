@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list, display_rejected_files  
+from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list  
 from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         
 from pdfsimuti.utils import PrettyErrorDisplay     
 
@@ -282,7 +282,6 @@ def merge(
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
     items = validate_pdf_list(items, exclude, mimecheck)
-    display_rejected_files()
     
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort: items = sort_list(sort, items)

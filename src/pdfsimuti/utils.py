@@ -63,7 +63,7 @@ def get_pdf_from_dir(directory: str) -> list:
     return pdf_files
 
 
-def mimecheck_update_rejected_file_list(fileList: list):
+def validate_fileList_via_mimecheck(fileList: list):
     """
     Mimecheck assisted updater to the rejected file lists.
 
@@ -105,7 +105,8 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
     # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
     if mimeCheck:
-        mimecheck_update_rejected_file_list(fileList)
+        validate_fileList_via_mimecheck(fileList)
+        display_rejected_files()
     else:
         print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
 
