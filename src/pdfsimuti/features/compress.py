@@ -12,10 +12,8 @@ from rich.panel import Panel
 from pdfsimuti.utils import PrettyErrorDisplay, validate_pdf_list
 
 app = typer.Typer()
-table = Table()
 
-
-def list_file_size(itemList : list) -> float:
+def return_fileList_size(itemList : list) -> float:
     """
     Show the file size of the entire list of PDF
 
@@ -25,7 +23,7 @@ def list_file_size(itemList : list) -> float:
     Returns:
         float: total size of the list
     """
-    return [round(os.path.getsize(item)/ (1024 * 1024), 2) for item in itemList]
+    return [round(os.path.getsize(item), 2) for item in itemList]
 
 
 def display_overview_confirm(itemList: list) -> bool:
@@ -38,7 +36,19 @@ def display_overview_confirm(itemList: list) -> bool:
     Returns:
         bool: Confirmation of compressing
     """
-    print(Panel("\n".join(str(item) for item in itemList), subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
+    print("\nThe following files will be compressed.")
+    
+    table = Table(show_lines=True, highlight=True)
+    table.add_column("SI")
+    table.add_column("File Name")
+    table.add_column("File Path (Absolute)", justify="center")
+    table.add_column("Size (KB)")
+    
+    for index, item in enumerate(itemList, 1):
+        table.add_row(str(index), os.path.basename(item), os.path.abspath(item), str(os.path.getsize(item)))
+    
+    
+    print(Panel(table, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
     return typer.confirm("Do you want to continue with this settings?")
 
 
@@ -49,19 +59,18 @@ def display_compress_outcome(infoList : list):
     Args:
         infoList (list): list of the PDFs
     """
-    print(infoList)
-    
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI")
-    table.add_column("Name")
-    table.add_column("Before (MB)")
-    table.add_column("After (MB)")
-    table.add_column("Compression")
+    table.add_column("File Name")
+    table.add_column("File Location")
+    table.add_column("Before (KB)", justify="center")
+    table.add_column("After (KB)", justify="center")
+    table.add_column("Compression", justify="center")
 
     for index, item in enumerate(infoList, 1):
         itemName, before, after = item
-        compression_calculate = f'{(before - after)/before*100}%' if before > after else f'[red]{(before - after)/before*100}%[/red]'
-        table.add_row(str(index), itemName, str(before), str(after), compression_calculate)
+        compression_calculate = round((before - after)/before*100, 2)
+        table.add_row(str(index), itemName, os.path.dirname(itemName), str(before), str(after), f'{compression_calculate}%' if before > after else f'[red]{compression_calculate}%[/red]')
     print(Panel(table, subtitle="Successful Compression", border_style="bright_green", expand=False))
 
 
@@ -98,16 +107,19 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList):
     validated_file_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
     
     if display_overview_confirm(validated_file_list):
+        
         # 1st Size capture
-        initial_file_size = list_file_size(fileList)
-        compress_pdf_list(fileList)
+        initial_file_size = return_fileList_size(validated_file_list)
+        compress_pdf_list(validated_file_list)
+        
         # 2nd Size Capture
-        final_file_size = list_file_size(fileList)
+        final_file_size = return_fileList_size(validated_file_list)
+        
         # Create a list combining PDFitems, Initial Size & Final Size
-        outcomeFileList = [(name, initial, final) for name, initial, final in zip(fileList, initial_file_size, final_file_size)]
+        outcomeFileList = [(name, initial, final) for name, initial, final in zip(validated_file_list, initial_file_size, final_file_size)]
         display_compress_outcome(outcomeFileList)
     else:
-        print("[red]Job terminated.[/red]")
+        print("[red]Aborted[/red]")
 
 
 def compress(
@@ -118,14 +130,16 @@ def compress(
     compress_runtime(filelist, mimecheck, exclude)
 
     
-# TODO: Get rid of validate from compress. Prioritize mimecheck boolean only
-# TODO: tidy up the codebase a bit. it's ancient
-# TODO: do some designings to the compress. be sure to add display_rejected_files from utils.py as well
+# ✅TODO: Get rid of validate from compress. Prioritize mimecheck boolean only
+# ✅TODO: tidy up the codebase a bit. it's ancient
+# ✅TODO: do some designings to the compress. be sure to add display_rejected_files from utils.py as well
 # TODO: create flag for compression. PyMuPDf by default, ghostscript or gs as option
 # TODO: use case statement between ghostscript and pymupdf. Both needs to have their own function and is called from compress_runtime. 
 # compress_runtime will handle the passing of the fileList to compression mode
-# TODO: explore new methods on how to 
+# TODO: explore all features of the ghostscript and pymupdf
 # TODO: research preserve-files mode. (for users in case their compression choice gets them fucked up)
 # TODO: preserve-files mode needs to be able to save files as PDFSIMUTI-COMPRESSED_filename.pdf
+# TODO: revert_files. If compression is performed and the compress results is bigger than filesize, abort and revert to previous file. Requires preserve-Files to work
+# You may delay that to v0.5.0 release
 # TODO: final code tidying up
 # TODO: get rid of this todo 

@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list  
+from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_list, return_filepath_basename, return_filepath_dirname
 from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         
 from pdfsimuti.utils import PrettyErrorDisplay     
 
@@ -68,32 +68,6 @@ def sort_list(sort_type, items):
     return items
 
 
-def return_filepath_basename(item: str) -> str:
-    """
-    Returns the basename of a filepath.
-    Created if the user sends a path outside of the active directory
-
-    Args:
-        item (str): filepath 
-
-    Returns:
-        str: basename of the filepath
-    """
-    return os.path.basename(item)
-
-
-def return_filepath_dirname(item:str) -> str:
-    """
-    Returns the directory folder path of the file
-
-    Args:
-        item (str): filepath
-
-    Returns:
-        str: folder of the filepath
-    """
-    return os.path.dirname(item)
-
 
 def designate_saving_dirname(filePath) -> str:
     """
@@ -145,7 +119,7 @@ def designate_saving_filename(target_file_path:str) -> str:
             filename = typer.prompt(f"Enter saving filename (such as {DEFAULT_SAVE_PDF_FILENAME}): ")
             continue
 
-        elif os.path.exists(get_full_path(folderpath, filename)): # Takes the updated filename only. Check above
+        elif os.path.exists(return_joined_filePath(folderpath, filename)): # Takes the updated filename only. Check above
 
             # if the output already leads to an existing file and then user doesn't want to overwrite so if they add another file
             #  and AGAIN make the same mistake like before then prompt them again!
@@ -176,9 +150,9 @@ def designate_saving_filePath(target_file_path):
     folder_path = workingDir if target_file_dirname == "" else target_file_dirname
     
     working_dir = designate_saving_dirname(folder_path)
-    outputFileName = designate_saving_filename(get_full_path(working_dir, target_file_basename))
+    outputFileName = designate_saving_filename(return_joined_filePath(working_dir, target_file_basename))
 
-    return get_full_path(working_dir, outputFileName)
+    return return_joined_filePath(working_dir, outputFileName)
 
 
 def show_successful_merge_outcome(outputPath:str):

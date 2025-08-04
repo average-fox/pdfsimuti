@@ -33,7 +33,7 @@ def main(version: Annotated[
     pass
 
 
-# why app.command()(app.app)? See: https://github.com/fastapi/typer/issues/178 
+# See: https://github.com/fastapi/typer/issues/178 
 app.command(
     short_help="Merges several PDFs into a super PDF",
     help=f"""
@@ -74,6 +74,7 @@ app.command(
     Inspiration taken from [link=https://github.com/theeko74/pdfc]pdfc by theeko[/link]\n
     Be sure to [yellow]stargraze[/yellow] their repository!""",
     )(compress.compress)
+
 
 app.command(
     help="""

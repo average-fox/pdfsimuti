@@ -1,14 +1,18 @@
 import os
 import importlib
 from rich import print
+from rich.text import Text
 from rich.table import Table
+from rich.panel import Panel
+from rich.traceback import install
 
 from click.exceptions import ClickException
 
-### FIXED VARIBLES
-workingDir = os.getcwd() # use this var on functions that calls os.getcwd() more than once
-DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
+install(show_locals=True)
 rejected_file_list = {}
+workingDir = os.getcwd()
+
+DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
 ### SHARED FUNCTIONS
 class PrettyErrorDisplay(ClickException):
@@ -17,6 +21,50 @@ class PrettyErrorDisplay(ClickException):
      
     Imports from Click.exceptions.ClickException
     """
+    
+    def __init__(self, message):
+        from rich.console import Console
+        super().__init__(Console().render_str(message))
+        
+        
+def return_filepath_basename(item: str) -> str:
+    """
+    Returns the basename of a filepath.
+    Created if the user sends a path outside of the active directory
+
+    Args:
+        item (str): filepath 
+
+    Returns:
+        str: basename of the filepath
+    """
+    return os.path.basename(item)
+
+
+def return_filepath_dirname(item:str) -> str:
+    """
+    Returns the directory folder path of the file
+
+    Args:
+        item (str): filepath
+
+    Returns:
+        str: folder of the filepath
+    """
+    return os.path.dirname(item)
+
+
+def return_absolute_filePath(item:str) -> str:
+    """
+    Returns the absolute filepath of an existant file.
+
+    Args:
+        item (str): name of the file
+
+    Returns:
+        str: absolute path of the file
+    """
+    return os.path.abspath(item)
 
 
 def has_pdf_extension(item) -> bool:
@@ -28,9 +76,10 @@ def has_pdf_extension(item) -> bool:
     return item.lower().split(".")[-1] == "pdf" and item != "pdf"
 
 
-def get_full_path(folderpath:str, filename:str) -> str:
+def return_joined_filePath(folderpath:str, filename:str) -> str:
     """
-    Returns absolute path of a file by combining folder path and file name
+    Returns absolute path of a file by joining folder path and file name.
+    This function is reserved for path that aren't real/exists.
 
     Args:
         folderpath (str): folder name
@@ -57,7 +106,7 @@ def get_pdf_from_dir(directory: str) -> list:
     directory = workingDir if "." in directory else directory
     pdf_files = []
     for folder_item in os.listdir(directory):
-        folder_path = get_full_path(directory, folder_item)
+        folder_path = return_joined_filePath(directory, folder_item)
         if has_pdf_extension(folder_path): pdf_files.append(folder_path)
 
     return pdf_files
@@ -80,7 +129,8 @@ def validate_fileList_via_mimecheck(fileList: list):
 def validate_pdf_list(items, exclude, mimeCheck):
     """
     List Validation of eligible PDF files.
-    Takes a list and removes incompatible item from the lists
+    Takes a list and removes incompatible item from the lists.
+    Scans a directory to determine either it's real or fake.
 
     Args:
         items (list): Unchecked list of str as file path
@@ -95,13 +145,21 @@ def validate_pdf_list(items, exclude, mimeCheck):
     """
     fileList = []
     
+    # start everything from new line
+    print()
+    
     for item in items:
-        if item not in fileList and has_pdf_extension(item) and os.path.exists(item): fileList.append(os.path.abspath(item)) # ensures duplicates are not found.
+        if item not in fileList and has_pdf_extension(item) and os.path.exists(item): 
+            fileList.append(return_absolute_filePath(item)) # ensures duplicates are not found.
         elif os.path.isdir(item):
-            print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else item} [/yellow]")
+            print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else f"[i]{return_absolute_filePath(item)}[/i]"} [/yellow]")
             # Note: "." is actually an address to the current directory
             fileList.extend(get_pdf_from_dir(item))
-        else: print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] {item} [/i]")
+        else: 
+            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_filePath(item)}[/yellow] [/i]")
+        
+    if len(set(fileList)) != len(fileList): 
+        print("\n[yellow]CAUTION![/yellow] Duplicates found and got ignored.")
 
     # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
     if mimeCheck:
@@ -116,7 +174,9 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
     # List needs to be more than 1 validated pdf to work with merge
     if len(fileList) <= 1: 
-        raise PrettyErrorDisplay(f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.")
+        raise PrettyErrorDisplay(
+            f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.\n\n"
+            f"[u]Search Locations[/u]: \n[i]{"\n".join(set([return_absolute_filePath(item) for item in items]))}[/i]")
 
     return fileList
 
@@ -127,13 +187,14 @@ def display_rejected_files() -> None:
     """
     if len(rejected_file_list) != 0:
         # display rejected files
-        print(f"\n[yellow]CAUTION![/yellow] The following files have been ignored")
-        table = Table(show_lines=True, highlight=True, expand=True)
+        print(f"\n[yellow]CAUTION![/yellow] The following files have been ignored due to mimecheck.")
+        table = Table(show_lines=True, highlight=True)
         table.add_column("File No.", justify = "center", no_wrap=True)
         table.add_column("File Name", justify = "center", no_wrap=True)
+        table.add_column("File Path (Absolute)", justify = "center", no_wrap=True)
         table.add_column("Received Type\n[i]Instead of 'application/PDF'[/i]", justify = "center", no_wrap=True)
         
         for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
-            table.add_row(str(index+1), filename, f'[red]{filetype}[/red]')
+            table.add_row(str(index+1), os.path.basename(filename), os.path.abspath(filename), f'[red]{filetype}[/red]')
         
-        print(table)
+        print(Panel(table, subtitle="[red]Ignored files[/red]", expand=False))
