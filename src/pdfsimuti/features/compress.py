@@ -125,7 +125,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList):
 def compress(
     filelist: Annotated[List[str], typer.Argument(help="PDF files to be compressed. Can be single or multiple")],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
+    exclude: Annotated[List[str], typer.Option(help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     ):    
     compress_runtime(filelist, mimecheck, exclude)
 

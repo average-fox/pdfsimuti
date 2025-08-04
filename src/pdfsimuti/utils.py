@@ -169,7 +169,8 @@ def validate_pdf_list(items, exclude, mimeCheck):
         print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
 
     # [] is for NoneType to allow iteration of list
-    fileList = list(dict.fromkeys([i for i in fileList or [] if i not in ((exclude and rejected_file_list) or [])]))
+    excludeList = [return_absolute_filePath(excludeItem) for excludeItem in exclude if excludeItem != None]
+    fileList = list(dict.fromkeys([item for item in fileList or [] if (item not in rejected_file_list or []) and (item not in excludeList)]))
     
 
     # List needs to be more than 1 validated pdf to work with merge
@@ -187,7 +188,7 @@ def display_rejected_files() -> None:
     """
     if len(rejected_file_list) != 0:
         # display rejected files
-        print(f"\n[yellow]CAUTION![/yellow] The following files have been ignored due to mimecheck.")
+        print(f"\n[yellow]CAUTION![/yellow] The following files have been rejected due to mimecheck.")
         table = Table(show_lines=True, highlight=True)
         table.add_column("File No.", justify = "center", no_wrap=True)
         table.add_column("File Name", justify = "center", no_wrap=True)
@@ -197,4 +198,4 @@ def display_rejected_files() -> None:
         for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
             table.add_row(str(index+1), os.path.basename(filename), os.path.abspath(filename), f'[red]{filetype}[/red]')
         
-        print(Panel(table, subtitle="[red]Ignored files[/red]", expand=False))
+        print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
