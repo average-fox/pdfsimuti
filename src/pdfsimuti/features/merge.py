@@ -36,7 +36,7 @@ class SortOrder(str, Enum):
     modified = "modified"
 
     def __str__(self):  
-        return self.name.replace("_", " ").capitalize() # Get the name of the class value
+        return self.name.replace("_", " ").capitalize() # Get the name of the class value for overview
     
     def description(self):
         description = {

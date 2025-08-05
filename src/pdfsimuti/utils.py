@@ -1,14 +1,15 @@
 import os
 import importlib
+import struct # windows os + ghostScript only. Required to get CPU bit since gswin64c and gswin32c are different
+import sys
+
 from rich import print
 from rich.text import Text
 from rich.table import Table
 from rich.panel import Panel
-from rich.traceback import install
 
 from click.exceptions import ClickException
 
-install(show_locals=True)
 rejected_file_list = {}
 workingDir = os.getcwd()
 
@@ -26,6 +27,27 @@ class PrettyErrorDisplay(ClickException):
         from rich.console import Console
         super().__init__(Console().render_str(message))
         
+
+def return_ghostscript_callname() -> str:
+    """
+    Returns the ghostscript callname. 
+    Could be either gs, gswin64c or gswin32c
+
+    Returns:
+        str: ghostscript callname
+    """
+    gs_name = "gs"
+    
+    # only linux and windows environments are supported. if there are others, well open an issue then :)
+    # string appending is used here. its much less complicated.
+    if sys.platform == "win32":
+        gs_name+="win"
+        if 8*struct.calcsize("P"): gs_name+="64c"  
+        else: gs_name+="32c"
+        
+    return gs_name
+        
+
         
 def return_filepath_basename(item: str) -> str:
     """

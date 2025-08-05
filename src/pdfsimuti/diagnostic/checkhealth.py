@@ -2,7 +2,6 @@ import sys
 import os
 import textwrap # used for triple quote with indent without facing consequences
 import shutil # used for getting ghostscriptapplication PATH variables
-import struct # windows os + ghostScript only. Required to get CPU bit since gswin64c and gswin32c exists
 import subprocess # capture output
 
 import importlib.util # getting package ModuleSpec
@@ -10,13 +9,13 @@ from importlib.metadata import version # for checking packages versions
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 import typer
 from typing_extensions import Annotated
 
-console = Console()
+from pdfsimuti.utils import return_ghostscript_callname
 
+console = Console()
 
 packages_dict = {
     'pymupdf' : {
@@ -77,15 +76,7 @@ def get_gs_detail():
     
     if not found, nothing happens.
     """
-    gs_name = "gs"
-    
-    # only linux and windows environments are supported. if there are others, well open an issue then :)
-    # string appending is used here. its much less complicated.
-    if sys.platform == "win32":
-        gs_name+="win"
-        if 8*struct.calcsize("P"): gs_name+="64c"  
-        else: gs_name+="32c"
-        
+    gs_name = return_ghostscript_callname()
     try: 
         result = subprocess.run([gs_name, '--version'], capture_output=True, text=True)
     except FileNotFoundError: return 0
@@ -136,6 +127,8 @@ def verbose_level_2():
     
     Displays in a panel form
     """
+    from rich.table import Table
+    
     table = Table(show_lines=True, show_edge=False, expand=True)
     table.add_column("Package Name", justify="center", no_wrap=True)
     table.add_column("Status", justify="center", no_wrap=True)
