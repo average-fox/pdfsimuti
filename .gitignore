@@ -11,6 +11,8 @@ settings.json
 
 # Python Cache files
 src/pdfsimuti/__pycache__
+src/pdfsimuti/features/__pycache__
+src/pdfsimuti/diagnostic/__pycache__
 
 # Tests/ Research files
 tests
