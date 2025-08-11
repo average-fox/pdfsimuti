@@ -11,11 +11,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_list, return_filepath_basename, return_filepath_dirname
-from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         
-from pdfsimuti.utils import PrettyErrorDisplay     
+from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_list, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
 
-                    
+         
 app = typer.Typer()
 
 # TODO: Optimize the code between output designation + merge_runtime and try to change all os.path with pathlib (check performance comparison first) 
@@ -85,7 +83,7 @@ def designate_saving_dirname(filePath) -> str:
     """
     if not os.path.isdir(filePath):
         print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
-        folder_creation_choice = typer.confirm(f"Do you wish to create it?")
+        folder_creation_choice = return_confirm(f"Do you wish to create it?")
         if not folder_creation_choice:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
             filePath = workingDir
@@ -125,7 +123,7 @@ def designate_saving_filename(target_file_path:str) -> str:
             #  and AGAIN make the same mistake like before then prompt them again!
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
-            if not typer.confirm("Do you wish to overwrite this file?"):    
+            if not return_confirm("Do you wish to overwrite this file?"):    
                 print("Filename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
@@ -237,10 +235,12 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     output = designate_saving_filePath(output)
     view_merge_overview(itemsList, output, preserveFiles, sort)
     
-    if typer.confirm("\nContinue with current settings"):
+    if return_confirm("\nContinue with current settings"):
         if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
         generate_merged_pdf(itemsList, output, preserveFiles)
         show_successful_merge_outcome(output) # Print success
+    else:
+        print("[red]Aborted[/red]")
 
 
 def merge(

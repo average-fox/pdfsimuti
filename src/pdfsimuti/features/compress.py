@@ -10,7 +10,7 @@ from rich import print
 from rich.table import Table
 from rich.panel import Panel
 
-from pdfsimuti.utils import PrettyErrorDisplay, validate_pdf_list
+from pdfsimuti.utils import PrettyErrorDisplay, validate_pdf_list, return_confirm
 
 app = typer.Typer()
 
@@ -87,7 +87,7 @@ def display_overview_confirm(itemList: list) -> bool:
     
     
     print(Panel(table, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
-    return typer.confirm("Do you want to continue with this settings?")
+    return return_confirm("Do you want to continue with this settings?")
 
 
 def display_compress_outcome(infoList : list):

@@ -9,6 +9,7 @@ from rich.table import Table
 from rich.panel import Panel
 
 from click.exceptions import ClickException
+import typer
 
 rejected_file_list = {}
 workingDir = os.getcwd()
@@ -27,6 +28,10 @@ class PrettyErrorDisplay(ClickException):
         from rich.console import Console
         super().__init__(Console().render_str(message))
         
+        
+def return_confirm(msg:str) -> bool:
+    return typer.confirm(msg, default=True); # default flag means enter key = y
+
 
 def return_ghostscript_callname() -> str:
     """
