@@ -14,16 +14,38 @@ from pdfsimuti.utils import PrettyErrorDisplay, validate_pdf_list, return_confir
 
 app = typer.Typer()
 
-class ghostscript_settings:
-    def __init__(self, fileList, compatibility, custom):
-        self.fileList = fileList
-        self.batch = "dBATCH" if len(self.fileList) > 1 else ""
-        self.compatibility = compatibility
-        self.custom = self.validate_gs_custom_commands(self.custom)
+# class ghostscript_settings:
+#     # def __init__(self, fileList, compatibility, custom):
+#     # def __init__(self, compatibility, optimization_presets, custom):
+#     def __init__(self, custom):
+#         # self.fileList = fileList
+#         # self.batch = "dBATCH" if len(self.fileList) > 1 else ""
+#         # self.compatibility = compatibility
+#         # self.custom = self.validate_gs_custom_commands(custom)
+#         self.custom = custom
+#         self.validate_gs_custom_commands()
+#         # self.optimization_presets = optimization_presets
+#         self.display()
         
     
-    def validate_gs_custom_commands(self, custom):        
-        pass
+    # def validate_gs_custom_commands(self):
+    # import re
+    #     compatibility_match = re.search(r'-dCompatibilityLevel=([\d.]+)', self.custom)
+    #     preset_match = re.search(r'-dPDFSETTINGS=/\w+', self.custom)
+    #     # external_files regex will locate all occurance of "pdf files"
+    #     external_files = re.search(r'\b\w+\.pdf\b', self.custom)
+        
+    #     # if compatibility_match:
+    #     #     self.compatibility = compatibility_match.group(1)
+    #     # if preset_match:
+    #     #     self.optimization_presets = preset_match.group(0)
+    #     if external_files:
+    #         # GhostScript is complicated. I dont know how it works so for the time being, no files via ghostscript
+            # raise PrettyErrorDisplay(f"""
+            #                          Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside the string
+            #                          Obtained files: {external_files}  
+            #                          """)
+        
         # list of files
         # optimization presets: screen, ebook (default), printer, prepress
         # batch or no batch. If batch then use dNOPAUSE
@@ -31,6 +53,9 @@ class ghostscript_settings:
         # custom arguments (be sure to detect that sOutPut and other inputs. PDFSimUti cannot accept file items via ghostScript) 
         # custom detect: DownSampleColorImages
         # custom detect: ColorImageResolution
+        
+    # def display(self):
+    #     print(self.custom)
         
 
 class compressMethodChoice(str, Enum):
@@ -112,6 +137,44 @@ def display_compress_outcome(infoList : list):
     print(Panel(table, subtitle="Successful Compression", border_style="bright_green", expand=False))
 
 
+def pymupdf_compression(fileList: list):
+    for item in fileList:
+        with fitz.open(item) as doc:
+            # temp files created to solve incremental saving issue
+            temp_file = item + ".temp"
+            doc.save(temp_file, garbage=4, deflate=True)
+        os.replace(temp_file, item)
+
+
+def gs_compression(fileList: list):
+    import subprocess
+    from pdfsimuti.utils import return_joined_filePath, return_absolute_filePath, return_filepath_dirname, return_filepath_basename
+    
+    for item in fileList:
+        # not doing this temp will result in a blank file
+        temp_file = return_joined_filePath(return_filepath_dirname(item), "temp"+return_filepath_basename(item))
+        command = [
+                'gswin64c',
+                '-sDEVICE=pdfwrite',
+                '-dCompatibilityLevel=1.4',
+                '-dPDFSettings=/ebook',
+                '-dEmbedAllFonts=true',
+                '-dSubsetFonts=true',
+                '-dNOPAUSE',
+                '-dQuiet',
+                '-dBATCH',
+                '-dSAFER', 
+                f'-sOutputFile={temp_file}',
+                return_absolute_filePath(item)
+            ]
+        
+        try:
+            subprocess.run(command, check=True, capture_output=True)
+            os.replace(temp_file, return_absolute_filePath(item))
+        except subprocess.CalledProcessError as e:
+            raise PrettyErrorDisplay(f"GhostScript failed to run successfully.\nGhostscript Output: {e.stderr}")
+        
+
 def compress_pdf_list(itemList: list, compressMethod: str):
     """
     Compress pdf main function
@@ -123,25 +186,11 @@ def compress_pdf_list(itemList: list, compressMethod: str):
     Raises:
         utils.PrettyErrorDisplay: raise exception if compression fails
     """
-    try: 
-        match compressMethod:
-            case 'gs': gs_compression(fileList=itemList)
-            case 'ghostscript':  gs_compression(fileList=itemList)
-            case 'pymupdf': pymupdf_compression(fileList=itemList)
-    except Exception as e: raise PrettyErrorDisplay(f"Program Failed To Run Properly. \n{e}")
+    match compressMethod:
+        case 'gs': gs_compression(fileList=itemList)
+        case 'ghostscript':  gs_compression(fileList=itemList)
+        case 'pymupdf': pymupdf_compression(fileList=itemList)
 
-
-def pymupdf_compression(fileList: list):
-    for item in fileList:
-        with fitz.open(item) as doc:
-            # temp files created to solve incremental saving issue
-            temp_file = item + ".temp"
-            doc.save(temp_file, garbage=4, deflate=True)
-        os.replace(temp_file, item)
-
-
-def gs_compression(fileList: list):
-    print("Not built yet. Please be patient.")
 
 
 def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMethod: str):
@@ -155,12 +204,14 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
         excludeList (list): list of files to be excluded (unvalidated) (don't need validation)
         compressMethod (str) : Compression mode
     """
-    validated_file_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
+    # validated_file_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
+    validated_file_list = fileList
     
     if display_overview_confirm(validated_file_list):
         
         # 1st Size capture
         initial_file_size = return_fileList_size(validated_file_list)
+        
         # runtime
         compress_pdf_list(validated_file_list, compressMethod)
         
@@ -180,14 +231,16 @@ def compress(
     exclude: Annotated[List[str], typer.Option(help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional Options", metavar="[gs/ghostscript|pymupdf]")] = "pymupdf",
-    compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify gs Compatibility mode", rich_help_panel="Ghostscript options")] = '1.4',
-    presets: Annotated[gsPDFshrinkPresets, typer.Option(help="Specify gs pdf shrinking presets", rich_help_panel="Ghostscript options (--compressMethod gs  | --compressMethod ghostscript)")] = "ebook",
-    
+    # compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify gs Compatibility mode", rich_help_panel="Ghostscript options")] = '1.4',
+    # presets: Annotated[gsPDFshrinkPresets, typer.Option(help="Specify gs pdf shrinking presets", rich_help_panel="Ghostscript options (--compressMethod gs  | --compressMethod ghostscript)")] = "ebook",
+    # gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Pass as a single string enclosed with ''. Please note that commands must be case-sensitive")] = None
     ):
     # TODO: Do something here like configure_gs_settings(param1, param2, param3 T / F ,param 4) then pass the info to the main compress_runtime
     # gs itself is a class. Not a singple function so that it can accomudate more features.
+    
     compress_runtime(filelist, mimecheck, exclude, compressMethod)
     # compress_pdf_list(filelist, compressMethod)
+    # ghostscript_settings(gs_custom)
 
     
 # ✅TODO: Get rid of validate from compress. Prioritize mimecheck boolean only
