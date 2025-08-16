@@ -199,13 +199,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
     excludeList = [return_absolute_filePath(excludeItem) for excludeItem in exclude if excludeItem != None]
     fileList = list(dict.fromkeys([item for item in fileList or [] if (item not in rejected_file_list or []) and (item not in excludeList)]))
     
-
-    # List needs to be more than 1 validated pdf to work with merge
-    if len(fileList) <= 1: 
-        raise PrettyErrorDisplay(
-            f"Searched over {len(items)} items. Excepted more than 1 compatible PDF file for merging.\n\n"
-            f"[u]Search Locations[/u]: \n[i]{"\n".join(set([return_absolute_filePath(item) for item in items]))}[/i]")
-
+    
     return fileList
 
 

@@ -232,6 +232,12 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
         sort (str): sorting method of the list items
 
     """
+        # List needs to be more than 1 validated pdf to work with merge
+    if len(itemsList) <= 1: 
+        from pdfsimuti.utils import return_absolute_filePath
+        raise PrettyErrorDisplay("Excepted more than 1 compatible PDF file for merging.")
+        
+        
     output = designate_saving_filePath(output)
     view_merge_overview(itemsList, output, preserveFiles, sort)
     

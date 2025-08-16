@@ -204,8 +204,8 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
         excludeList (list): list of files to be excluded (unvalidated) (don't need validation)
         compressMethod (str) : Compression mode
     """
-    # validated_file_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
-    validated_file_list = fileList
+    validated_file_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
+    # validated_file_list = fileList
     
     if display_overview_confirm(validated_file_list):
         
