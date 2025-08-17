@@ -132,9 +132,10 @@ def display_compress_outcome(infoList : list):
 
     for index, item in enumerate(infoList, 1):
         itemName, before, after = item
-        compression_calculate = round((before - after)/before*100, 2)
-        table.add_row(str(index), itemName, os.path.dirname(itemName), str(before), str(after), f'{compression_calculate}%' if before > after else f'[red]{compression_calculate}%[/red]')
-    print(Panel(table, subtitle="Successful Compression", border_style="bright_green", expand=False))
+        compression_calculate = abs(round((before - after)/before*100, 3))
+        table.add_row(str(index), os.path.basename(itemName), os.path.dirname(itemName), str(before), str(after), f'{compression_calculate}%' if before > after else f'[red]{compression_calculate}%[/red]')
+        
+    print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
 
 
 def pymupdf_compression(fileList: list):
@@ -149,30 +150,43 @@ def pymupdf_compression(fileList: list):
 def gs_compression(fileList: list):
     import subprocess
     from pdfsimuti.utils import return_joined_filePath, return_absolute_filePath, return_filepath_dirname, return_filepath_basename
+    from rich.progress import Progress, SpinnerColumn
+    from rich.console import Console
     
-    for item in fileList:
-        # not doing this temp will result in a blank file
-        temp_file = return_joined_filePath(return_filepath_dirname(item), "temp"+return_filepath_basename(item))
-        command = [
-                'gswin64c',
-                '-sDEVICE=pdfwrite',
-                '-dCompatibilityLevel=1.4',
-                '-dPDFSettings=/ebook',
-                '-dEmbedAllFonts=true',
-                '-dSubsetFonts=true',
-                '-dNOPAUSE',
-                '-dQuiet',
-                '-dBATCH',
-                '-dSAFER', 
-                f'-sOutputFile={temp_file}',
-                return_absolute_filePath(item)
-            ]
-        
-        try:
-            subprocess.run(command, check=True, capture_output=True)
-            os.replace(temp_file, return_absolute_filePath(item))
-        except subprocess.CalledProcessError as e:
-            raise PrettyErrorDisplay(f"GhostScript failed to run successfully.\nGhostscript Output: {e.stderr}")
+    console = Console()
+    
+    with Progress(
+        SpinnerColumn(),
+        *Progress.get_default_columns(),
+        console=console,
+        transient=True) as progress:
+        runtime = progress.add_task(description="", total=len(fileList))
+        for item in fileList:
+            # not doing this temp will result in a blank file
+            temp_file = return_joined_filePath(return_filepath_dirname(item), "temp"+return_filepath_basename(item))
+            command = [
+                    'gswin64c',
+                    '-sDEVICE=pdfwrite',
+                    '-dCompatibilityLevel=1.4',
+                    '-dPDFSettings=/ebook',
+                    '-dEmbedAllFonts=true',
+                    '-dSubsetFonts=true',
+                    '-dNOPAUSE',
+                    '-dQuiet',
+                    '-dBATCH',
+                    '-dSAFER', 
+                    f'-sOutputFile={temp_file}',
+                    return_absolute_filePath(item)
+                ]
+            
+            try:
+                subprocess.run(command, check=True, capture_output=True)
+                os.replace(temp_file, return_absolute_filePath(item))
+                progress.log(f"[green]Compressing...[/green] {return_filepath_basename(item)}")
+                progress.update(runtime, advance=1)
+                
+            except subprocess.CalledProcessError as e:
+                raise PrettyErrorDisplay(f"GhostScript failed to run successfully.\nGhostscript Output: {e.stderr}")
         
 
 def compress_pdf_list(itemList: list, compressMethod: str):
@@ -204,22 +218,24 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
         excludeList (list): list of files to be excluded (unvalidated) (don't need validation)
         compressMethod (str) : Compression mode
     """
-    validated_file_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
-    # validated_file_list = fileList
+    validated_pdf_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
+    # validated_pdf_list = fileList
+    if len(validated_pdf_list) == 0:
+        raise PrettyErrorDisplay("No compatible PDF files found for compress.")
     
-    if display_overview_confirm(validated_file_list):
+    if display_overview_confirm(validated_pdf_list):
         
         # 1st Size capture
-        initial_file_size = return_fileList_size(validated_file_list)
+        initial_file_size = return_fileList_size(validated_pdf_list)
         
         # runtime
-        compress_pdf_list(validated_file_list, compressMethod)
+        compress_pdf_list(validated_pdf_list, compressMethod)
         
         # 2nd Size Capture
-        final_file_size = return_fileList_size(validated_file_list)
+        final_file_size = return_fileList_size(validated_pdf_list)
         
         # Create a list combining PDFitems, Initial Size & Final Size
-        outcomeFileList = [(name, initial, final) for name, initial, final in zip(validated_file_list, initial_file_size, final_file_size)]
+        outcomeFileList = [(name, initial, final) for name, initial, final in zip(validated_pdf_list, initial_file_size, final_file_size)]
         display_compress_outcome(outcomeFileList)
     else:
         print("[red]Aborted[/red]")
