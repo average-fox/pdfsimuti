@@ -8,7 +8,8 @@ from pdfsimuti.features import merge, compress
 from pdfsimuti.diagnostic import checkhealth
 
 app = typer.Typer(
-    no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False
+    no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False,
+    context_settings={"help_option_names" : ["-h", "--help"]}
 )
 
 # See https://docs.python.org/3/library/importlib.metadata.html#distribution-versions
