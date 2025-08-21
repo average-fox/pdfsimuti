@@ -1,5 +1,4 @@
 import typer
-import fitz # fitz = pymupdf
 import os
 
 from typing_extensions import Annotated
@@ -9,6 +8,7 @@ from enum import Enum
 from rich import print
 from rich.table import Table
 from rich.panel import Panel
+
 
 from pdfsimuti.utils import PrettyErrorDisplay, validate_pdf_list, return_confirm
 
@@ -74,11 +74,13 @@ class gsCompatibilityChoice(str, Enum):
 class gsPDFshrinkPresets(str, Enum):
     ebook = "ebook"
     screen = "screen"
+    printer = "printer"
+    prepress = "prepress"
     
 
-def return_fileList_size(itemList : list) -> float:
+def return_fileList_size(itemList : list) -> list:
     """
-    Show the file size of the entire list of PDF
+    returns a list of the file size.
 
     Args:
         itemList (list): list of PDFs
@@ -89,7 +91,7 @@ def return_fileList_size(itemList : list) -> float:
     return [round(os.path.getsize(item), 2) for item in itemList]
 
 
-def display_overview_confirm(itemList: list) -> bool:
+def display_overview_confirm(itemList: list, compressMethod) -> bool:
     """
     Compress display overview and final confirmation
 
@@ -99,7 +101,11 @@ def display_overview_confirm(itemList: list) -> bool:
     Returns:
         bool: Confirmation of compressing
     """
-    print("\nThe following files will be compressed.")
+    
+    from rich.text import Text
+    from rich.console import Group
+    
+    print("\nThe following file(s) will be compressed.")
     
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI")
@@ -108,10 +114,14 @@ def display_overview_confirm(itemList: list) -> bool:
     table.add_column("Size (KB)")
     
     for index, item in enumerate(itemList, 1):
-        table.add_row(str(index), os.path.basename(item), os.path.abspath(item), str(os.path.getsize(item)))
+        table.add_row(str(index), os.path.basename(item), os.path.abspath(item), str(os.path.getsize(item)))    
     
+    panel_group = Group(
+        table, 
+        Text(f"Compression mode: {'GhostScript' if compressMethod == 'gs' else compressMethod.capitalize()}")   
+    )
+    print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
     
-    print(Panel(table, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
     return return_confirm("Do you want to continue with this settings?")
 
 
@@ -123,44 +133,46 @@ def display_compress_outcome(infoList : list):
         infoList (list): list of the PDFs
     """
     table = Table(show_lines=True, highlight=True)
-    table.add_column("SI")
+    table.add_column("SI"),
     table.add_column("File Name")
     table.add_column("File Location")
     table.add_column("Before (KB)", justify="center")
     table.add_column("After (KB)", justify="center")
-    table.add_column("Compression", justify="center")
+    table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", justify="center")
 
     for index, item in enumerate(infoList, 1):
         itemName, before, after = item
         compression_calculate = abs(round((before - after)/before*100, 3))
-        table.add_row(str(index), os.path.basename(itemName), os.path.dirname(itemName), str(before), str(after), f'{compression_calculate}%' if before > after else f'[red]{compression_calculate}%[/red]')
+        table.add_row(str(index), os.path.basename(itemName), os.path.dirname(itemName), str(before), str(after), f'[green]{compression_calculate}%[/green]' if before > after else f'[red]{compression_calculate}%[/red]')
         
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
 
 
-def pymupdf_compression(fileList: list):
-    for item in fileList:
-        with fitz.open(item) as doc:
-            # temp files created to solve incremental saving issue
-            temp_file = item + ".temp"
-            doc.save(temp_file, garbage=4, deflate=True)
-        os.replace(temp_file, item)
+def pymupdf_compression(fileList: list):    
+    try: 
+        import fitz # fitz = pymupdf
 
+        for item in fileList:
+            with fitz.open(item) as doc:
+                # temp files created to solve incremental saving issue
+                temp_file = item + ".temp"
+                doc.save(temp_file, garbage=4, deflate=True)
+            os.replace(temp_file, item)
+    except Exception: raise PrettyErrorDisplay(f"Error\n{Exception}")
+    
+    
 
-def gs_compression(fileList: list):
+def gs_compression(fileList: list, gs_settings=None):
     import subprocess
     from pdfsimuti.utils import return_joined_filePath, return_absolute_filePath, return_filepath_dirname, return_filepath_basename
     from rich.progress import Progress, SpinnerColumn
-    from rich.console import Console
-    
-    console = Console()
-    
+
     with Progress(
         SpinnerColumn(),
         *Progress.get_default_columns(),
-        console=console,
         transient=True) as progress:
         runtime = progress.add_task(description="", total=len(fileList))
+        # TODO: Create a single string of the entire command once except the file.
         for item in fileList:
             # not doing this temp will result in a blank file
             temp_file = return_joined_filePath(return_filepath_dirname(item), "temp"+return_filepath_basename(item))
@@ -168,13 +180,18 @@ def gs_compression(fileList: list):
                     'gswin64c',
                     '-sDEVICE=pdfwrite',
                     '-dCompatibilityLevel=1.4',
-                    '-dPDFSettings=/ebook',
+                    '-dPDFSettings=/screen',
                     '-dEmbedAllFonts=true',
                     '-dSubsetFonts=true',
+                    '-dDownsampleColorImages=true',
+                    '-dColorImageResolution=72',
+                    '-dDownsampleGrayImages=true',
+                    '-dGrayImageResolution=72',
+                    '-dMonoImageResolution=300',
                     '-dNOPAUSE',
                     '-dQuiet',
                     '-dBATCH',
-                    '-dSAFER', 
+                    '-dSAFER',
                     f'-sOutputFile={temp_file}',
                     return_absolute_filePath(item)
                 ]
@@ -188,17 +205,22 @@ def gs_compression(fileList: list):
             except subprocess.CalledProcessError as e:
                 raise PrettyErrorDisplay(f"GhostScript failed to run successfully.\nGhostscript Output: {e.stderr}")
         
+            except FileNotFoundError as e:
+                raise PrettyErrorDisplay(f"""
+            Compression via GhostScript failed.
+            Please check your GhostScript installation via [code]pdfsimuti checkhealth[/code]
+            If the problem persists, please create an [link=https://github.com/foxtbirdy/pdfsimuti/issues/new]issue[/link].
+            """)
+        
 
 def compress_pdf_list(itemList: list, compressMethod: str):
     """
-    Compress pdf main function
+    Compress pdf main function.
 
     Args:
         itemList (list): list of PDFs
         compressMethod (str) : Mode of compression. Either gs or pymupdf
 
-    Raises:
-        utils.PrettyErrorDisplay: raise exception if compression fails
     """
     match compressMethod:
         case 'gs': gs_compression(fileList=itemList)
@@ -223,16 +245,26 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
     if len(validated_pdf_list) == 0:
         raise PrettyErrorDisplay("No compatible PDF files found for compress.")
     
-    if display_overview_confirm(validated_pdf_list):
+    if display_overview_confirm(validated_pdf_list, compressMethod):
+        
+        import logging
+        from rich.logging import RichHandler
+        logging.basicConfig(
+            level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
+        )
+        log = logging.getLogger("rich")
         
         # 1st Size capture
         initial_file_size = return_fileList_size(validated_pdf_list)
         
         # runtime
+        log.info("Working...")
         compress_pdf_list(validated_pdf_list, compressMethod)
+        log.info("Compression runtime over.")
         
         # 2nd Size Capture
         final_file_size = return_fileList_size(validated_pdf_list)
+
         
         # Create a list combining PDFitems, Initial Size & Final Size
         outcomeFileList = [(name, initial, final) for name, initial, final in zip(validated_pdf_list, initial_file_size, final_file_size)]
@@ -242,19 +274,18 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
 
 
 def compress(
-    filelist: Annotated[List[str], typer.Argument(help="PDF files to be compressed. Can be single or multiple")],
+    filelist: Annotated[List[str], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple")],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
-    exclude: Annotated[List[str], typer.Option(help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
-    
+    exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional Options", metavar="[gs/ghostscript|pymupdf]")] = "pymupdf",
-    # compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify gs Compatibility mode", rich_help_panel="Ghostscript options")] = '1.4',
-    # presets: Annotated[gsPDFshrinkPresets, typer.Option(help="Specify gs pdf shrinking presets", rich_help_panel="Ghostscript options (--compressMethod gs  | --compressMethod ghostscript)")] = "ebook",
-    # gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Pass as a single string enclosed with ''. Please note that commands must be case-sensitive")] = None
+    compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify ghostscript compatibility mode", rich_help_panel="Ghostscript options")] = '1.4',
+    presets: Annotated[gsPDFshrinkPresets, typer.Option(help="Specify ghostscript pdf compression presets", rich_help_panel="Ghostscript options")] = "ebook",
+    gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Commands must be case-sensitive", rich_help_panel="Ghostscript options")] = None
     ):
     # TODO: Do something here like configure_gs_settings(param1, param2, param3 T / F ,param 4) then pass the info to the main compress_runtime
-    # gs itself is a class. Not a singple function so that it can accomudate more features.
+    # gs itself is a class. Not a singple function so that it can accom udate more features.
     
-    compress_runtime(filelist, mimecheck, exclude, compressMethod)
+    compress_runtime(filelist, mimecheck, exclude, compressMethod.value)
     # compress_pdf_list(filelist, compressMethod)
     # ghostscript_settings(gs_custom)
 
@@ -267,6 +298,7 @@ def compress(
 # compress_runtime will handle the passing of the fileList to compression mode
 # TODO: Run basic tests with Ghostscript and PyMuPDF
 # TODO: explore all features of the ghostscript and pymupdf
+# TODO: add compression strength selection for pymupdf
 # TODO: research preserve-files mode. (for users in case their compression choice gets them fucked up)
 # TODO: preserve-files mode needs to be able to save files as PDFSIMUTI-COMPRESSED_filename.pdf
 # TODO: revert_files. If compression is performed and the compress results is bigger than filesize, abort and revert to previous file. Requires preserve-Files to work

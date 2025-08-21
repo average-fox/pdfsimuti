@@ -25,8 +25,9 @@ class PrettyErrorDisplay(ClickException):
     """
     
     def __init__(self, message):
+        import textwrap
         from rich.console import Console
-        super().__init__(Console().render_str(message))
+        super().__init__(Console().render_str(textwrap.dedent(message).strip()))
         
         
 def return_confirm(msg:str) -> bool:
@@ -209,7 +210,7 @@ def display_rejected_files() -> None:
     """
     if len(rejected_file_list) != 0:
         # display rejected files
-        print(f"\n[yellow]CAUTION![/yellow] The following files have been rejected due to mimecheck.")
+        print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected due to mimecheck.")
         table = Table(show_lines=True, highlight=True)
         table.add_column("File No.", justify = "center", no_wrap=True)
         table.add_column("File Name", justify = "center", no_wrap=True)

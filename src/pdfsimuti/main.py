@@ -9,7 +9,7 @@ from pdfsimuti.diagnostic import checkhealth
 
 app = typer.Typer(
     no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False,
-    context_settings={"help_option_names" : ["-h", "--help"]}
+    context_settings={"help_option_names" : ["-h", "--help"]},
 )
 
 # See https://docs.python.org/3/library/importlib.metadata.html#distribution-versions
@@ -36,9 +36,9 @@ def main(version: Annotated[
 
 # See: https://github.com/fastapi/typer/issues/178 
 app.command(
-    short_help="Merges several PDFs into a super PDF",
-    help=f"""
-    Add ITEMS (PDF) to merge them together.
+    # short_help="",
+    help="""
+    Merges several PDFs into a super PDF.
     
 
  ___   __ _______ ______   _______ _______ 
@@ -49,7 +49,6 @@ app.command(
 | ||_|| |   |___|   |  | |   |_| |   |___ 
 |_|   |_|_______|___|  |_|_______|_______|
 
-
 - Output file is 'merged.pdf' by default but you can change it using --ouput TEXT
 - Tip: Pass '.' to include current directory.
 - Tip: You can pass folder paths as well just like adding PDF filenames.
@@ -59,7 +58,7 @@ app.command(
 
 app.command(
     help="""
-    Add ITEMS (PDF) to compress them into smaller sizes.
+    Compress PDF(s) into smaller sizes.
 
 
     _______ _______ __   __ _______ ______   _______ _______ _______ 
@@ -72,14 +71,14 @@ app.command(
     
     """,
     epilog="""
-    Inspiration taken from [link=https://github.com/theeko74/pdfc]pdfc by theeko[/link]\n
-    Be sure to [yellow]stargraze[/yellow] their repository!""",
-    )(compress.compress)
+    Please note.\n
+    - Any commands given for GhostScript without [bold]--compressMethod[/bold] being added is automatically ignored.
+    """)(compress.compress)
 
 
 app.command(
     help="""
-    Shows you the status of the packages required for the program
+    Shows you the status of the packages required for the program.
     
     You don't have to install all of them. However, that would limit the program's capability.
     
