@@ -9,42 +9,50 @@ from rich import print
 from rich.table import Table
 from rich.panel import Panel
 
-
 from pdfsimuti.utils import PrettyErrorDisplay, validate_pdf_list, return_confirm
 
-app = typer.Typer()
+import logging
+from rich.logging import RichHandler
+logging.basicConfig(
+    level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
+)
 
-# class ghostscript_settings:
-#     # def __init__(self, fileList, compatibility, custom):
-#     # def __init__(self, compatibility, optimization_presets, custom):
-#     def __init__(self, custom):
-#         # self.fileList = fileList
-#         # self.batch = "dBATCH" if len(self.fileList) > 1 else ""
-#         # self.compatibility = compatibility
-#         # self.custom = self.validate_gs_custom_commands(custom)
-#         self.custom = custom
-#         self.validate_gs_custom_commands()
-#         # self.optimization_presets = optimization_presets
-#         self.display()
+app = typer.Typer()
+log = logging.getLogger("rich")    
+gs_instance = None
+
+
+class ghostscript_settings:
+    def __init__(self, compatibility, presets, custom):
+        self.compatibility = compatibility
+        self.presets = presets
+        self.custom = self.validate_gs_custom_commands(custom)
         
     
-    # def validate_gs_custom_commands(self):
-    # import re
-    #     compatibility_match = re.search(r'-dCompatibilityLevel=([\d.]+)', self.custom)
-    #     preset_match = re.search(r'-dPDFSETTINGS=/\w+', self.custom)
-    #     # external_files regex will locate all occurance of "pdf files"
-    #     external_files = re.search(r'\b\w+\.pdf\b', self.custom)
-        
-    #     # if compatibility_match:
-    #     #     self.compatibility = compatibility_match.group(1)
-    #     # if preset_match:
-    #     #     self.optimization_presets = preset_match.group(0)
-    #     if external_files:
-    #         # GhostScript is complicated. I dont know how it works so for the time being, no files via ghostscript
-            # raise PrettyErrorDisplay(f"""
-            #                          Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside the string
-            #                          Obtained files: {external_files}  
-            #                          """)
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    
+    def validate_gs_custom_commands(self, custom_commands):
+        if custom_commands:
+            log.info("validating custom commands")
+            import re
+            compatibility_match = re.search(r'-dCompatibilityLevel=([\d.]+)',custom_commands)
+            preset_match = re.search(r'-dPDFSETTINGS=/\w+',custom_commands)
+            # external_files regex will locate all occurance of "pdf files"
+            external_files = re.search(r'\b\w+\.pdf\b',custom_commands)
+            
+            if compatibility_match:
+                self.compatibility = compatibility_match.group(1)
+            if preset_match:
+                self.optimization_presets = preset_match.group(0)
+            if external_files:
+                # GhostScript is complicated. I dont know how it works so for the time being, no files via ghostscript
+                log.error("Invalid command found")
+                raise PrettyErrorDisplay(f"""
+                    Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside the string
+                    Command: {custom_commands}  
+                """)
         
         # list of files
         # optimization presets: screen, ebook (default), printer, prepress
@@ -53,9 +61,6 @@ app = typer.Typer()
         # custom arguments (be sure to detect that sOutPut and other inputs. PDFSimUti cannot accept file items via ghostScript) 
         # custom detect: DownSampleColorImages
         # custom detect: ColorImageResolution
-        
-    # def display(self):
-    #     print(self.custom)
         
 
 class compressMethodChoice(str, Enum):
@@ -118,19 +123,20 @@ def display_overview_confirm(itemList: list, compressMethod) -> bool:
     
     panel_group = Group(
         table, 
-        Text(f"Compression mode: {'GhostScript' if compressMethod == 'gs' else compressMethod.capitalize()}")   
+        Text(f"Compression mode: {'GhostScript' if compressMethod == 'gs' else compressMethod.capitalize()}")
     )
     print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
     
-    return return_confirm("Do you want to continue with this settings?")
+    return return_confirm("\nDo you want to continue with this settings?")
 
 
-def display_compress_outcome(infoList : list):
+def display_compress_outcome(infoList : list, time_elasped):
     """
     Display the compress outcome
 
     Args:
         infoList (list): list of the PDFs
+        time_elasped (int): time taken for compression
     """
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI"),
@@ -146,7 +152,8 @@ def display_compress_outcome(infoList : list):
         table.add_row(str(index), os.path.basename(itemName), os.path.dirname(itemName), str(before), str(after), f'[green]{compression_calculate}%[/green]' if before > after else f'[red]{compression_calculate}%[/red]')
         
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
-
+    print(f"Total time taken: {round(time_elasped, 2)} seconds")
+    
 
 def pymupdf_compression(fileList: list):    
     try: 
@@ -158,29 +165,30 @@ def pymupdf_compression(fileList: list):
                 temp_file = item + ".temp"
                 doc.save(temp_file, garbage=4, deflate=True)
             os.replace(temp_file, item)
-    except Exception: raise PrettyErrorDisplay(f"Error\n{Exception}")
-    
+    except Exception: raise PrettyErrorDisplay(f"Error\n{Exception}")    
     
 
-def gs_compression(fileList: list, gs_settings=None):
+def gs_compression(fileList: list):
+
     import subprocess
-    from pdfsimuti.utils import return_joined_filePath, return_absolute_filePath, return_filepath_dirname, return_filepath_basename
+    from pdfsimuti.utils import return_joined_filePath, return_ghostscript_callname
     from rich.progress import Progress, SpinnerColumn
 
     with Progress(
         SpinnerColumn(),
         *Progress.get_default_columns(),
         transient=True) as progress:
-        runtime = progress.add_task(description="", total=len(fileList))
-        # TODO: Create a single string of the entire command once except the file.
+        runtime = progress.add_task(description="Working...", total=len(fileList))
         for item in fileList:
             # not doing this temp will result in a blank file
-            temp_file = return_joined_filePath(return_filepath_dirname(item), "temp"+return_filepath_basename(item))
+            target_filename = os.path.basename(item)
+            target_absolute = os.path.abspath(item)
+            temp_file = return_joined_filePath(os.path.dirname(item), "temp"+target_filename)
             command = [
-                    'gswin64c',
+                    return_ghostscript_callname(),
                     '-sDEVICE=pdfwrite',
-                    '-dCompatibilityLevel=1.4',
-                    '-dPDFSettings=/screen',
+                    f'-dCompatibilityLevel={gs_instance['compatibility']}',
+                    f'-dPDFSettings=/{gs_instance['presets']}',
                     '-dEmbedAllFonts=true',
                     '-dSubsetFonts=true',
                     '-dDownsampleColorImages=true',
@@ -193,17 +201,17 @@ def gs_compression(fileList: list, gs_settings=None):
                     '-dBATCH',
                     '-dSAFER',
                     f'-sOutputFile={temp_file}',
-                    return_absolute_filePath(item)
+                    target_absolute
                 ]
             
             try:
                 subprocess.run(command, check=True, capture_output=True)
-                os.replace(temp_file, return_absolute_filePath(item))
-                progress.log(f"[green]Compressing...[/green] {return_filepath_basename(item)}")
+                os.replace(temp_file, target_absolute)
+                progress.log(f"[green]Compressing...[/green] {target_filename}")
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
-                raise PrettyErrorDisplay(f"GhostScript failed to run successfully.\nGhostscript Output: {e.stderr}")
+                raise PrettyErrorDisplay(f"GhostScript failed to run successfully.\nGhostscript Output: {e.output}")
         
             except FileNotFoundError as e:
                 raise PrettyErrorDisplay(f"""
@@ -235,40 +243,39 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
     Captures list file size two times (before, after) for comparison
 
     Args:
-        fileList (list): list of the files to be compressed (unvalidated)
+        fileList (list): list of the files to be compressed
         mimecheck: bool enable mimechecking
-        excludeList (list): list of files to be excluded (unvalidated) (don't need validation)
+        excludeList (list): list of files to be excluded
         compressMethod (str) : Compression mode
     """
+    log.info("Validating files......")
     validated_pdf_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
-    # validated_pdf_list = fileList
+    log.info("Validation complete")
+
     if len(validated_pdf_list) == 0:
         raise PrettyErrorDisplay("No compatible PDF files found for compress.")
     
     if display_overview_confirm(validated_pdf_list, compressMethod):
         
-        import logging
-        from rich.logging import RichHandler
-        logging.basicConfig(
-            level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
-        )
-        log = logging.getLogger("rich")
+        import time
         
         # 1st Size capture
+        start = time.time()
         initial_file_size = return_fileList_size(validated_pdf_list)
         
         # runtime
-        log.info("Working...")
+        log.info("Compression runtime started.")
         compress_pdf_list(validated_pdf_list, compressMethod)
         log.info("Compression runtime over.")
         
         # 2nd Size Capture
+        end = time.time()
         final_file_size = return_fileList_size(validated_pdf_list)
 
         
         # Create a list combining PDFitems, Initial Size & Final Size
         outcomeFileList = [(name, initial, final) for name, initial, final in zip(validated_pdf_list, initial_file_size, final_file_size)]
-        display_compress_outcome(outcomeFileList)
+        display_compress_outcome(outcomeFileList, end-start)
     else:
         print("[red]Aborted[/red]")
 
@@ -278,14 +285,27 @@ def compress(
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
     exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional Options", metavar="[gs/ghostscript|pymupdf]")] = "pymupdf",
-    compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify ghostscript compatibility mode", rich_help_panel="Ghostscript options")] = '1.4',
-    presets: Annotated[gsPDFshrinkPresets, typer.Option(help="Specify ghostscript pdf compression presets", rich_help_panel="Ghostscript options")] = "ebook",
+    compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify ghostscript compatibility mode", rich_help_panel="Ghostscript options")] = '1.7',
+    presets: Annotated[gsPDFshrinkPresets, typer.Option("-p", "--presets", help="Specify ghostscript pdf compression presets", rich_help_panel="Ghostscript options")] = "ebook",
     gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Commands must be case-sensitive", rich_help_panel="Ghostscript options")] = None
     ):
     # TODO: Do something here like configure_gs_settings(param1, param2, param3 T / F ,param 4) then pass the info to the main compress_runtime
     # gs itself is a class. Not a singple function so that it can accom udate more features.
     
+    import sys # detect for ghostscript commands.
+    
+    log.info("performing command line validation")
+    
+    if any(value in ["-p", '--presets', "--gs_custom", "--compatibility"] for value in sys.argv) and compressMethod == "pymupdf":
+        raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
+    elif compressMethod == "gs" or "ghostscript":
+        global gs_instance
+        gs_instance = ghostscript_settings(compatibility.value, presets, gs_custom)
+    
+
     compress_runtime(filelist, mimecheck, exclude, compressMethod.value)
+    # print(gs['presets'])
+    
     # compress_pdf_list(filelist, compressMethod)
     # ghostscript_settings(gs_custom)
 
@@ -296,7 +316,7 @@ def compress(
 # ✅TODO: create flag for compression. PyMuPDf by default, ghostscript or gs as option
 # ✅TODO: use case statement between ghostscript and pymupdf. Both needs to have their own function and is called from compress_runtime. 
 # compress_runtime will handle the passing of the fileList to compression mode
-# TODO: Run basic tests with Ghostscript and PyMuPDF
+# ✅TODO: Run basic tests with Ghostscript and PyMuPDF
 # TODO: explore all features of the ghostscript and pymupdf
 # TODO: add compression strength selection for pymupdf
 # TODO: research preserve-files mode. (for users in case their compression choice gets them fucked up)
