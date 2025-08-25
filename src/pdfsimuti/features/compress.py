@@ -28,13 +28,17 @@ class ghostscript_settings:
         self.presets = presets
         self.embedAllFonts = str(enableEmbedFonts).lower()
         self.enableColorSampling = str(enableColorSampling).lower()
-        self.colorResValue = colorResValue,
+        self.colorResValue = colorResValue
         self.colorSample = colorSample.capitalize()
         self.enableGreySampling = str(enableGreySampling).lower()
         self.greyResValue = greyResValue
         self.greySample = greySample.capitalize()
-        self.custom = self.validate_gs_custom_commands(custom)
+        self.custom = custom
+        self.validate_gs_custom_commands(custom)
         
+    
+    def display(self):
+        print(self.custom)
     
     def __getitem__(self, key):
         return getattr(self, key)
@@ -60,6 +64,8 @@ class ghostscript_settings:
                     Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside the string
                     Command: {custom_commands}  
                 """)
+        else:
+            return " "
         
         # list of files
         # optimization presets: screen, ebook (default), printer, prepress
@@ -191,7 +197,7 @@ def gs_compression(fileList: list):
         SpinnerColumn(),
         *Progress.get_default_columns(),
         transient=True) as progress:
-        runtime = progress.add_task(description="Working...", total=len(fileList))
+        compress_runtime = progress.add_task(description="Working...", total=len(fileList))
         for item in fileList:
             # not doing this temp will result in a blank file
             target_filename = os.path.basename(item)
@@ -217,14 +223,20 @@ def gs_compression(fileList: list):
                     target_absolute
                 ]
             
+            # adding custom commands
+            command[len(command)-2:len(command)-2] = gs_instance['custom'].split()
             try:
                 subprocess.run(command, check=True, capture_output=True)
                 os.replace(temp_file, target_absolute)
                 progress.log(f"[green]Compressing...[/green] {target_filename}")
-                progress.update(runtime, advance=1)
+                progress.update(compress_runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
-                raise PrettyErrorDisplay(f"GhostScript failed to run successfully.\nGhostscript Output: {e.output}")
+                raise PrettyErrorDisplay(f"""
+            GhostScript failed to run successfully.
+            GhostScript Output: {e.output}
+            GhostScript command: {command}
+            """)
         
             except FileNotFoundError as e:
                 raise PrettyErrorDisplay(f"""
@@ -319,6 +331,7 @@ def compress(
     import sys # detect for ghostscript commands.
     
     log.info("performing command line validation")
+    print(gs_custom)
     
     if any(value in ["-p", '--presets', "--gs_custom", "--compatibility", "--embedFonts"] for value in sys.argv) and compressMethod == "pymupdf":
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
