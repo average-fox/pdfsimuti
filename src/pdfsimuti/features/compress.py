@@ -102,10 +102,17 @@ def return_fileList_size(itemList : list) -> list:
         itemList (list): list of PDFs
 
     Returns:
-        float: total size of the list
+        list: every file sizes of the list in an arranged list
     """
-    return [round(os.path.getsize(item), 2) for item in itemList]
-
+    list_size = []
+    for item in itemList:
+        if os.path.exists(item):
+            list_size.append(os.path.getsize(item))
+        else:
+            list_size.append(None)
+    
+    return list_size
+    
 
 def display_overview_confirm(itemList: list, compressMethod) -> bool:
     """
@@ -159,9 +166,12 @@ def display_compress_outcome(infoList : list, time_elasped):
 
     for index, item in enumerate(infoList, 1):
         itemName, before, after = item
-        compression_calculate = abs(round((before - after)/before*100, 3))
-        table.add_row(str(index), os.path.basename(itemName), os.path.abspath(itemName), str(before), str(after), f'[green]{compression_calculate}%[/green]' if before > after else f'[red]{compression_calculate}%[/red]')
-        
+        if os.path.exists(itemName):
+            compression_calculate = abs(round((before - after)/before*100, 3))
+            table.add_row(str(index), os.path.basename(itemName), itemName, str(before), str(after), f'[green]{compression_calculate}%[/green]' if before > after else f'[red]{compression_calculate}%[/red]')
+        else:
+            table.add_row(str(index), f"[strike]{os.path.basename(itemName)}[/strike]", f"[strike]{itemName}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
+    
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
     print(f"Total time taken: {round(time_elasped, 2)} seconds")
     
@@ -193,11 +203,10 @@ def gs_compression(fileList: list):
         fileList (list): list of the pdf files for conversion 
     """
     # special warning in case user uses something else other than colorConversion
-    if gs_instance["colorConversion"] != "leaveColorUnchanged":
+    if gs_instance["colorConversion"] != "LeaveColorUnchanged":
         from rich.prompt import Confirm
         if not Confirm.ask(f"[bold white on red] Warning! [/bold white on red] Color Conversion not default. Colors will be affected. Proceed?"):
             raise PrettyErrorDisplay("Program terminated for safety.")   
-
 
     import subprocess
     from pdfsimuti.utils import return_joined_filePath, return_ghostscript_callname
@@ -207,7 +216,10 @@ def gs_compression(fileList: list):
         SpinnerColumn(),
         *Progress.get_default_columns(),
         transient=True) as progress:
+        
         compress_runtime = progress.add_task(description="GhostScript is running...", total=len(fileList))
+        log.info("Started GhostScript calling.")
+        
         for item in fileList:
             # not doing this temp will result in a blank file
             target_filename = os.path.basename(item)
@@ -244,11 +256,18 @@ def gs_compression(fileList: list):
                 progress.update(compress_runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
-                raise PrettyErrorDisplay(f"""
-            GhostScript failed to run successfully.
-            GhostScript Output: {e.output}
-            GhostScript command: {" ".join(command)}
-            """)
+                # return code 1 => file not found. i think.
+                if e.returncode == 1:
+                    progress.log(f"[red]Failed to compress[/red] {target_filename}")
+                    os.remove(temp_file)
+                    continue
+                else:
+                    raise PrettyErrorDisplay(f"""
+                GhostScript failed to run successfully.
+                GhostScript Output: {e.output}
+                GhostScript command: {" ".join(command)}
+                {e.returncode}
+                """)
         
             except FileNotFoundError as e:
                 raise PrettyErrorDisplay(f"""
@@ -256,7 +275,7 @@ def gs_compression(fileList: list):
             Please check your GhostScript installation via [code]pdfsimuti checkhealth[/code]
             If the problem persists, please create an [link=https://github.com/foxtbirdy/pdfsimuti/issues/new]issue[/link].
             """)
-        
+                
 
 def compress_pdf_list(itemList: list, compressMethod: str):
     """
