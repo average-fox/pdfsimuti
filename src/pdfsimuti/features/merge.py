@@ -11,11 +11,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import get_full_path, has_pdf_extension, validate_pdf_list, display_rejected_files  
-from pdfsimuti.utils import workingDir, DEFAULT_SAVE_PDF_FILENAME         
-from pdfsimuti.utils import PrettyErrorDisplay     
+from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_list, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
 
-                    
+         
 app = typer.Typer()
 
 # TODO: Optimize the code between output designation + merge_runtime and try to change all os.path with pathlib (check performance comparison first) 
@@ -36,7 +34,7 @@ class SortOrder(str, Enum):
     modified = "modified"
 
     def __str__(self):  
-        return self.name.replace("_", " ").capitalize() # Get the name of the class value
+        return self.name.replace("_", " ").capitalize() # Get the name of the class value for overview
     
     def description(self):
         description = {
@@ -68,32 +66,6 @@ def sort_list(sort_type, items):
     return items
 
 
-def return_filepath_basename(item: str) -> str:
-    """
-    Returns the basename of a filepath.
-    Created if the user sends a path outside of the active directory
-
-    Args:
-        item (str): filepath 
-
-    Returns:
-        str: basename of the filepath
-    """
-    return os.path.basename(item)
-
-
-def return_filepath_dirname(item:str) -> str:
-    """
-    Returns the directory folder path of the file
-
-    Args:
-        item (str): filepath
-
-    Returns:
-        str: folder of the filepath
-    """
-    return os.path.dirname(item)
-
 
 def designate_saving_dirname(filePath) -> str:
     """
@@ -111,7 +83,7 @@ def designate_saving_dirname(filePath) -> str:
     """
     if not os.path.isdir(filePath):
         print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
-        folder_creation_choice = typer.confirm(f"Do you wish to create it?")
+        folder_creation_choice = return_confirm(f"Do you wish to create it?")
         if not folder_creation_choice:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
             filePath = workingDir
@@ -145,13 +117,13 @@ def designate_saving_filename(target_file_path:str) -> str:
             filename = typer.prompt(f"Enter saving filename (such as {DEFAULT_SAVE_PDF_FILENAME}): ")
             continue
 
-        elif os.path.exists(get_full_path(folderpath, filename)): # Takes the updated filename only. Check above
+        elif os.path.exists(return_joined_filePath(folderpath, filename)): # Takes the updated filename only. Check above
 
             # if the output already leads to an existing file and then user doesn't want to overwrite so if they add another file
             #  and AGAIN make the same mistake like before then prompt them again!
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
-            if not typer.confirm("Do you wish to overwrite this file?"):    
+            if not return_confirm("Do you wish to overwrite this file?"):    
                 print("Filename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
@@ -176,9 +148,9 @@ def designate_saving_filePath(target_file_path):
     folder_path = workingDir if target_file_dirname == "" else target_file_dirname
     
     working_dir = designate_saving_dirname(folder_path)
-    outputFileName = designate_saving_filename(get_full_path(working_dir, target_file_basename))
+    outputFileName = designate_saving_filename(return_joined_filePath(working_dir, target_file_basename))
 
-    return get_full_path(working_dir, outputFileName)
+    return return_joined_filePath(working_dir, outputFileName)
 
 
 def show_successful_merge_outcome(outputPath:str):
@@ -260,13 +232,20 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
         sort (str): sorting method of the list items
 
     """
+        # List needs to be more than 1 validated pdf to work with merge
+    if len(itemsList) <= 1: 
+        raise PrettyErrorDisplay("Excepted more than 1 compatible PDF file for merging.")
+        
+        
     output = designate_saving_filePath(output)
     view_merge_overview(itemsList, output, preserveFiles, sort)
     
-    if typer.confirm("\nContinue with current settings"):
+    if return_confirm("\nContinue with current settings"):
         if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
         generate_merged_pdf(itemsList, output, preserveFiles)
         show_successful_merge_outcome(output) # Print success
+    else:
+        print("[red]Aborted[/red]")
 
 
 def merge(
@@ -282,7 +261,6 @@ def merge(
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
     items = validate_pdf_list(items, exclude, mimecheck)
-    display_rejected_files()
     
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort: items = sort_list(sort, items)
