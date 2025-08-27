@@ -69,10 +69,6 @@ app.command(
     |  |____|       | ||_|| |   |   |   |  | |   |___ _____| |_____| |
     |_______|_______|_|   |_|___|   |___|  |_|_______|_______|_______|
     
-    """,
-    epilog="""
-    Please note.\n
-    - Any commands given for GhostScript without [bold]--compressMethod[/bold] being added is automatically ignored.
     """)(compress.compress)
 
 
