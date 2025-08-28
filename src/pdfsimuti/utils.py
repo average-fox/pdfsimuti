@@ -173,11 +173,14 @@ def validate_fileList_write_capability(fileList: list, mimecheck):
     for item in fileList:
         if not check_if_openable(item):
             rejected_file_list[item] = "[red]No Write Permission[/red]"
+            continue
+        elif magic and magic.from_file(item) != "application/pdf":
+            rejected_file_list[item] = f"[red]Mimecheck pass fail[/red]. \nReceived: {magic.from_file(item)}"
+            continue
 
-        elif magic:
-            file_mimecheck_result = magic.from_file(item)
-            if file_mimecheck_result != "application/pdf":
-                rejected_file_list[item] = f"[red]Mimecheck pass fail[/red]. \nReceived: {file_mimecheck_result}"
+        if importlib.util.find_spec('fitz') is not None and importlib.import_module('fitz').open(item).needs_pass:
+            rejected_file_list[item] = "[red]Password Protected[/red]"
+
 
 
 def validate_pdf_list(items, exclude, mimeCheck):
