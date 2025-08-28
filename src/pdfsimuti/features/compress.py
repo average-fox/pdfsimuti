@@ -198,14 +198,19 @@ def pymupdf_compression(fileList: list):
     """ 
     # try: 
     import fitz # fitz = pymupdf
-    
     for item in fileList:
-        with fitz.open(item) as doc:
-            # temp files created to solve incremental saving issue
-            temp_file = item + ".temp"
-            doc.save(temp_file, garbage=pymupdf_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-        os.replace(temp_file, item)
-    # except Exception as e: raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
+        try:
+            with fitz.open(item) as doc:
+                # temp files created to solve incremental saving issue
+                temp_file = item + ".temp"
+                doc.save(temp_file, garbage=pymupdf_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+            os.replace(temp_file, item)
+    
+        except ValueError:
+            log.warn(f"CAUTION. '{os.path.basename(item)}' cannot be compressed")
+            continue
+        except Exception as e: 
+            raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
     
 
 def gs_compression(fileList: list):
@@ -288,6 +293,9 @@ def gs_compression(fileList: list):
             Please check your GhostScript installation via [code]pdfsimuti checkhealth[/code]
             If the problem persists, please create an [link=https://github.com/foxtbirdy/pdfsimuti/issues/new]issue[/link].
             """)
+                
+            except Exception as e:
+                raise PrettyErrorDisplay("GhostScript compression has failed")
                 
 
 def compress_pdf_list(itemList: list, compressMethod: str):

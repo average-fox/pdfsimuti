@@ -40,7 +40,7 @@ def return_ghostscript_callname() -> str:
     Could be either gs, gswin64c or gswin32c
 
     Returns:
-        str: ghostscript callname
+        str: actual ghostscript callname on the installed machine
     """
     gs_name = "gs"
     
@@ -95,6 +95,24 @@ def return_absolute_filePath(item:str) -> str:
     return os.path.abspath(item)
 
 
+def check_if_openable(item: str) -> bool:
+    """
+    Determines if a PDF can be opened or not. Returns depending on weither it got an exception or not
+
+    Args:
+        item (str): PDF file
+
+    Returns:
+        bool: outcome
+    """
+    try:
+        with open(item, "r") as doc:
+            return True
+    except Exception:
+        return False
+    
+
+
 def has_pdf_extension(item) -> bool:
     """
     Returns the filetype by checking if it endswith .pdf
@@ -140,19 +158,27 @@ def get_pdf_from_dir(directory: str) -> list:
     return pdf_files
 
 
-def validate_fileList_via_mimecheck(fileList: list):
+def validate_fileList_write_capability(fileList: list, mimecheck):
     """
     Mimecheck assisted updater to the rejected file lists.
 
     Args:
         fileList (list): PDF filepaths in a list
     """
-    magic = importlib.import_module('magic')
+    try:
+        magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
+    except ModuleNotFoundError:
+        raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
+        
     for item in fileList:
-        file_mimecheck_result = magic.Magic(mime=True).from_file(item)
-        if file_mimecheck_result != "application/pdf":
-            rejected_file_list[item] = file_mimecheck_result
-            
+        if not check_if_openable(item):
+            rejected_file_list[item] = "[red]No Write Permission[/red]"
+
+        elif magic:
+            file_mimecheck_result = magic.from_file(item)
+            if file_mimecheck_result != "application/pdf":
+                rejected_file_list[item] = f"[red]Mimecheck pass fail[/red]. \nReceived: {file_mimecheck_result}"
+
 
 def validate_pdf_list(items, exclude, mimeCheck):
     """
@@ -170,6 +196,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
     Returns:
         list: Validated list of PDF files
+        
     """
     fileList = []
     
@@ -177,30 +204,28 @@ def validate_pdf_list(items, exclude, mimeCheck):
     print()
     
     for item in items:
-        if item not in fileList and has_pdf_extension(item) and os.path.exists(item): 
+        # updates the list of files that are present or not
+        if item not in fileList and has_pdf_extension(item) and os.path.exists(item):
             fileList.append(return_absolute_filePath(item)) # ensures duplicates are not found.
         elif os.path.isdir(item):
             print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else f"[i]{return_absolute_filePath(item)}[/i]"} [/yellow]")
             # Note: "." is actually an address to the current directory
             fileList.extend(get_pdf_from_dir(item))
         else: 
-            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_filePath(item)}[/yellow] [/i]")
+            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_filePath(item)}[/yellow] [/i]")  
         
     if len(set(fileList)) != len(fileList): 
         print("\n[yellow]CAUTION![/yellow] Duplicates found and got ignored.")
 
-    # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
-    if mimeCheck:
-        validate_fileList_via_mimecheck(fileList)
-        display_rejected_files()
-    else:
-        print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
+    # Performs write permissions of the files from the list. Will update the fileList of any non-compatible files
+    validate_fileList_write_capability(fileList, mimeCheck)
 
     # [] is for NoneType to allow iteration of list
     excludeList = [return_absolute_filePath(excludeItem) for excludeItem in exclude if excludeItem != None]
     fileList = list(dict.fromkeys([item for item in fileList or [] if (item not in rejected_file_list or []) and (item not in excludeList)]))
     
     
+    if len(rejected_file_list) != 0: display_rejected_files()
     return fileList
 
 
@@ -208,16 +233,16 @@ def display_rejected_files() -> None:
     """
     Display the rejected files to the user in a table manner
     """
-    if len(rejected_file_list) != 0:
-        # display rejected files
-        print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected due to mimecheck.")
-        table = Table(show_lines=True, highlight=True)
-        table.add_column("File No.", justify = "center", no_wrap=True)
-        table.add_column("File Name", justify = "center", no_wrap=True)
-        table.add_column("File Path (Absolute)", justify = "center", no_wrap=True)
-        table.add_column("Received Type\n[i]Instead of 'application/PDF'[/i]", justify = "center", no_wrap=True)
-        
-        for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
-            table.add_row(str(index+1), os.path.basename(filename), os.path.abspath(filename), f'[red]{filetype}[/red]')
-        
-        print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
+
+    # display rejected files
+    print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected.")
+    table = Table(show_lines=True, highlight=True)
+    table.add_column("File No.", justify = "center", no_wrap=True)
+    table.add_column("File Name", justify = "center", no_wrap=True)
+    table.add_column("File Path (Absolute)", justify = "center", no_wrap=True)
+    table.add_column("Cause", justify = "center", no_wrap=True)
+    
+    for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
+        table.add_row(str(index+1), os.path.basename(filename), os.path.abspath(filename), f'{filetype}')
+    
+    print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
