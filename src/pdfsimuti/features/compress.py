@@ -19,7 +19,20 @@ logging.basicConfig(
 
 app = typer.Typer()
 log = logging.getLogger("rich")    
+
+# these instances carry the configuration class to be able
+# for passing down globally.
 gs_instance = None
+pymupdf_instance = None
+
+
+class pymupdf_settings:
+    def __init__(self, garbageStrength):
+        self.garbageStrength = garbageStrength
+        
+            
+    def __getitem__(self, key):
+        return getattr(self, key)
 
 
 class ghostscript_settings:
@@ -183,16 +196,16 @@ def pymupdf_compression(fileList: list):
     Args:
         fileList (list): list of the pdf files for conversion 
     """ 
-    try: 
-        import fitz # fitz = pymupdf
-
-        for item in fileList:
-            with fitz.open(item) as doc:
-                # temp files created to solve incremental saving issue
-                temp_file = item + ".temp"
-                doc.save(temp_file, garbage=4, deflate=True)
-            os.replace(temp_file, item)
-    except Exception: raise PrettyErrorDisplay(f"Error\n{Exception}")    
+    # try: 
+    import fitz # fitz = pymupdf
+    
+    for item in fileList:
+        with fitz.open(item) as doc:
+            # temp files created to solve incremental saving issue
+            temp_file = item + ".temp"
+            doc.save(temp_file, garbage=pymupdf_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+        os.replace(temp_file, item)
+    # except Exception as e: raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
     
 
 def gs_compression(fileList: list):
@@ -343,6 +356,8 @@ def compress(
     exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=[None],
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional options", metavar="[gs/ghostscript|pymupdf]")] = "pymupdf",
     
+    garbage: Annotated[int, typer.Option(max=4, min=0, help="PyMuPDF garbage strength control", rich_help_panel="PyMuPDF Settings")] = 4,
+    
     compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify ghostscript compatibility mode", rich_help_panel="GhostScript options")] = '1.7',
     presets: Annotated[gsPDFshrinkPresets, typer.Option("-p", "--presets", help="Specify ghostscript pdf compression presets", rich_help_panel="GhostScript options")] = "ebook",
     gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Commands must be case-sensitive. Can override everything.", rich_help_panel="GhostScript options")] = None,
@@ -361,17 +376,24 @@ def compress(
     # TODO: Do something here like configure_gs_settings(param1, param2, param3 T / F ,param 4) then pass the info to the main compress_runtime
     # gs itself is a class. Not a singple function so that it can accom udate more features.
     
-    import sys # detect for ghostscript commands.
-    
     log.info("performing command line validation")
+    
+    import sys # detect for ghostscript commands.
     
     # validate commandline of logic errors.
     commandline_exception_no_gs = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--grey-res", "--grey_sample_type"]
+    capture_method = compressMethod
     
     if any(value in commandline_exception_no_gs for value in sys.argv) and compressMethod == "pymupdf":
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
-    elif compressMethod == "gs" or "ghostscript":
+    
+    elif compressMethod == ("gs" or "ghostscript"):
         global gs_instance
         gs_instance = ghostscript_settings(compatibility.value, presets.value, embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
     
+    elif compressMethod == "pymupdf":
+        global pymupdf_instance
+        pymupdf_instance = pymupdf_settings(garbageStrength=garbage)
+    
+    # compress runtime handles the main load
     compress_runtime(filelist, mimecheck, exclude, compressMethod.value)
