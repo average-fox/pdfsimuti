@@ -330,8 +330,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
     validated_pdf_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
     log.info("Validation complete")
 
-    if len(validated_pdf_list) == 0:
-        raise PrettyErrorDisplay("No compatible PDF files found for compress.")
+
     
     if display_overview_confirm(validated_pdf_list, compressMethod):
         

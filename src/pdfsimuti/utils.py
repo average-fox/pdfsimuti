@@ -34,6 +34,13 @@ def return_confirm(msg:str) -> bool:
     return typer.confirm(msg, default=True); # default flag means enter key = y
 
 
+def get_calling_function():
+    from inspect import currentframe
+    
+    return return_filepath_basename(currentframe().f_back.f_back.f_code.co_filename)
+
+
+
 def return_ghostscript_callname() -> str:
     """
     Returns the ghostscript callname. 
@@ -82,9 +89,9 @@ def return_filepath_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def return_absolute_filePath(item:str) -> str:
+def return_absolute_path(item:str) -> str:
     """
-    Returns the absolute filepath of an existant file.
+    returns the abspath. works as os.path.abspath(ITEM)
 
     Args:
         item (str): name of the file
@@ -137,7 +144,7 @@ def return_joined_filePath(folderpath:str, filename:str) -> str:
     return os.path.join(folderpath, filename)
 
 
-def get_pdf_from_dir(directory: str) -> list:
+def return_pdfFiles_fromDir(directory: str) -> list:
     """
     Gets PDFs from a directory. 
     Only used in the validate_pdf_list when the user passes a directory address instead of the filename
@@ -146,15 +153,16 @@ def get_pdf_from_dir(directory: str) -> list:
         directory (str): Directory path
 
     Returns:
-        list: Pdf files from the list
+        list: PDF absolute filepaths from the directory
     """
-
-    directory = workingDir if "." in directory else directory
+    # Note: "." is actually an address to the current directory
+    directory = workingDir if directory == "." else return_absolute_path(directory)
+    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
+            
     pdf_files = []
     for folder_item in os.listdir(directory):
         folder_path = return_joined_filePath(directory, folder_item)
         if has_pdf_extension(folder_path): pdf_files.append(folder_path)
-
     return pdf_files
 
 
@@ -175,7 +183,7 @@ def validate_fileList_write_capability(fileList: list, mimecheck):
             rejected_file_list[item] = "[red]No Write Permission[/red]"
             continue
         elif magic and magic.from_file(item) != "application/pdf":
-            rejected_file_list[item] = f"[red]Mimecheck pass fail[/red]. \nReceived: {magic.from_file(item)}"
+            rejected_file_list[item] = f"[red]Mimecheck pass fail[/red] \nReceived: {magic.from_file(item)}"
             continue
 
         if importlib.util.find_spec('fitz') is not None and importlib.import_module('fitz').open(item).needs_pass:
@@ -197,7 +205,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
     Raises:
         PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files
 
-    Returns:
+    Returns (if match case):
         list: Validated list of PDF files
         
     """
@@ -209,13 +217,11 @@ def validate_pdf_list(items, exclude, mimeCheck):
     for item in items:
         # updates the list of files that are present or not
         if item not in fileList and has_pdf_extension(item) and os.path.exists(item):
-            fileList.append(return_absolute_filePath(item)) # ensures duplicates are not found.
+            fileList.append(return_absolute_path(item)) # ensures duplicates are not found.
         elif os.path.isdir(item):
-            print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else f"[i]{return_absolute_filePath(item)}[/i]"} [/yellow]")
-            # Note: "." is actually an address to the current directory
-            fileList.extend(get_pdf_from_dir(item))
+            fileList.extend(return_pdfFiles_fromDir(item))
         else: 
-            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_filePath(item)}[/yellow] [/i]")  
+            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")  
         
     if len(set(fileList)) != len(fileList): 
         print("\n[yellow]CAUTION![/yellow] Duplicates found and got ignored.")
@@ -224,12 +230,25 @@ def validate_pdf_list(items, exclude, mimeCheck):
     validate_fileList_write_capability(fileList, mimeCheck)
 
     # [] is for NoneType to allow iteration of list
-    excludeList = [return_absolute_filePath(excludeItem) for excludeItem in exclude if excludeItem != None]
+    excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
     fileList = list(dict.fromkeys([item for item in fileList or [] if (item not in rejected_file_list or []) and (item not in excludeList)]))
     
-    
+    # display rejected files. If it exists
     if len(rejected_file_list) != 0: display_rejected_files()
-    return fileList
+    
+    if len(fileList) == 0:
+        raise PrettyErrorDisplay(f"""
+            No compatible PDF files found.
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_absolute_path(item) for item in items]))}[/i]
+        """)
+    
+    
+    match get_calling_function():
+        case "compress.py": 
+            return fileList
+        case "merge.py":
+            if len(fileList) <= 1:
+                raise PrettyErrorDisplay("Excepted more than 1 compatible PDF file for merging.")
 
 
 def display_rejected_files() -> None:
