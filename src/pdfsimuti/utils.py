@@ -16,6 +16,12 @@ workingDir = os.getcwd()
 
 DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
+
+def text_dedent(msg : str):
+    import textwrap
+    return textwrap.dedent(msg).strip()
+
+
 ### SHARED FUNCTIONS
 class PrettyErrorDisplay(ClickException):
     """
@@ -25,9 +31,8 @@ class PrettyErrorDisplay(ClickException):
     """
     
     def __init__(self, message):
-        import textwrap
         from rich.console import Console
-        super().__init__(Console().render_str(textwrap.dedent(message).strip()))
+        super().__init__(Console().render_str(text_dedent(message)))
         
         
 def return_confirm(msg:str) -> bool:

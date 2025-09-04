@@ -20,11 +20,6 @@ logging.basicConfig(
 app = typer.Typer()
 log = logging.getLogger("rich")    
 
-# these instances carry the configuration class to be able
-# for passing down globally.
-gs_instance = None
-pymupdf_instance = None
-
 
 class pymupdf_settings:
     def __init__(self, garbageStrength):
@@ -33,6 +28,16 @@ class pymupdf_settings:
             
     def __getitem__(self, key):
         return getattr(self, key)
+    
+    
+    def display_properties(self):
+        from pdfsimuti.utils import text_dedent
+        return text_dedent(f"""
+        Compression mode: PyMuPDF
+        Compression Settings:
+        -----------------------
+        Garbage Mode: {self.garbageStrength}         
+        """)
 
 
 class ghostscript_settings:
@@ -63,15 +68,43 @@ class ghostscript_settings:
             # external_files regex will locate all occurance of "pdf files"
             external_files = re.search(r'\b\w+\.pdf\b',custom_commands)
             if external_files:
-                # GhostScript is complicated. I dont know how it works so for the time being, no files via ghostscript
+                # GhostScript is complicated. Having external files via ghostscript is hazard. External files can only be added outside gs_custom
+                # if this feature is needed, open up an issue to fix the problem.
                 log.error("Invalid command found")
                 raise PrettyErrorDisplay(f"""
-                    Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside the string
+                    Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside of --gs-custom.
                     Command: '{custom_commands}'  
                 """)
         else:
             return " "
         
+    def display_properties(self):
+        from pdfsimuti.utils import text_dedent
+        return text_dedent(f"""
+        Compression mode: GhostScript
+        
+        Compression Settings:
+        -----------------------
+        Compatibility: {self.compatibility}
+        Presets: {self.presets}
+        Enable -dEmbedAllFonts: {self.embedAllFonts}
+        Enable -dEnableColorSampling: {self.enableColorSampling}
+        Enable -dEnableGreySampling: {self.enableGreySampling}
+        
+        Color Resolution value: {self.colorResValue}
+        Color Resolution mode: {self.colorSample}
+        Color Conversion Strategy: {self.colorConversion}
+        
+        Grey Resolution value: {self.greyResValue}
+        Grey Resolution mode: {self.greySample}
+        
+        Custom GhostScript Commands: 
+        {self.custom if self.custom else None}
+        
+        Please note, any ghostscript custom command if added can override the values represented here.
+           
+        """)
+
         
 class compressMethodChoice(str, Enum):
     gs = "gs"
@@ -127,7 +160,7 @@ def return_fileList_size(itemList : list) -> list:
     return list_size
     
 
-def display_overview_confirm(itemList: list, compressMethod) -> bool:
+def display_overview_confirm(itemList: list, compressMethod, compressInstance) -> bool:
     """
     Compress display overview and final confirmation
 
@@ -138,8 +171,8 @@ def display_overview_confirm(itemList: list, compressMethod) -> bool:
         bool: Confirmation of compressing
     """
     
-    from rich.text import Text
     from rich.console import Group
+    from rich.console import Console
     
     print("\nThe following file(s) will be compressed.")
     
@@ -154,7 +187,7 @@ def display_overview_confirm(itemList: list, compressMethod) -> bool:
     
     panel_group = Group(
         table, 
-        Text(f"Compression mode: {'GhostScript' if compressMethod == 'gs' else compressMethod.capitalize()}")
+        Console().render_str(f"\n{compressInstance.display_properties()}")
     )
     print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
     
@@ -189,7 +222,7 @@ def display_compress_outcome(infoList : list, time_elasped):
     print(f"Total time taken: {round(time_elasped, 2)} seconds")
     
 
-def pymupdf_compression(fileList: list):   
+def pymupdf_compression(fileList: list, fitz_instance):   
     """
     PyMuPDF Commpression call and runtime.
     
@@ -203,9 +236,8 @@ def pymupdf_compression(fileList: list):
             with fitz.open(item) as doc:
                 # temp files created to solve incremental saving issue
                 temp_file = item + ".temp"
-                doc.save(temp_file, garbage=pymupdf_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+                doc.save(temp_file, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
             os.replace(temp_file, item)
-    
         except ValueError:
             log.warn(f"CAUTION. '{os.path.basename(item)}' cannot be compressed")
             continue
@@ -213,7 +245,7 @@ def pymupdf_compression(fileList: list):
             raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
     
 
-def gs_compression(fileList: list):
+def gs_compression(fileList: list, gs_instance):
     """
     GhostScript Commpression call and runtime.
     
@@ -298,7 +330,7 @@ def gs_compression(fileList: list):
                 raise PrettyErrorDisplay("GhostScript compression has failed")
                 
 
-def compress_pdf_list(itemList: list, compressMethod: str):
+def compress_pdf_list(itemList: list, compressMethod: str, compressInstance):
     """
     Compress pdf main function.
 
@@ -308,13 +340,13 @@ def compress_pdf_list(itemList: list, compressMethod: str):
 
     """
     match compressMethod:
-        case 'gs': gs_compression(fileList=itemList)
-        case 'ghostscript':  gs_compression(fileList=itemList)
-        case 'pymupdf': pymupdf_compression(fileList=itemList)
+        case 'gs': gs_compression(itemList, compressInstance)
+        case 'ghostscript':  gs_compression(itemList, compressInstance)
+        case 'pymupdf': pymupdf_compression(itemList, compressInstance)
 
 
 
-def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMethod: str):
+def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMethod: str, compressInstance=None):
     """
     Compress runtime
     Captures list file size two times (before, after) for comparison
@@ -325,6 +357,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
         mimecheck: bool enable mimechecking
         excludeList (list): list of files to be excluded
         compressMethod (str) : Compression mode
+        compressInstance (class) : Class instance that carries the settings for a specific compression
     """
     log.info("Validating files...")
     validated_pdf_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
@@ -332,7 +365,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
 
 
     
-    if display_overview_confirm(validated_pdf_list, compressMethod):
+    if display_overview_confirm(validated_pdf_list, compressMethod, compressInstance):
         
         import time
         
@@ -342,7 +375,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
         
         # runtime
         log.info("Compression runtime started.")
-        compress_pdf_list(validated_pdf_list, compressMethod)
+        compress_pdf_list(validated_pdf_list, compressMethod, compressInstance)
         log.info("Compression runtime over.")
         
         # 2nd Size Capture
@@ -380,27 +413,23 @@ def compress(
     grey_sample_type: Annotated[gsDownSampleControl, typer.Option("--grey_sample_type", "-gs", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = "bicubic"
     
     ):
-    # TODO: Do something here like configure_gs_settings(param1, param2, param3 T / F ,param 4) then pass the info to the main compress_runtime
-    # gs itself is a class. Not a singple function so that it can accom udate more features.
     
     log.info("performing command line validation")
     
-    import sys # detect for ghostscript commands.
     
     # validate commandline of logic errors.
+    import sys # detect for ghostscript commands.
     commandline_exception_no_gs = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--grey-res", "--grey_sample_type"]
-    capture_method = compressMethod
-    
+    compressInstance = None
+
     if any(value in commandline_exception_no_gs for value in sys.argv) and compressMethod == "pymupdf":
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
     elif compressMethod == ("gs" or "ghostscript"):
-        global gs_instance
-        gs_instance = ghostscript_settings(compatibility.value, presets.value, embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
+        compressInstance = ghostscript_settings(compatibility.value, presets.value, embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
     
     elif compressMethod == "pymupdf":
-        global pymupdf_instance
-        pymupdf_instance = pymupdf_settings(garbageStrength=garbage)
-    
+        compressInstance = pymupdf_settings(garbageStrength=garbage)
+
     # compress runtime handles the main load
-    compress_runtime(filelist, mimecheck, exclude, compressMethod.value)
+    compress_runtime(filelist, mimecheck, exclude, compressMethod.value, compressInstance)

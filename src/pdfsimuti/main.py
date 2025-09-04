@@ -23,13 +23,13 @@ def version_callback(value:bool):
         raise typer.Exit()
 
 
-@app.callback(epilog="Written by [link=www.github.com/foxtbirdy]foxtbirdy[/link] 🦊 with 💜")
+@app.callback(epilog="Author: @[link=www.github.com/foxtbirdy]foxtbirdy[/link]")
 def main(version: Annotated[
     Optional[bool],
     typer.Option("--version", "-v", callback=version_callback, is_eager=True, help="Show version & exit")] = None,
     ):
     """
-    A very simple PDF utility tool written in Python using Typer.
+    Utility collection tool for PDF written in Python with Typer.
     """
     pass
 
