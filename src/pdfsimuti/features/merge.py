@@ -153,7 +153,7 @@ def designate_saving_filePath(target_file_path):
     return return_joined_filePath(working_dir, outputFileName)
 
 
-def show_successful_merge_outcome(outputPath:str):
+def display_successful_merge_outcome(outputPath:str):
     """
     Display Successfull merge output. Shows output file location
 
@@ -161,14 +161,15 @@ def show_successful_merge_outcome(outputPath:str):
         outputPath (str) : saving directory of the file
     """
 
-    print(Panel(f"""
-Filename: [i]{return_filepath_basename(outputPath)}[/i]
-Folder: [i]{workingDir if return_filepath_dirname(outputPath) == "" else return_filepath_dirname(outputPath)}[/i]
-Fullpath: [i]{outputPath}[/i]
-""", subtitle="MERGE COMPLETED", border_style="green", expand=False))
+    outcome_table = Table(show_header=False, expand=False, show_lines=True)
+    outcome_table.add_row("[u][b]Filename[/b][/u]", return_filepath_basename(outputPath))
+    outcome_table.add_row("[u][b]Folder[/b][/u]", workingDir if return_filepath_dirname(outputPath) == "" else return_filepath_dirname(outputPath))
+    outcome_table.add_row("[u][b]Absolute Path[/b][/u]", outputPath)
+
+    print(Panel(outcome_table, subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
-def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, sort:str):
+def display_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, sort:str):
     """
     Overview of the entire task before the start of the job.
     Uses Panel and Table from Rich.
@@ -179,12 +180,18 @@ def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, so
         sort (str): sorting method of the list items
     """
     fileSize = 0
-    table = Table(show_header=False, show_lines=True, highlight=True, expand=True)
-    ordered_file_list_view = f"{"\n".join(f"{index+1}. ITEM: [blue]{return_filepath_basename(item)}[/blue]\n   DIRECTORY: [yellow]{return_filepath_dirname(item)}[/yellow]" for index, item in enumerate(itemsList))}"
+    table = Table(show_header=False, show_lines=True, highlight=True, expand=False)
+    
+    inner_table = Table(show_lines=True)
+    inner_table.add_column("Index")
+    inner_table.add_column("Filename")
+    inner_table.add_column("Absolute Path")
+    for index, item in enumerate(itemsList):
+        inner_table.add_row(str(index+1), return_filepath_basename(item), f'{os.path.abspath(item)}')
 
     # Calculate estimated size of the merge
     for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
-    table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", ordered_file_list_view)
+    table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", inner_table)
     table.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
     table.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
     table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
@@ -192,17 +199,16 @@ def view_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, so
     table.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
     print("\nPlease confirm the job.")
-    print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=True))
+    print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
 
-def generate_merged_pdf(itemsList:list, outputFile:str, preserveFiles:bool):
+def generate_merged_pdf(itemsList:list, outputFile:str):
     """
     Main engine of the pdf. Uses PyMuPDF to merge files
 
     Args:
         itemsList (list): validated list of pdf filenames
         outputFile (str): output file str
-        preserveFiles (bool): preserving files after completion confirmation
 
     Raises:
         PrettyErrorDisplay: Display error if failed to merge
@@ -211,12 +217,12 @@ def generate_merged_pdf(itemsList:list, outputFile:str, preserveFiles:bool):
         doc = fitz.open()
         for file in itemsList:
             doc.insert_file(file)
-            # Remove files if preserve is removed
-            if not preserveFiles:
-                os.remove(file)
         doc.save(outputFile)
+        doc.close()
         
-    # If output directory specified doesn't exist
+    except KeyboardInterrupt:
+        print("[red]Aborting...[/red]")
+        
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
@@ -234,12 +240,16 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     """
 
     output = designate_saving_filePath(output)
-    view_merge_overview(itemsList, output, preserveFiles, sort)
+    display_merge_overview(itemsList, output, preserveFiles, sort)
     
     if return_confirm("\nContinue with current settings"):
         if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
-        generate_merged_pdf(itemsList, output, preserveFiles)
-        show_successful_merge_outcome(output) # Print success
+        generate_merged_pdf(itemsList, output)
+        
+        if not preserveFiles:
+            for item in itemsList: os.remove(item)
+        
+        display_successful_merge_outcome(output) # Print success
     else:
         print("[red]Aborted[/red]")
 
@@ -252,7 +262,7 @@ def merge(
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_SAVE_PDF_FILENAME):
 
-    # in case someone is stupid to pass --mimencheck as --output
+    # in case someone pass --mimencheck as --output
     if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
