@@ -16,6 +16,12 @@ workingDir = os.getcwd()
 
 DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
+
+def text_dedent(msg : str):
+    import textwrap
+    return textwrap.dedent(msg).strip()
+
+
 ### SHARED FUNCTIONS
 class PrettyErrorDisplay(ClickException):
     """
@@ -25,13 +31,19 @@ class PrettyErrorDisplay(ClickException):
     """
     
     def __init__(self, message):
-        import textwrap
         from rich.console import Console
-        super().__init__(Console().render_str(textwrap.dedent(message).strip()))
+        super().__init__(Console().render_str(text_dedent(message)))
         
         
 def return_confirm(msg:str) -> bool:
     return typer.confirm(msg, default=True); # default flag means enter key = y
+
+
+def get_calling_function():
+    from inspect import currentframe
+    
+    return return_filepath_basename(currentframe().f_back.f_back.f_code.co_filename)
+
 
 
 def return_ghostscript_callname() -> str:
@@ -40,7 +52,7 @@ def return_ghostscript_callname() -> str:
     Could be either gs, gswin64c or gswin32c
 
     Returns:
-        str: ghostscript callname
+        str: actual ghostscript callname on the installed machine
     """
     gs_name = "gs"
     
@@ -82,9 +94,9 @@ def return_filepath_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def return_absolute_filePath(item:str) -> str:
+def return_absolute_path(item:str) -> str:
     """
-    Returns the absolute filepath of an existant file.
+    returns the abspath. works as os.path.abspath(ITEM)
 
     Args:
         item (str): name of the file
@@ -93,6 +105,24 @@ def return_absolute_filePath(item:str) -> str:
         str: absolute path of the file
     """
     return os.path.abspath(item)
+
+
+def check_if_openable(item: str) -> bool:
+    """
+    Determines if a PDF can be opened or not. Returns depending on weither it got an exception or not
+
+    Args:
+        item (str): PDF file
+
+    Returns:
+        bool: outcome
+    """
+    try:
+        with open(item, "r") as doc:
+            return True
+    except Exception:
+        return False
+    
 
 
 def has_pdf_extension(item) -> bool:
@@ -119,7 +149,7 @@ def return_joined_filePath(folderpath:str, filename:str) -> str:
     return os.path.join(folderpath, filename)
 
 
-def get_pdf_from_dir(directory: str) -> list:
+def return_pdfFiles_fromDir(directory: str) -> list:
     """
     Gets PDFs from a directory. 
     Only used in the validate_pdf_list when the user passes a directory address instead of the filename
@@ -128,31 +158,43 @@ def get_pdf_from_dir(directory: str) -> list:
         directory (str): Directory path
 
     Returns:
-        list: Pdf files from the list
+        list: PDF absolute filepaths from the directory
     """
-
-    directory = workingDir if "." in directory else directory
+    # Note: "." is actually an address to the current directory
+    directory = workingDir if directory == "." else return_absolute_path(directory)
+    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
+            
     pdf_files = []
     for folder_item in os.listdir(directory):
         folder_path = return_joined_filePath(directory, folder_item)
         if has_pdf_extension(folder_path): pdf_files.append(folder_path)
-
     return pdf_files
 
 
-def validate_fileList_via_mimecheck(fileList: list):
+def validate_fileList_write_capability(fileList: list, mimecheck):
     """
     Mimecheck assisted updater to the rejected file lists.
 
     Args:
         fileList (list): PDF filepaths in a list
     """
-    magic = importlib.import_module('magic')
+    try:
+        magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
+    except ModuleNotFoundError:
+        raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
+        
     for item in fileList:
-        file_mimecheck_result = magic.Magic(mime=True).from_file(item)
-        if file_mimecheck_result != "application/pdf":
-            rejected_file_list[item] = file_mimecheck_result
-            
+        if not check_if_openable(item):
+            rejected_file_list[item] = "[red]Insufficient Permissions[/red]"
+            continue
+        elif magic and magic.from_file(item) != "application/pdf":
+            rejected_file_list[item] = f"[red]Mimecheck pass fail[/red] \nReceived: {magic.from_file(item)}"
+            continue
+
+        if importlib.util.find_spec('fitz') is not None and importlib.import_module('fitz').open(item).needs_pass:
+            rejected_file_list[item] = "[red]Password Protected[/red]"
+
+
 
 def validate_pdf_list(items, exclude, mimeCheck):
     """
@@ -168,8 +210,9 @@ def validate_pdf_list(items, exclude, mimeCheck):
     Raises:
         PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files
 
-    Returns:
+    Returns (if match case):
         list: Validated list of PDF files
+        
     """
     fileList = []
     
@@ -177,47 +220,57 @@ def validate_pdf_list(items, exclude, mimeCheck):
     print()
     
     for item in items:
-        if item not in fileList and has_pdf_extension(item) and os.path.exists(item): 
-            fileList.append(return_absolute_filePath(item)) # ensures duplicates are not found.
+        # updates the list of files that are present or not
+        if item not in fileList and has_pdf_extension(item) and os.path.exists(item):
+            fileList.append(return_absolute_path(item)) # ensures duplicates are not found.
         elif os.path.isdir(item):
-            print(f"ADDDING FOLDER: [yellow]{"<CURRENT DIRECTORY>" if item == "." else f"[i]{return_absolute_filePath(item)}[/i]"} [/yellow]")
-            # Note: "." is actually an address to the current directory
-            fileList.extend(get_pdf_from_dir(item))
+            fileList.extend(return_pdfFiles_fromDir(item))
         else: 
-            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_filePath(item)}[/yellow] [/i]")
+            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")  
         
     if len(set(fileList)) != len(fileList): 
         print("\n[yellow]CAUTION![/yellow] Duplicates found and got ignored.")
 
-    # Performs mimechecking of the files from the list. Will update the list of any non-compatible files
-    if mimeCheck:
-        validate_fileList_via_mimecheck(fileList)
-        display_rejected_files()
-    else:
-        print("\n[orange]Fake PDF files cannot be detected. Use '-m' to enable file mime checking")
+    # Performs write permissions of the files from the list. Will update the fileList of any non-compatible files
+    validate_fileList_write_capability(fileList, mimeCheck)
 
     # [] is for NoneType to allow iteration of list
-    excludeList = [return_absolute_filePath(excludeItem) for excludeItem in exclude if excludeItem != None]
+    excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
     fileList = list(dict.fromkeys([item for item in fileList or [] if (item not in rejected_file_list or []) and (item not in excludeList)]))
     
+    # display rejected files. If it exists
+    if len(rejected_file_list) != 0: display_rejected_files()
     
-    return fileList
+    if len(fileList) == 0:
+        raise PrettyErrorDisplay(f"""
+            No compatible PDF files found.
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_absolute_path(item) for item in items]))}[/i]
+        """)
+    
+    
+    match get_calling_function():
+        case "compress.py": 
+            return fileList
+        case "merge.py":
+            if len(fileList) <= 1:
+                raise PrettyErrorDisplay("Excepted more than 1 compatible PDF file for merging.")
+            return fileList
 
 
 def display_rejected_files() -> None:
     """
     Display the rejected files to the user in a table manner
     """
-    if len(rejected_file_list) != 0:
-        # display rejected files
-        print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected due to mimecheck.")
-        table = Table(show_lines=True, highlight=True)
-        table.add_column("File No.", justify = "center", no_wrap=True)
-        table.add_column("File Name", justify = "center", no_wrap=True)
-        table.add_column("File Path (Absolute)", justify = "center", no_wrap=True)
-        table.add_column("Received Type\n[i]Instead of 'application/PDF'[/i]", justify = "center", no_wrap=True)
-        
-        for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
-            table.add_row(str(index+1), os.path.basename(filename), os.path.abspath(filename), f'[red]{filetype}[/red]')
-        
-        print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
+
+    # display rejected files
+    print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected.")
+    table = Table(show_lines=True, highlight=True)
+    table.add_column("File No.", justify = "center", no_wrap=True)
+    table.add_column("File Name", justify = "center", no_wrap=True)
+    table.add_column("File Path (Absolute)", justify = "center", no_wrap=True)
+    table.add_column("Cause", justify = "center", no_wrap=True)
+    
+    for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
+        table.add_row(str(index+1), os.path.basename(filename), os.path.abspath(filename), f'{filetype}')
+    
+    print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
