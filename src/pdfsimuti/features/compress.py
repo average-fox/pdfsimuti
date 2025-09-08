@@ -9,7 +9,7 @@ from rich import print
 from rich.table import Table
 from rich.panel import Panel
 
-from pdfsimuti.utils import PrettyErrorDisplay, validate_pdf_list, return_confirm
+from pdfsimuti.utils import PrettyErrorDisplay
 
 import logging
 from rich.logging import RichHandler
@@ -34,6 +34,7 @@ class pymupdf_settings:
         from pdfsimuti.utils import text_dedent
         return text_dedent(f"""
         Compression mode: PyMuPDF
+        
         Compression Settings:
         -----------------------
         Garbage Mode: {self.garbageStrength}   
@@ -175,6 +176,7 @@ def display_overview_confirm(itemList: list, compressInstance) -> bool:
     
     from rich.console import Group
     from rich.console import Console
+    from pdfsimuti.utils import return_confirm
     
     print("\nThe following file(s) will be compressed.")
     
@@ -247,7 +249,7 @@ def pymupdf_compression(fileList: list, fitz_instance):
             raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
     
 
-def gs_compression(fileList: list, gs_instance):
+def ghostscript_compression(fileList: list, gs_instance):
     """
     GhostScript Commpression call and runtime.
     
@@ -269,7 +271,7 @@ def gs_compression(fileList: list, gs_instance):
         *Progress.get_default_columns(),
         transient=True) as progress:
         
-        compress_runtime = progress.add_task(description="GhostScript is running...", total=len(fileList))
+        runtime = progress.add_task(description="GhostScript is running...", total=len(fileList))
         log.info("Started GhostScript calling.")
         
         for item in fileList:
@@ -305,7 +307,7 @@ def gs_compression(fileList: list, gs_instance):
                 subprocess.run(command, check=True, capture_output=True)
                 os.replace(temp_file, target_absolute)
                 progress.log(f"[green]Compressed [/green] {target_filename}")
-                progress.update(compress_runtime, advance=1)
+                progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
                 if not os.path.exists(item):
@@ -334,23 +336,23 @@ def gs_compression(fileList: list, gs_instance):
                 raise PrettyErrorDisplay("GhostScript compression has failed")
                 
 
-def compress_pdf_list(itemList: list, compressMethod: str, compressInstance):
+def compress_pdf_list(itemList: list, compressInstance):
     """
     Compress pdf main function.
 
     Args:
         itemList (list): list of PDFs
         compressMethod (str) : Mode of compression. Either gs or pymupdf
+        compressInstance : Compression settings. Can be either pymupdf or ghostscript
 
     """
-    match compressMethod:
-        case 'gs': gs_compression(itemList, compressInstance)
-        case 'ghostscript':  gs_compression(itemList, compressInstance)
-        case 'pymupdf': pymupdf_compression(itemList, compressInstance)
+    match compressInstance.__class__.__name__:
+        case 'ghostscript_settings': ghostscript_compression(itemList, compressInstance)
+        case 'pymupdf_settings': pymupdf_compression(itemList, compressInstance)
 
 
 
-def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMethod: str, compressInstance=None):
+def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressInstance=None):
     """
     Compress runtime
     Captures list file size two times (before, after) for comparison
@@ -363,23 +365,22 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
         compressMethod (str) : Compression mode
         compressInstance (class) : Class instance that carries the settings for a specific compression
     """
+    from pdfsimuti.utils import validate_pdf_list
+    
     log.info("Validating files...")
     validated_pdf_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
     log.info("Validation complete")
-
-
     
     if display_overview_confirm(validated_pdf_list, compressInstance):
-        
         import time
         
         # 1st Size capture
         start = time.time()
         initial_file_size = return_fileList_size(validated_pdf_list)
         
-        # runtime
+        # main function
         log.info("Compression runtime started.")
-        compress_pdf_list(validated_pdf_list, compressMethod, compressInstance)
+        compress_pdf_list(validated_pdf_list, compressInstance)
         log.info("Compression runtime over.")
         
         # 2nd Size Capture
@@ -435,4 +436,4 @@ def compress(
         compressInstance = pymupdf_settings(garbageStrength=garbage)
 
     # compress runtime handles the main load
-    compress_runtime(filelist, mimecheck, exclude, compressMethod.value, compressInstance)
+    compress_runtime(filelist, mimecheck, exclude, compressInstance)
