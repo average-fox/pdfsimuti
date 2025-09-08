@@ -36,7 +36,8 @@ class pymupdf_settings:
         Compression mode: PyMuPDF
         Compression Settings:
         -----------------------
-        Garbage Mode: {self.garbageStrength}         
+        Garbage Mode: {self.garbageStrength}   
+        -----------------------      
         """)
 
 
@@ -102,7 +103,7 @@ class ghostscript_settings:
         {self.custom if self.custom else None}
         
         Please note, any ghostscript custom command if added can override the values represented here.
-           
+        -----------------------
         """)
 
         
@@ -160,12 +161,13 @@ def return_fileList_size(itemList : list) -> list:
     return list_size
     
 
-def display_overview_confirm(itemList: list, compressMethod, compressInstance) -> bool:
+def display_overview_confirm(itemList: list, compressInstance) -> bool:
     """
     Compress display overview and final confirmation
 
     Args:
         itemList (list): list of files
+        compressInstance (class instance): Either ghostscript_settings or pymupdf_settings
 
     Returns:
         bool: Confirmation of compressing
@@ -186,8 +188,8 @@ def display_overview_confirm(itemList: list, compressMethod, compressInstance) -
         table.add_row(str(index), os.path.basename(item), os.path.abspath(item), str(os.path.getsize(item)))    
     
     panel_group = Group(
+        Console().render_str(f"{compressInstance.display_properties()}"),
         table, 
-        Console().render_str(f"\n{compressInstance.display_properties()}")
     )
     print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
     
@@ -306,25 +308,27 @@ def gs_compression(fileList: list, gs_instance):
                 progress.update(compress_runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
-                # return code 1 => file not found. i think.
-                if e.returncode == 1:
-                    progress.log(f"[red]Failed to compress[/red] {target_filename}")
-                    os.remove(temp_file)
-                    continue
+                if not os.path.exists(item):
+                    log.warn(f"Failed to compress {os.path.basename(item)}. File not found.")
                 else:
                     raise PrettyErrorDisplay(f"""
-                GhostScript failed to run successfully.
+                GhostScript failed to run.
                 GhostScript Output: {e.output}
-                GhostScript command: {" ".join(command)}
-                {e.returncode}
+                GhostScript command: 
+                {" ".join(command)}
                 """)
-        
+
             except FileNotFoundError as e:
                 raise PrettyErrorDisplay(f"""
             Compression via GhostScript failed.
             Please check your GhostScript installation via [code]pdfsimuti checkhealth[/code]
             If the problem persists, please create an [link=https://github.com/foxtbirdy/pdfsimuti/issues/new]issue[/link].
             """)
+                
+            except KeyboardInterrupt:
+                print("[red]Aborting...[/red]")
+                if os.path.exists(temp_file): os.remove(temp_file)
+                exit()
                 
             except Exception as e:
                 raise PrettyErrorDisplay("GhostScript compression has failed")
@@ -365,7 +369,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressMetho
 
 
     
-    if display_overview_confirm(validated_pdf_list, compressMethod, compressInstance):
+    if display_overview_confirm(validated_pdf_list, compressInstance):
         
         import time
         
@@ -415,7 +419,6 @@ def compress(
     ):
     
     log.info("performing command line validation")
-    
     
     # validate commandline of logic errors.
     import sys # detect for ghostscript commands.

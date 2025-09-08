@@ -222,6 +222,7 @@ def generate_merged_pdf(itemsList:list, outputFile:str):
         
     except KeyboardInterrupt:
         print("[red]Aborting...[/red]")
+        exit()
         
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 

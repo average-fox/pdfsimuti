@@ -185,7 +185,7 @@ def validate_fileList_write_capability(fileList: list, mimecheck):
         
     for item in fileList:
         if not check_if_openable(item):
-            rejected_file_list[item] = "[red]No Write Permission[/red]"
+            rejected_file_list[item] = "[red]Insufficient Permissions[/red]"
             continue
         elif magic and magic.from_file(item) != "application/pdf":
             rejected_file_list[item] = f"[red]Mimecheck pass fail[/red] \nReceived: {magic.from_file(item)}"
@@ -254,6 +254,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
         case "merge.py":
             if len(fileList) <= 1:
                 raise PrettyErrorDisplay("Excepted more than 1 compatible PDF file for merging.")
+            return fileList
 
 
 def display_rejected_files() -> None:
