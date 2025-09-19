@@ -4,7 +4,6 @@ import struct # windows os + ghostScript only. Required to get CPU bit since gsw
 import sys
 
 from rich import print
-from rich.text import Text
 from rich.table import Table
 from rich.panel import Panel
 

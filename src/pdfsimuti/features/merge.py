@@ -16,7 +16,6 @@ from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_
          
 app = typer.Typer()
 
-# TODO: Optimize the code between output designation + merge_runtime and try to change all os.path with pathlib (check performance comparison first) 
 
 class SortOrder(str, Enum):
     """
@@ -66,6 +65,46 @@ def sort_list(sort_type, items):
     return items
 
 
+def advanced_filenaming(filename:str) -> str:
+    """
+    Advance filenaming allowing naming files with options instead of aborting
+    Can either edit or replace the filename depending on the choice.
+    
+    Returns the filename after choice.
+
+    Args:
+        filename (str): unedited filename
+    
+    Returns:
+        filename (str): newly edited filename
+    """
+    from pdfsimuti.utils import text_dedent
+    print(text_dedent(f"""
+    -----------------------------------------------
+    Detected risky filename. What do you want to do?
+    
+    [1] : Ignore warning and add extension to the end. [i]{filename}.pdf[/i]
+    [2] : Change all "." to "-" then add extension to the end. [i]{filename.replace(".", "-")}.pdf[/i]
+    [3] : Remove all "." then add extension. [i]{filename.lower().split(".")[0]}.pdf[/i]
+    [0] : Enter a new name
+    -----------------------------------------------
+    """))
+    while True:
+        respond = input("> ")
+        match respond:
+            case "0":
+                return input("Enter filename: ")
+            case "1":
+                return f"{filename}.pdf"
+            case "2":
+                return f"{filename.replace(".", "-")}.pdf"
+            case "3":
+                return f"{filename.lower().split(".")[0]}.pdf"
+            case _:
+                print("[red]Invalid input[/red]. Choose either 0,1,2 or 3.")
+                continue
+        break
+
 
 def designate_saving_dirname(filePath) -> str:
     """
@@ -98,7 +137,7 @@ def designate_saving_dirname(filePath) -> str:
 def designate_saving_filename(target_file_path:str) -> str:
     """
     Checks the filetype of the target directory filename.
-    this will keep causing a prompt if the filetype doesn't match the correct type or the filename is SUS.
+    this will keep causing a prompt if the filetype doesn't match the correct type.
     Only runs if the user wants to add a custom filename instead of the default.
 
     Args:
@@ -107,20 +146,23 @@ def designate_saving_filename(target_file_path:str) -> str:
     Returns:
         str: File name of the validated file.
     """
-    # if user gives something like folder/ then the filename will be default or otherwise it will be '' which is bad.
+    # if user gives something like folder/ then the filename will be default or otherwise it will be '' which is an error.
     filename = DEFAULT_SAVE_PDF_FILENAME if return_filepath_basename(target_file_path) == "" else return_filepath_basename(target_file_path) 
     folderpath = return_filepath_dirname(target_file_path)
     
     while True:
         if not has_pdf_extension(filename):
-            print(f"\nInvalid FileType name. Expected 'pdf'. Got {filename.lower().split(".")[-1]}")
-            filename = typer.prompt(f"Enter saving filename (such as {DEFAULT_SAVE_PDF_FILENAME}): ")
+            file_extension = filename.lower().split(".")
+            print(f"\nInvalid filetype. Expected 'pdf'. Got '{file_extension[-1]}'")
+            
+            if len(file_extension) > 2:
+                filename = advanced_filenaming(filename)
+                continue
+            else:
+                filename = typer.prompt(f"Enter saving filename (such as {DEFAULT_SAVE_PDF_FILENAME}): ")
             continue
 
-        elif os.path.exists(return_joined_filePath(folderpath, filename)): # Takes the updated filename only. Check above
-
-            # if the output already leads to an existing file and then user doesn't want to overwrite so if they add another file
-            #  and AGAIN make the same mistake like before then prompt them again!
+        elif os.path.exists(return_joined_filePath(folderpath, filename)):
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
             if not return_confirm("Do you wish to overwrite this file?"):    
