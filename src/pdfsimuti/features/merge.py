@@ -81,7 +81,7 @@ def advanced_filenaming(filename:str) -> str:
     from pdfsimuti.utils import text_dedent
     print(text_dedent(f"""
     -----------------------------------------------
-    Detected risky filename. What do you want to do?
+    Detected risky filename ({filename}). What do you want to do?
     
     [1] : Ignore warning and add extension to the end. [i]{filename}.pdf[/i]
     [2] : Change all "." to "-" then add extension to the end. [i]{filename.replace(".", "-")}.pdf[/i]
@@ -153,13 +153,11 @@ def designate_saving_filename(target_file_path:str) -> str:
     while True:
         if not has_pdf_extension(filename):
             file_extension = filename.lower().split(".")
-            print(f"\nInvalid filetype. Expected 'pdf'. Got '{file_extension[-1]}'")
-            
-            if len(file_extension) > 2:
+
+            if len(file_extension) > 1:
                 filename = advanced_filenaming(filename)
-                continue
             else:
-                filename = typer.prompt(f"Enter saving filename (such as {DEFAULT_SAVE_PDF_FILENAME}): ")
+                filename = filename + ".pdf"
             continue
 
         elif os.path.exists(return_joined_filePath(folderpath, filename)):
