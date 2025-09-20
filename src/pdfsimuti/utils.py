@@ -16,7 +16,16 @@ workingDir = os.getcwd()
 DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
 
-def text_dedent(msg : str):
+def text_dedent(msg : str) -> str:
+    """
+    Detents a triple quote print statement using textwrap
+
+    Args:
+        msg (str): String to dedent
+
+    Returns:
+        str: Detended string
+    """
     import textwrap
     return textwrap.dedent(msg).strip()
 
@@ -35,10 +44,26 @@ class PrettyErrorDisplay(ClickException):
         
         
 def return_confirm(msg:str) -> bool:
+    """
+    Typer based confirm y/n.
+    Default is y.
+    
+    Args:
+        msg (str): Typer confirm message.
+
+    Returns:
+        bool: Outcome of confirm
+    """
     return typer.confirm(msg, default=True); # default flag means enter key = y
 
 
 def get_calling_function():
+    """
+    Returns the file basename that called this python file.
+
+    Returns:
+        str: caller filename
+    """
     from inspect import currentframe
     
     return return_filepath_basename(currentframe().f_back.f_back.f_code.co_filename)

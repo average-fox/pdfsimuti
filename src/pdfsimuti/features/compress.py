@@ -109,6 +109,13 @@ class ghostscript_settings:
 
         
 class compressMethodChoice(str, Enum):
+    """
+    Compress method choices. Required for typer Enum options
+
+    Args:
+        str (str): typer string to match
+        Enum (enum): strings to point
+    """
     gs = "gs"
     pymupdf = "pymupdf"
     ghostscript = "ghostscript"
@@ -116,6 +123,13 @@ class compressMethodChoice(str, Enum):
 
 
 class gsColorConversionStrategy(str, Enum):
+    """
+    GhostScript conversion Strategy choices. Required for typer Enum options
+
+    Args:
+        str (str): typer string to match
+        Enum (enum): strings to point
+    """
     leaveColorUnchanged="LeaveColorUnchanged"
     Gray="Gray"
     RGB="RGB"
@@ -123,6 +137,13 @@ class gsColorConversionStrategy(str, Enum):
 
 
 class gsCompatibilityChoice(str, Enum):
+    """
+    GhostScript compatibility settings. Required for typer Enum options
+
+    Args:
+        str (str): typer string to match
+        Enum (enum): strings to point
+    """
     one_three = "1.3"
     one_four = "1.4"
     one_seven = "1.7"
@@ -130,6 +151,13 @@ class gsCompatibilityChoice(str, Enum):
 
 
 class gsPDFshrinkPresets(str, Enum):
+    """
+    GhostScript shrinking presets. Required for typer Enum options
+
+    Args:
+        str (str): typer string to match
+        Enum (enum): strings to point
+    """
     ebook = "ebook"
     screen = "screen"
     printer = "printer"
@@ -137,6 +165,14 @@ class gsPDFshrinkPresets(str, Enum):
 
 
 class gsDownSampleControl(str, Enum):
+    """
+    GhostScript color/grey downgrading sample control. Required for typer Enum options
+
+    Args:
+        str (str): typer string to match
+        Enum (enum): strings to point
+    """    
+
     subsample = "subsample"
     average = "average"
     bicubic = "bicubic"
@@ -418,15 +454,14 @@ def compress(
     grey_sample_type: Annotated[gsDownSampleControl, typer.Option("--grey_sample_type", "-gs", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = "bicubic"
     
     ):
-    
+
     log.info("performing command line validation")
     
-    # validate commandline of logic errors.
     import sys # detect for ghostscript commands.
-    commandline_exception_no_gs = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--grey-res", "--grey_sample_type"]
+    commandline_gs_exception = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--grey-res", "--grey_sample_type"]
     compressInstance = None
 
-    if any(value in commandline_exception_no_gs for value in sys.argv) and compressMethod == "pymupdf":
+    if any(value in commandline_gs_exception for value in sys.argv) and compressMethod == "pymupdf":
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
     elif compressMethod == ("gs" or "ghostscript"):
