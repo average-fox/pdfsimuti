@@ -173,26 +173,20 @@ def return_joined_filePath(folderpath:str, filename:str) -> str:
     return os.path.join(folderpath, filename)
 
 
-def return_pdfFiles_fromDir(directory: str) -> list:
-    """
-    Gets PDFs from a directory. 
-    Only used in the validate_pdf_list when the user passes a directory address instead of the filename
+def update_dict_with_dir_pdfs(fileList: list, directory: str) -> list:
 
-    Args:
-        directory (str): Directory path
-
-    Returns:
-        list: PDF absolute filepaths from the directory
-    """
-    # Note: "." is actually an address to the current directory
     directory = workingDir if directory == "." else return_absolute_path(directory)
     print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
-            
-    pdf_files = []
-    for folder_item in os.listdir(directory):
-        folder_path = return_joined_filePath(directory, folder_item)
-        if has_pdf_extension(folder_path): pdf_files.append(folder_path)
-    return pdf_files
+    
+    for item in os.listdir(directory):
+        # folder_path = return_joined_filePath(directory, item)
+        if has_pdf_extension(item):
+            if item not in fileList: 
+                fileList.append(item)
+            else:
+                print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {item}")    
+
+    return fileList
 
 
 def validate_fileList_write_capability(fileList: list, mimecheck):
@@ -238,22 +232,36 @@ def validate_pdf_list(items, exclude, mimeCheck):
         list: Validated list of PDF files
         
     """
+    # dict = {
+    #    file="file1.pdf", {
+    #       valid="True/False", data="based on valid",
+    #       }
+    # }
+
+
     fileList = []
+    # fileDict = {}
     
     # start everything from new line
     print()
     
+    # build the dict by taking all the given items 
     for item in items:
         # updates the list of files that are present or not
-        if item not in fileList and has_pdf_extension(item) and os.path.exists(item):
-            fileList.append(return_absolute_path(item)) # ensures duplicates are not found.
-        elif os.path.isdir(item):
-            fileList.extend(return_pdfFiles_fromDir(item))
-        else: 
-            print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")  
-        
-    if len(set(fileList)) != len(fileList): 
-        print("\n[yellow]CAUTION![/yellow] Duplicates found and got ignored.")
+
+        if os.path.isdir(item):
+            fileList = update_dict_with_dir_pdfs(fileList, item) 
+        elif has_pdf_extension(item) and os.path.exists(item):
+            if item not in fileList:
+                fileList.append(item) # ensures duplicates are not found.
+            else:
+                print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {item}")  
+                # fileDict[return_absolute_path] = None
+        # else: 
+        #     print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")  
+    
+    # turn the fileList items into absolute items
+    fileList =  [return_absolute_path(item) for item in fileList]
 
     # Performs write permissions of the files from the list. Will update the fileList of any non-compatible files
     validate_fileList_write_capability(fileList, mimeCheck)
@@ -277,7 +285,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
             return fileList
         case "merge.py":
             if len(fileList) <= 1:
-                raise PrettyErrorDisplay("Excepted more than 1 compatible PDF file for merging.")
+                raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
             return fileList
 
 
