@@ -154,6 +154,11 @@ def has_pdf_extension(item) -> bool:
     Returns the filetype by checking if it endswith .pdf
     Doesn't use name.endswith("pdf") because files like file/pdf returns True if used.
     Will return false if the item is just "pdf" and nothing else
+    
+    Args: 
+        item (str): filename or filepath
+    Returns:
+        bool: outcome
     """
     return item.lower().split(".")[-1] == "pdf" and item != "pdf"
 
@@ -173,20 +178,28 @@ def return_joined_filePath(folderpath:str, filename:str) -> str:
     return os.path.join(folderpath, filename)
 
 
-def update_dict_with_dir_pdfs(fileList: list, directory: str) -> list:
+def scan_dir_files(targetList: list, directory: str) -> list:
+    """
+    Scans a given directory for PDF files to be appended to the targetList for operations
 
+    Args:
+        targetList (list) : list for the files to be appended
+        directory (str) : directory path for PDF file scanning
+    Returns:
+        targetList (list) : updated targetList with included directory files
+    """
     directory = workingDir if directory == "." else return_absolute_path(directory)
     print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
     
     for item in os.listdir(directory):
-        # folder_path = return_joined_filePath(directory, item)
-        if has_pdf_extension(item):
-            if item not in fileList: 
-                fileList.append(item)
+        folder_path = return_joined_filePath(directory, item)
+        if has_pdf_extension(folder_path):
+            if folder_path not in targetList: 
+                targetList.append(folder_path)
             else:
-                print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {item}")    
+                print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {folder_path}")    
 
-    return fileList
+    return targetList
 
 
 def validate_fileList_write_capability(fileList: list, mimecheck):
@@ -211,7 +224,8 @@ def validate_fileList_write_capability(fileList: list, mimecheck):
 
         if importlib.util.find_spec('fitz') is not None and importlib.import_module('fitz').open(item).needs_pass:
             rejected_file_list[item] = "[red]Password Protected[/red]"
-
+    
+    return fileList
 
 
 def validate_pdf_list(items, exclude, mimeCheck):
@@ -240,6 +254,7 @@ def validate_pdf_list(items, exclude, mimeCheck):
 
 
     fileList = []
+    excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
     # fileDict = {}
     
     # start everything from new line
@@ -247,28 +262,25 @@ def validate_pdf_list(items, exclude, mimeCheck):
     
     # build the dict by taking all the given items 
     for item in items:
-        # updates the list of files that are present or not
-
+        item = return_absolute_path(item)
         if os.path.isdir(item):
-            fileList = update_dict_with_dir_pdfs(fileList, item) 
-        elif has_pdf_extension(item) and os.path.exists(item):
-            if item not in fileList:
-                fileList.append(item) # ensures duplicates are not found.
-            else:
-                print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {item}")  
-                # fileDict[return_absolute_path] = None
-        # else: 
-        #     print(f"[white on red]WARNING![/white on red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")  
-    
-    # turn the fileList items into absolute items
-    fileList =  [return_absolute_path(item) for item in fileList]
-
+            if item in excludeList:
+                continue
+            fileList = scan_dir_files(fileList, item)
+        elif not os.path.exists(item): 
+            print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")
+        elif not has_pdf_extension(item):
+            print("[yellow]CAUTION[/yellow]! Target file not PDF. Extension mismatch.")    
+        elif item in fileList:
+            print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {item}")
+        else:
+            fileList.append(item)
+        
     # Performs write permissions of the files from the list. Will update the fileList of any non-compatible files
-    validate_fileList_write_capability(fileList, mimeCheck)
-
     # [] is for NoneType to allow iteration of list
-    excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
-    fileList = list(dict.fromkeys([item for item in fileList or [] if (item not in rejected_file_list or []) and (item not in excludeList)]))
+    if exclude:
+        fileList = [item for item in fileList if item not in excludeList]
+    fileList = list(dict.fromkeys([item for item in (validate_fileList_write_capability(fileList, mimeCheck) or []) if item not in excludeList and item not in rejected_file_list]))
     
     # display rejected files. If it exists
     if len(rejected_file_list) != 0: display_rejected_files()
