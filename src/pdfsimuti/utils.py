@@ -10,11 +10,8 @@ from rich.panel import Panel
 from click.exceptions import ClickException
 import typer
 
-rejected_file_list = {}
 workingDir = os.getcwd()
-
 DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
-
 
 def text_dedent(msg : str) -> str:
     """
@@ -178,15 +175,15 @@ def return_joined_filePath(folderpath:str, filename:str) -> str:
     return os.path.join(folderpath, filename)
 
 
-def scan_dir_files(targetList: list, directory: str) -> list:
+def scan_dir_files(filesDict: dict, directory: str) -> list:
     """
     Scans a given directory for PDF files to be appended to the targetList for operations
 
     Args:
-        targetList (list) : list for the files to be appended
+        filesDict (dict) : dict for the files to be appended
         directory (str) : directory path for PDF file scanning
     Returns:
-        targetList (list) : updated targetList with included directory files
+        filesDict (dict) : updated filesDict with included directory files
     """
     directory = workingDir if directory == "." else return_absolute_path(directory)
     print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
@@ -194,38 +191,49 @@ def scan_dir_files(targetList: list, directory: str) -> list:
     for item in os.listdir(directory):
         folder_path = return_joined_filePath(directory, item)
         if has_pdf_extension(folder_path):
-            if folder_path not in targetList: 
-                targetList.append(folder_path)
+            if folder_path not in filesDict: 
+                filesDict[folder_path] = {"valid" : None, "data": None}
             else:
                 print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {folder_path}")    
 
-    return targetList
+    return filesDict
 
-
-def validate_fileList_write_capability(fileList: list, mimecheck):
+def validate_fileList_write_capability(filesDict: dict, mimecheck):
     """
-    Mimecheck assisted updater to the rejected file lists.
+    Mimecheck assisted updater to filesList.
 
     Args:
-        fileList (list): PDF filepaths in a list
+        filesDict (dict): PDF filepaths in a dict
     """
     try:
         magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
     except ModuleNotFoundError:
         raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
         
-    for item in fileList:
-        if not check_if_openable(item):
-            rejected_file_list[item] = "[red]Insufficient Permissions[/red]"
+    for file_item, file_info in filesDict.items():
+        if not check_if_openable(file_item):
+            file_info['valid'] = False
+            file_info['data'] = "Insufficient Permissions"
             continue
-        elif magic and magic.from_file(item) != "application/pdf":
-            rejected_file_list[item] = f"[red]Mimecheck pass fail[/red] \nReceived: {magic.from_file(item)}"
+        elif magic and magic.from_file(file_item) != "application/pdf":
+            file_info['valid'] = False
+            file_info['data'] = f"Mimecheck pass fail \nReceived: {magic.from_file(file_item)}"
             continue
 
-        if importlib.util.find_spec('fitz') is not None and importlib.import_module('fitz').open(item).needs_pass:
-            rejected_file_list[item] = "[red]Password Protected[/red]"
-    
-    return fileList
+        if importlib.util.find_spec('fitz') is not None:
+            if importlib.import_module('fitz').open(file_item).needs_pass:
+                file_info['valid'] = False
+                file_info['data'] = "Password Protected"
+                continue
+        else:
+            print("[yellow]CAUTION![/yellow] Package 'PyMuPDF' not found. Skipping password protection check.")
+        
+        file_info['valid'] = True
+        file_info['data'] = os.path.getsize(file_item)
+                
+    return filesDict
+
+
 
 
 def validate_pdf_list(items, exclude, mimeCheck):
@@ -240,10 +248,8 @@ def validate_pdf_list(items, exclude, mimeCheck):
         mimeCheck (bool): Mimecheck of files using bool
 
     Raises:
-        PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files
+        PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files for merge.py
 
-    Returns (if match case):
-        list: Validated list of PDF files
         
     """
     # dict = {
@@ -253,9 +259,8 @@ def validate_pdf_list(items, exclude, mimeCheck):
     # }
 
 
-    fileList = []
     excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
-    # fileDict = {}
+    filesDict = {}
     
     # start everything from new line
     print()
@@ -264,34 +269,41 @@ def validate_pdf_list(items, exclude, mimeCheck):
     for item in items:
         item = return_absolute_path(item)
         if os.path.isdir(item):
+            # if item in excludeList, skip the scan
             if item in excludeList:
                 continue
-            fileList = scan_dir_files(fileList, item)
+            filesDict = scan_dir_files(filesDict, item)
         elif not os.path.exists(item): 
             print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")
         elif not has_pdf_extension(item):
-            print("[yellow]CAUTION[/yellow]! Target file not PDF. Extension mismatch.")    
-        elif item in fileList:
-            print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {item}")
+            print("[yellow]CAUTION![/yellow] Target file not PDF. Extension mismatch.")    
+        elif item in filesDict:
+            print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {item}")
         else:
-            fileList.append(item)
+            filesDict[item] = {"valid": None, "data": None}
         
     # Performs write permissions of the files from the list. Will update the fileList of any non-compatible files
     # [] is for NoneType to allow iteration of list
     if exclude:
-        fileList = [item for item in fileList if item not in excludeList]
-    fileList = list(dict.fromkeys([item for item in (validate_fileList_write_capability(fileList, mimeCheck) or []) if item not in excludeList and item not in rejected_file_list]))
+        filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
+    
+    # fileList = list(dict.fromkeys([item for item in (validate_fileList_write_capability(fileList, mimeCheck) or []) if item not in excludeList and item not in rejected_file_list]))
+    filesDict = validate_fileList_write_capability(filesDict, mimeCheck)
     
     # display rejected files. If it exists
-    if len(rejected_file_list) != 0: display_rejected_files()
+    rejected_files_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == False}
+    if len(rejected_files_dict) > 0:
+        display_rejected_files(rejected_files_dict)
+        filesDict = {key:value for key, value in filesDict.items() if value['valid'] == True}
     
-    if len(fileList) == 0:
+    if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
-            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_absolute_path(item) for item in items]))}[/i]
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_filepath_dirname(return_absolute_path(item)) for item in items]))}[/i]
         """)
     
     
+    fileList = list(filesDict.keys())
     match get_calling_function():
         case "compress.py": 
             return fileList
@@ -301,11 +313,14 @@ def validate_pdf_list(items, exclude, mimeCheck):
             return fileList
 
 
-def display_rejected_files() -> None:
+def display_rejected_files(rejected_files_dict: dict) -> None:
     """
     Display the rejected files to the user in a table manner
+    
+    Args:
+        filesDict(dict): filesDict with valid and data keys
     """
-
+    print(rejected_files_dict)
     # display rejected files
     print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected.")
     table = Table(show_lines=True, highlight=True)
@@ -314,7 +329,7 @@ def display_rejected_files() -> None:
     table.add_column("File Path (Absolute)", justify = "center", no_wrap=True)
     table.add_column("Cause", justify = "center", no_wrap=True)
     
-    for index, (filename, filetype) in enumerate(rejected_file_list.items()): 
-        table.add_row(str(index+1), os.path.basename(filename), os.path.abspath(filename), f'{filetype}')
+    for index, (file, error_type) in enumerate(rejected_files_dict.items()): 
+        table.add_row(str(index+1), os.path.basename(file), os.path.abspath(file), f'[red]{error_type}[/red]')
     
     print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
