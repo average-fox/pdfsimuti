@@ -15,7 +15,8 @@ DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
 def text_dedent(msg : str) -> str:
     """
-    Detents a triple quote print statement using textwrap
+    Detents a triple quote print statement using textwrap.
+    Created for pretty outputs only.
 
     Args:
         msg (str): String to dedent
@@ -31,8 +32,7 @@ def text_dedent(msg : str) -> str:
 class PrettyErrorDisplay(ClickException):
     """
     Raised when the program does something it wasn't supposed to.
-     
-    Imports from Click.exceptions.ClickException
+    Imports from Click.exceptions.ClickException to create a pretty error display.
     """
     
     def __init__(self, message):
@@ -42,14 +42,13 @@ class PrettyErrorDisplay(ClickException):
         
 def return_confirm(msg:str) -> bool:
     """
-    Typer based confirm y/n.
-    Default is y.
+    Typer based confirm y/n. Default: y
     
     Args:
         msg (str): Typer confirm message.
 
     Returns:
-        bool: Outcome of confirm
+        bool: confirm bool
     """
     return typer.confirm(msg, default=True); # default flag means enter key = y
 
@@ -57,6 +56,7 @@ def return_confirm(msg:str) -> bool:
 def get_calling_function():
     """
     Returns the file basename that called this python file.
+    Required by validate_pdf_list to specify return statementsj
 
     Returns:
         str: caller filename
@@ -70,10 +70,11 @@ def get_calling_function():
 def return_ghostscript_callname() -> str:
     """
     Returns the ghostscript callname. 
-    Could be either gs, gswin64c or gswin32c
+    Could be either gs, gswin64c or gswin32c.
+    Important for cross-platform compatibility.
 
     Returns:
-        str: actual ghostscript callname on the installed machine
+        gs_name (str) : ghostscript callname on the installed machine
     """
     gs_name = "gs"
     
@@ -128,7 +129,7 @@ def return_absolute_path(item:str) -> str:
     return os.path.abspath(item)
 
 
-def check_if_openable(item: str) -> bool:
+def check_file_readability(item: str) -> bool:
     """
     Determines if a PDF can be opened or not. Returns depending on weither it got an exception or not
 
@@ -148,7 +149,7 @@ def check_if_openable(item: str) -> bool:
 
 def has_pdf_extension(item) -> bool:
     """
-    Returns the filetype by checking if it endswith .pdf
+    Returns the fujyiletype by checking if it endswith .pdf
     Doesn't use name.endswith("pdf") because files like file/pdf returns True if used.
     Will return false if the item is just "pdf" and nothing else
     
@@ -198,12 +199,16 @@ def scan_dir_files(filesDict: list, directory: str) -> list:
     return filesDict
 
 
-def update_file_dict_entry(item: tuple, mimecheck):
+def update_file_dict_entry(item: tuple, mimecheck: bool):
     """
-    Mimecheck assisted updater to filesList.
+    Mimecheck assisted updater to file entry from a dict.
 
     Args:
         filesDict (dict): PDF filepaths in a dict
+        mimecheck (bool): PDF 
+    
+    Return:
+        updated_entry (json) : json-like entry for filesDict  
     """
     filename = item[0]
     file_validaty = item[1]['valid']
@@ -214,7 +219,7 @@ def update_file_dict_entry(item: tuple, mimecheck):
     except ModuleNotFoundError:
         raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
         
-    if not check_if_openable(filename):
+    if not check_file_readability(filename):
         file_validaty = False
         file_data = "Unreadable file"
         
@@ -239,8 +244,6 @@ def update_file_dict_entry(item: tuple, mimecheck):
 def validate_pdf_list(items, exclude, mimeCheck):
     """
     List Validation of eligible PDF files.
-    Takes a list and removes incompatible item from the lists.
-    Scans a directory to determine either it's real or fake.
 
     Args:
         items (list): Unchecked list of str as file path
@@ -250,7 +253,8 @@ def validate_pdf_list(items, exclude, mimeCheck):
     Raises:
         PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files for merge.py
 
-        
+    Returns:
+        fileList (list): validated list
     """
 
     excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
@@ -273,9 +277,6 @@ def validate_pdf_list(items, exclude, mimeCheck):
             print("[yellow]CAUTION![/yellow] Target file not PDF. Extension mismatch.")    
         elif item in filesDict:
             print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {item}")
-        # TODO: expand this code. run the validations as entries here!!
-        # BUG: the files added via the scan_dirs_files aren't validated !!
-        # BUG: PLEASE FIX THIS SHIT. ITS ALL FUBAR!!
         else:
             filesDict[item] = {"valid": None, "data": None}
     
