@@ -15,23 +15,20 @@ DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
 def text_dedent(msg : str) -> str:
     """
-    Detents a triple quote print statement using textwrap.
-    Created for pretty outputs only.
+    Remove common leading whitespace and strip surrounding space/newlines.
 
     Args:
-        msg (str): String to dedent
+        msg (str): The multi-line string content to dedent.
 
     Returns:
-        str: Detended string
+        (str): The dedented string with no leading or trailing whitespace.
     """
     import textwrap
     return textwrap.dedent(msg).strip()
 
 
-### SHARED FUNCTIONS
 class PrettyErrorDisplay(ClickException):
     """
-    Raised when the program does something it wasn't supposed to.
     Imports from Click.exceptions.ClickException to create a pretty error display.
     """
     
@@ -42,39 +39,37 @@ class PrettyErrorDisplay(ClickException):
         
 def return_confirm(msg:str) -> bool:
     """
-    Typer based confirm y/n. Default: y
-    
+    Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
+
     Args:
-        msg (str): Typer confirm message.
+        msg: The confirmation message displayed to the user.
 
     Returns:
-        bool: confirm bool
+        bool: True if confirmed (Y or Enter), False otherwise (n).
     """
     return typer.confirm(msg, default=True); # default flag means enter key = y
 
 
 def get_calling_function():
     """
-    Returns the file basename that called this python file.
-    Required by validate_pdf_list to specify return statementsj
+    Get the file basename of the function two stack frames up. This is required 
+    by ``validate_pdf_list`` to specify return statement origins.
 
     Returns:
-        str: caller filename
+        str: The basename of the caller's Python file.
     """
     from inspect import currentframe
     
     return return_filepath_basename(currentframe().f_back.f_back.f_code.co_filename)
 
 
-
 def return_ghostscript_callname() -> str:
     """
-    Returns the ghostscript callname. 
-    Could be either gs, gswin64c or gswin32c.
-    Important for cross-platform compatibility.
+    Determine the correct Ghostscript executable name for cross-platform compatibility. 
+    It checks the OS and architecture (gs, gswin64c, or gswin32c).
 
     Returns:
-        gs_name (str) : ghostscript callname on the installed machine
+        str: The correct Ghostscript callname on the installed machine.
     """
     gs_name = "gs"
     
@@ -91,99 +86,97 @@ def return_ghostscript_callname() -> str:
         
 def return_filepath_basename(item: str) -> str:
     """
-    Returns the basename of a filepath.
-    Created if the user sends a path outside of the active directory
+    Return the basename of a given filepath, regardless of the active directory.
 
     Args:
-        item (str): filepath 
+        item (str): The full or relative filepath.
 
     Returns:
-        str: basename of the filepath
+        str: The final component of the path (the filename/basename).
     """
     return os.path.basename(item)
 
 
 def return_filepath_dirname(item:str) -> str:
     """
-    Returns the directory folder path of the file
+    Return the directory path of a file, excluding the filename.
 
     Args:
-        item (str): filepath
+        item (str): The full or relative filepath.
 
     Returns:
-        str: folder of the filepath
+        str: The directory component of the path (the folder).
     """
     return os.path.dirname(item)
 
 
 def return_absolute_path(item:str) -> str:
     """
-    returns the abspath. works as os.path.abspath(ITEM)
+    Return the normalized absolute path of a file or directory.
 
     Args:
-        item (str): name of the file
+        item (str): The relative or absolute path of the file.
 
     Returns:
-        str: absolute path of the file
+        str: The absolute path of the file.
     """
     return os.path.abspath(item)
 
 
 def check_file_readability(item: str) -> bool:
     """
-    Determines if a PDF can be opened or not. Returns depending on weither it got an exception or not
+    Check if a file can be opened and read by attempting to open it.
 
     Args:
-        item (str): PDF file
+        item (str): The path to the file to check.
 
     Returns:
-        bool: outcome
+        bool: True if the file is readable (no exception), False otherwise.
     """
-    try:
-        with open(item, "r") as doc:
-            return True
-    except Exception:
-        return False
-    
+    return os.path.isfile(item) and os.access(item, os.R_OK)
 
 
-def has_pdf_extension(item) -> bool:
+def has_pdf_extension(filename: str) -> bool:
     """
-    Returns the fujyiletype by checking if it endswith .pdf
-    Doesn't use name.endswith("pdf") because files like file/pdf returns True if used.
-    Will return false if the item is just "pdf" and nothing else
-    
+    Check if a file or path has the '.pdf' extension, ignoring case. 
+    It specifically prevents false positives like "file/pdf" and excludes the string "pdf".
+
     Args: 
-        item (str): filename or filepath
+        filename (str): The filename or filepath to check.
+
     Returns:
-        bool: outcome
+        bool: True if the filename has a valid '.pdf' extension, False otherwise.
     """
-    return item.lower().split(".")[-1] == "pdf" and item != "pdf"
+    return filename.lower().split(".")[-1] == "pdf" and filename != "pdf"
 
 
 def return_joined_filePath(folderpath:str, filename:str) -> str:
     """
-    Returns absolute path of a file by joining folder path and file name.
-    This function is reserved for path that aren't real/exists.
+    Construct a full file path by safely joining a folder path and a filename. 
+    This is primarily used for generating paths that may not yet exist on the filesystem.
 
     Args:
-        folderpath (str): folder name
-        filename (str): file Name
+        folderpath (str): The directory or folder name.
+        filename (str): The file name.
 
     Returns:
-        str: Full path of a file
+        str: The full, combined path string.
     """
     return os.path.join(folderpath, filename)
 
 
-def scan_dir_files(filesDict: list, directory: str) -> list:
+def scan_dir_files(filesDict: dict, directory: str) -> dict:
     """
-    Scans a given directory for PDF files and returns validated files in a list
+    Scan a specified directory, identify files with a '.pdf' extension, and add them to a dictionary for validation. 
+    Duplicate files encountered are noted and ignored.
+
     Args:
-        filesDict (dict) : file dict to be appended
-        directory (str) : directory path for PDF file scanning
+        filesDict (dict): The dictionary used to store file paths and their validation status.
+        directory (str): The path to the directory to scan for PDF files.
+
     Returns:
-        filesDict (dict) : updated filesDict with included directory files
+        filesDict (dist): The updated ``filesDict`` containing all unique PDF file paths found in the directory.
+
     """
     directory = workingDir if directory == "." else return_absolute_path(directory)
     print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
@@ -201,14 +194,15 @@ def scan_dir_files(filesDict: list, directory: str) -> list:
 
 def update_file_dict_entry(item: tuple, mimecheck: bool):
     """
-    Mimecheck assisted updater to file entry from a dict.
+    Validate a single file dictionary entry by performing readability, MIME type, and password checks. 
+    It updates the 'valid' and 'data' fields based on the outcome of these checks.
 
     Args:
-        filesDict (dict): PDF filepaths in a dict
-        mimecheck (bool): PDF 
-    
-    Return:
-        updated_entry (json) : json-like entry for filesDict  
+        item (tuple): A tuple containing the file path and its current dictionary entry
+        mimecheck (bool): Flag to indicate if the external 'magic' library should be used for MIME type validation.
+
+    Returns:
+        dict: The updated dictionary entry for the file ``{filename: {"valid": bool, "data": Any}}``
     """
     filename = item[0]
     file_validaty = item[1]['valid']
@@ -243,20 +237,22 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
 
 def validate_pdf_dict(items, exclude, mimeCheck):
     """
-    List Validation of eligible PDF files.
+    Perform multi-step validation and cleanup of a list of file and directory paths for eligible PDF files. 
+    It handles directory and extension scanning before passing it to `update_file_dict_entry()` for validation.
 
     Args:
-        items (list): Unchecked list of str as file path
-        exclude (list) : List of excluded files that will remove from items
-        mimeCheck (bool): Mimecheck of files using bool
+        items (list): An unchecked list of file or directory paths.
+        exclude (list): A list of file paths to explicitly exclude from the final results.
+        mimeCheck (bool): Boolean flag to enable/disable external MIME type validation using the 'magic' package.
 
     Raises:
-        PrettyErrorDisplay: Typer Exception if list has less than 2 PDF files for merge.py
+        PrettyErrorDisplay: If no compatible PDF files are found, or if the calling script 
+            (e.g., 'merge.py') requires a minimum number of files that isn't met.
 
     Returns:
-        fileList (list): validated list
+        dict: A validated dictionary of PDF file paths ready for processing.
     """
-
+    
     excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
     filesDict = {}
     
@@ -280,18 +276,14 @@ def validate_pdf_dict(items, exclude, mimeCheck):
         else:
             filesDict[item] = {"valid": None, "data": None}
     
-    
     for file_entry in filesDict.items():
         if file_entry[0] not in exclude:
             filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
     
-    if exclude:
-        filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
-        
-    # display rejected files. If it exists
-    rejected_files_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == False}
-    
+    if exclude: filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
+            
     # TODO: Remove this. it won't be required after doing the BOX-IN design
+    rejected_files_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == False}
     if len(rejected_files_dict) > 0:
         display_rejected_files(rejected_files_dict)
         filesDict = {key:value for key, value in filesDict.items() if value['valid'] == True}
@@ -301,9 +293,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
             No compatible PDF files found.
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_filepath_dirname(return_absolute_path(item)) for item in items]))}[/i]
         """)
-    
-    
-    # fileList = list(filesDict.keys())
+
     match get_calling_function():
         case "compress.py": 
             return filesDict
@@ -315,12 +305,11 @@ def validate_pdf_dict(items, exclude, mimeCheck):
 
 def display_rejected_files(rejected_files_dict: dict) -> None:
     """
-    Display the rejected files to the user in a table manner
-    
+    Generate and display a formatted table listing all files that were rejected during validation.
+
     Args:
-        filesDict(dict): filesDict with valid and data keys
+        rejected_files_dict (dict): A dictionary of rejected file paths and their corresponding rejection causes.
     """
-    # display rejected files
     print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected.")
     table = Table(show_lines=True, highlight=True)
     table.add_column("File No.", justify = "center", no_wrap=True)
