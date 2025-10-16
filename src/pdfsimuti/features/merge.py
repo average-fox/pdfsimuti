@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_list, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
+from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_dict, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
 
          
 app = typer.Typer()
@@ -44,25 +44,29 @@ class SortOrder(str, Enum):
         return description.get(self)
     
 
-def sort_list(sort_type, items):
+def sort_dict(sort_type, files_dict):
     """
-    Sorts a list of items based on the specified sort type.
-
-    Args:
-        sort_type (str): The type of sort to perform.
-        items (list): The list of items to sort.
+    # TODO: add docstrings. use ai if you want
+    """
+    # TODO: work on this!!
+    match sort_type:
+        case 'name':
+            return sorted(files_dict.items())
+        case 'name_reverse':
+            reversed_sorted = reversed(sorted(files_dict.items()))
+            return reversed_sorted
+        case 'modified':
+            # TODO: work on this os.path.getmtime() see the commented code below
+            return files_dict.sort(key=os.path.getmtime)
     
-    Returns:
-        items (list): Sorted List
-    """
-    # Dictionary-Based Approach
-    sort_methods = {
-        "name": lambda: items.sort(),
-        "name_reverse": lambda: items.sort(reverse=True),
-        "modified": lambda: sorted(items, key= lambda x: os.path.getmtime(x))
-    }
-    sort_methods.get(sort_type)()
-    return items
+    ## Dictionary-Based Approach
+    # sort_methods = {
+    #     "name": lambda: sorted(files_dict.items()),
+    #     "name_reverse": lambda: dict(reversed(files_dict.items())),
+    #     "modified": lambda: sorted(files_dict, key= lambda x: os.path.getmtime(x))
+    # }
+    # sort_methods.get(sort_type)()
+    # return files_dict
 
 
 def advanced_filenaming(filename:str) -> str:
@@ -209,13 +213,13 @@ def display_successful_merge_outcome(outputPath:str):
     print(Panel(outcome_table, subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
-def display_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, sort:str):
+def display_merge_overview(filesDict:list, outputPath:str, preserve_Files: bool, sort:str):
     """
     Overview of the entire task before the start of the job.
     Uses Panel and Table from Rich.
 
     Args:
-        itemsList (list): validated list of pdf filenames
+        filesDict (list): validated list of pdf filenames
         outputFile (str): output file str
         sort (str): sorting method of the list items
     """
@@ -226,11 +230,11 @@ def display_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool,
     inner_table.add_column("Index")
     inner_table.add_column("Filename")
     inner_table.add_column("Absolute Path")
-    for index, item in enumerate(itemsList):
-        inner_table.add_row(str(index+1), return_filepath_basename(item), f'{os.path.abspath(item)}')
+    for index, item in enumerate(filesDict):
+        inner_table.add_row(str(index+1), return_filepath_basename(item[0]), item[0])
 
     # Calculate estimated size of the merge
-    for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
+    for item in filesDict: fileSize += os.path.getsize(item[0]) / (1024 * 1024)
     table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", inner_table)
     table.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
     table.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
@@ -255,8 +259,8 @@ def generate_merged_pdf(itemsList:list, outputFile:str):
     """
     try:
         doc = fitz.open()
-        for file in itemsList:
-            doc.insert_file(file)
+        for item_entry in itemsList:
+            doc.insert_file(item_entry[0])
         doc.save(outputFile)
         doc.close()
         
@@ -267,13 +271,13 @@ def generate_merged_pdf(itemsList:list, outputFile:str):
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
-def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
+def merge_runtime(filesDict:list, output:str, preserveFiles:bool, sort:str):
     """
     Runtime of the merge feature
     Handles the arrangement of functions for merging
 
     Args:
-        itemsList (list): validated List of PDFs to merge
+        filesDict (dict): validated List of PDFs to merge
         output (str): output name of the merged pdf
         preserveFiles (bool): preserving files after completion confirmation
         sort (str): sorting method of the list items
@@ -281,14 +285,14 @@ def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
     """
 
     output = designate_saving_filePath(output)
-    display_merge_overview(itemsList, output, preserveFiles, sort)
+    display_merge_overview(filesDict, output, preserveFiles, sort)
     
     if return_confirm("\nContinue with current settings"):
         if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
-        generate_merged_pdf(itemsList, output)
+        generate_merged_pdf(filesDict, output)
         
         if not preserveFiles:
-            for item in itemsList: os.remove(item)
+            for item_entry in filesDict: os.remove(item_entry[0])
         
         display_successful_merge_outcome(output) # Print success
     else:
@@ -303,12 +307,19 @@ def merge(
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_SAVE_PDF_FILENAME):
 
-    # in case someone pass --mimencheck as --output
+    # in case someone pass --mimecheck as --output
     if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
-    items = validate_pdf_list(items, exclude, mimecheck)
+    validated_dict = validate_pdf_dict(items, exclude, mimecheck)
     
     # If user passes a sort order, update the previous list. Will happen after list validation
-    if sort: items = sort_list(sort, items)
-    merge_runtime(items, output, preserve, sort)
+    if sort:
+        validated_dict = sort_dict(sort, validated_dict)
+    merge_runtime(validated_dict, output, preserve, sort)
+    
+    # TODO 0: final changes to utils.py to return as dict, not list.
+    # TODO 1: check if the validated_dict passes through sort_dict(). check manual dict sorting
+    # TODO 2: patch display overview for dicts
+    # TODO 3: patch merge runtime for dicts
+    # TODO 4: update docstrings

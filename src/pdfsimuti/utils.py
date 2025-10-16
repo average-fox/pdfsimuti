@@ -241,7 +241,7 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
     return {filename: {"valid": file_validaty, "data": file_data}}
 
 
-def validate_pdf_list(items, exclude, mimeCheck):
+def validate_pdf_dict(items, exclude, mimeCheck):
     """
     List Validation of eligible PDF files.
 
@@ -287,10 +287,11 @@ def validate_pdf_list(items, exclude, mimeCheck):
     
     if exclude:
         filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
-    
+        
     # display rejected files. If it exists
     rejected_files_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == False}
     
+    # TODO: Remove this. it won't be required after doing the BOX-IN design
     if len(rejected_files_dict) > 0:
         display_rejected_files(rejected_files_dict)
         filesDict = {key:value for key, value in filesDict.items() if value['valid'] == True}
@@ -302,14 +303,14 @@ def validate_pdf_list(items, exclude, mimeCheck):
         """)
     
     
-    fileList = list(filesDict.keys())
+    # fileList = list(filesDict.keys())
     match get_calling_function():
         case "compress.py": 
-            return fileList
+            return filesDict
         case "merge.py":
-            if len(fileList) <= 1:
+            if len(filesDict) <= 1:
                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
-            return fileList
+            return filesDict
 
 
 def display_rejected_files(rejected_files_dict: dict) -> None:
