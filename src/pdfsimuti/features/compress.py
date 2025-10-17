@@ -17,7 +17,7 @@ logging.basicConfig(
     level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
 )
 
-from pdfsimuti.utils import return_filepath_basename, return_filepath_dirname, return_absolute_path
+from pdfsimuti.utils import return_filepath_basename, return_filepath_dirname, validate_pdf_dict
 
 app = typer.Typer()
 log = logging.getLogger("rich")    
@@ -180,29 +180,17 @@ class gsDownSampleControl(str, Enum):
     bicubic = "bicubic"
     
 
-def return_fileList_size(fileDict : dict) -> list:
-    """
-    """
-    list_size = []
-    for item in fileDict:
-        if os.path.exists(item):
-            list_size.append(os.path.getsize(item))
-        else:
-            list_size.append(None)
-    
-    return list_size
-    
-
 def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
     """
-    Compress display overview and final confirmation
+    Display a summary table of files to be compressed and the current compression settings, 
+    then prompt the user for final confirmation to proceed.
 
     Args:
-        filesDict (dict): 
-        compressInstance (class instance): Either ghostscript_settings or pymupdf_settings
+        filesDict (dict): A dictionary of validated file paths ready for compression.
+        compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
 
     Returns:
-        bool: Confirmation of compressing
+        bool: True if the user confirms the compression, False otherwise.
     """
     
     from rich.console import Group
@@ -210,7 +198,6 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
     from pdfsimuti.utils import return_confirm
     
     print("\nThe following file(s) will be compressed.")
-    print(filesDict)
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI")
     table.add_column("File Name")
@@ -219,7 +206,6 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
     
     
     for index, item in enumerate(filesDict):
-        print(item)
         table.add_row(str(index+1), return_filepath_basename(item), item, str(os.path.getsize(item)))    
     
     panel_group = Group(
@@ -231,13 +217,15 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
     return return_confirm("\nDo you want to continue with this settings?")
 
 
-def display_compress_outcome(outcomeFilesDict : dict, time_elasped):
+def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
     """
-    Display the compress outcome
+    Display the results of the compression process in a formatted table, showing file size changes and total time elapsed.
+    
+    Compression percentage is color-coded to indicate reduction (Green) or increase (Red) in size.
 
     Args:
-        outcomeFilesDict (dict): dicts of the PDF files.
-        time_elasped (int): time taken for compression
+        outcomeFilesDict (dict): A dictionary mapping file paths to a tuple of (initial_size, final_size).
+        time_elasped (int): The total time (in seconds) taken for the compression process.
     """
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI"),
@@ -261,13 +249,16 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped):
 
 def pymupdf_compression(filesDict: list, fitz_instance):   
     """
-    PyMuPDF Commpression call and runtime.
-    
+    Execute PyMuPDF (fitz) compression on a list of PDF files with specified settings.
+
+    The compression uses incremental saving logic with a temporary file to ensure safe operation.
+
     Args:
-        fileList (list): list of the pdf files for conversion 
-    """ 
+        filesDict (dict): A list of file paths to be compressed.
+        fitz_instance (instance): An instance of ``pymupdf_settings`` containing the compression parameters.
+    """
     # try: 
-    print(filesDict)
+
     import fitz # fitz = pymupdf
     for item in filesDict:
         try:
@@ -285,10 +276,11 @@ def pymupdf_compression(filesDict: list, fitz_instance):
 
 def ghostscript_compression(filesDict: list, gs_instance):
     """
-    GhostScript Commpression call and runtime.
-    
+    Execute PDF compression on a list of files by calling the Ghostscript command-line utility with customized settings.
+
     Args:
-        fileList (list): list of the pdf files for conversion 
+        filesDict (dict): A list of file paths to be compressed.
+        gs_instance (instance): An instance of ``ghostscript_settings`` containing all Ghostscript parameters.
     """
     # special warning in case user uses something else other than colorConversion
     if gs_instance["colorConversion"] != "LeaveColorUnchanged":
@@ -369,38 +361,19 @@ def ghostscript_compression(filesDict: list, gs_instance):
                 
             except Exception as e:
                 raise PrettyErrorDisplay("GhostScript compression has failed")
-                
-
-# def compress_pdf_dict(itemList: list, compressInstance):
-#     """
-#     Compress pdf main function.
-
-#     Args:
-#         itemList (list): list of PDFs
-#         compressMethod (str) : Mode of compression. Either gs or pymupdf
-#         compressInstance : Compression settings. Can be either pymupdf or ghostscript
-
-#     """
-#     match compressInstance.__class__.__name__:
-#         case 'ghostscript_settings': ghostscript_compression(itemList, compressInstance)
-#         case 'pymupdf_settings': pymupdf_compression(itemList, compressInstance)
-
-
+            
 
 def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInstance=None):
     """
-    Compress runtime
-    Captures list file size two times (before, after) for comparison
-    Display time elapsed as well
+    Control the entire PDF compression process, including validation, user confirmation, runtime execution, and displaying results.
+    The function measures and compares file sizes before and after compression to report the outcome and time elapsed.
 
     Args:
-        filesDict (list): list of the files to be compressed
-        mimecheck: bool enable mimechecking
-        excludeList (list): list of files to be excluded
-        compressMethod (str) : Compression mode
-        compressInstance (class) : Class instance that carries the settings for a specific compression
+        filesDict (dict): A list of file or directory paths to be processed.
+        mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
+        excludeList (list): A list of file paths to exclude from compression.
+        compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
     """
-    from pdfsimuti.utils import validate_pdf_dict
     
     log.info("Validating files...")
     validated_pdf_dict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
@@ -412,7 +385,7 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
         # 1st Size capture
         start = time.time()
         print(validated_pdf_dict)
-        initial_file_size = [details['data'] for details in validated_pdf_dict.values()]
+        initial_file_size = [file_detail['data'] for file_detail in validated_pdf_dict.values()]
         
         log.info("Compression runtime started.")
         #########################################
@@ -424,7 +397,7 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
         
         # 2nd Size Capture
         end = time.time()
-        final_file_size = [details['data'] for details in validated_pdf_dict.values()]
+        final_file_size = [os.path.getsize(filename) for filename in validated_pdf_dict]
 
         # create an entry like this => {file_item : (initial_size, final_size)}
         outcomeFileDict = {file_item : (initial_size, final_size) for file_item, initial_size, final_size in zip(validated_pdf_dict.keys(), initial_file_size, final_file_size)}
