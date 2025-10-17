@@ -17,6 +17,8 @@ logging.basicConfig(
     level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
 )
 
+from pdfsimuti.utils import return_filepath_basename, return_filepath_dirname, validate_pdf_dict
+
 app = typer.Typer()
 log = logging.getLogger("rich")    
 
@@ -178,36 +180,17 @@ class gsDownSampleControl(str, Enum):
     bicubic = "bicubic"
     
 
-def return_fileList_size(itemList : list) -> list:
+def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
     """
-    returns a list of the file size.
+    Display a summary table of files to be compressed and the current compression settings, 
+    then prompt the user for final confirmation to proceed.
 
     Args:
-        itemList (list): list of PDFs
+        filesDict (dict): A dictionary of validated file paths ready for compression.
+        compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
 
     Returns:
-        list: every file sizes of the list in an arranged list
-    """
-    list_size = []
-    for item in itemList:
-        if os.path.exists(item):
-            list_size.append(os.path.getsize(item))
-        else:
-            list_size.append(None)
-    
-    return list_size
-    
-
-def display_overview_confirm(itemList: list, compressInstance) -> bool:
-    """
-    Compress display overview and final confirmation
-
-    Args:
-        itemList (list): list of files
-        compressInstance (class instance): Either ghostscript_settings or pymupdf_settings
-
-    Returns:
-        bool: Confirmation of compressing
+        bool: True if the user confirms the compression, False otherwise.
     """
     
     from rich.console import Group
@@ -215,15 +198,15 @@ def display_overview_confirm(itemList: list, compressInstance) -> bool:
     from pdfsimuti.utils import return_confirm
     
     print("\nThe following file(s) will be compressed.")
-    
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI")
     table.add_column("File Name")
     table.add_column("File Path (Absolute)", justify="center")
     table.add_column("Size (KB)")
     
-    for index, item in enumerate(itemList, 1):
-        table.add_row(str(index), os.path.basename(item), os.path.abspath(item), str(os.path.getsize(item)))    
+    
+    for index, item in enumerate(filesDict):
+        table.add_row(str(index+1), return_filepath_basename(item), item, str(os.path.getsize(item)))    
     
     panel_group = Group(
         Console().render_str(f"{compressInstance.display_properties()}"),
@@ -234,13 +217,15 @@ def display_overview_confirm(itemList: list, compressInstance) -> bool:
     return return_confirm("\nDo you want to continue with this settings?")
 
 
-def display_compress_outcome(infoList : list, time_elasped):
+def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
     """
-    Display the compress outcome
+    Display the results of the compression process in a formatted table, showing file size changes and total time elapsed.
+    
+    Compression percentage is color-coded to indicate reduction (Green) or increase (Red) in size.
 
     Args:
-        infoList (list): list of the PDFs
-        time_elasped (int): time taken for compression
+        outcomeFilesDict (dict): A dictionary mapping file paths to a tuple of (initial_size, final_size).
+        time_elasped (int): The total time (in seconds) taken for the compression process.
     """
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI"),
@@ -250,28 +235,32 @@ def display_compress_outcome(infoList : list, time_elasped):
     table.add_column("After (KB)", justify="center")
     table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", justify="center")
 
-    for index, item in enumerate(infoList, 1):
-        itemName, before, after = item
-        if os.path.exists(itemName):
-            compression_calculate = abs(round((before - after)/before*100, 3))
-            table.add_row(str(index), os.path.basename(itemName), itemName, str(before), str(after), f'[green]{compression_calculate}%[/green]' if before > after else f'[red]{compression_calculate}%[/red]')
+    for index, (filename, (initial_size, final_size)) in enumerate(outcomeFilesDict.items(), 1):
+        if os.path.exists(filename):
+            compression_calculate = abs(round((initial_size - final_size)/initial_size*100, 3))
+            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial_size), str(final_size), f'[green]{compression_calculate}%[/green]' if initial_size > final_size else f'[red]{compression_calculate}%[/red]')
         else:
-            table.add_row(str(index), f"[strike]{os.path.basename(itemName)}[/strike]", f"[strike]{itemName}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
+            # user removed the file during the program runtime
+            table.add_row(str(index), f"[strike]{return_filepath_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
     
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
     print(f"Total time taken: {round(time_elasped, 2)} seconds")
     
 
-def pymupdf_compression(fileList: list, fitz_instance):   
+def pymupdf_compression(filesDict: list, fitz_instance):   
     """
-    PyMuPDF Commpression call and runtime.
-    
+    Execute PyMuPDF (fitz) compression on a list of PDF files with specified settings.
+
+    The compression uses incremental saving logic with a temporary file to ensure safe operation.
+
     Args:
-        fileList (list): list of the pdf files for conversion 
-    """ 
+        filesDict (dict): A list of file paths to be compressed.
+        fitz_instance (instance): An instance of ``pymupdf_settings`` containing the compression parameters.
+    """
     # try: 
+
     import fitz # fitz = pymupdf
-    for item in fileList:
+    for item in filesDict:
         try:
             with fitz.open(item) as doc:
                 # temp files created to solve incremental saving issue
@@ -279,18 +268,19 @@ def pymupdf_compression(fileList: list, fitz_instance):
                 doc.save(temp_file, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
             os.replace(temp_file, item)
         except ValueError:
-            log.warn(f"CAUTION. '{os.path.basename(item)}' cannot be compressed")
+            log.warn(f"CAUTION. '{return_filepath_basename(item)}' cannot be compressed")
             continue
         except Exception as e: 
             raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
     
 
-def ghostscript_compression(fileList: list, gs_instance):
+def ghostscript_compression(filesDict: list, gs_instance):
     """
-    GhostScript Commpression call and runtime.
-    
+    Execute PDF compression on a list of files by calling the Ghostscript command-line utility with customized settings.
+
     Args:
-        fileList (list): list of the pdf files for conversion 
+        filesDict (dict): A list of file paths to be compressed.
+        gs_instance (instance): An instance of ``ghostscript_settings`` containing all Ghostscript parameters.
     """
     # special warning in case user uses something else other than colorConversion
     if gs_instance["colorConversion"] != "LeaveColorUnchanged":
@@ -307,14 +297,15 @@ def ghostscript_compression(fileList: list, gs_instance):
         *Progress.get_default_columns(),
         transient=True) as progress:
         
-        runtime = progress.add_task(description="GhostScript is running...", total=len(fileList))
+        runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
         log.info("Started GhostScript calling.")
         
-        for item in fileList:
+        # TODO : work on this please. fix the items and remove unnecessary codes
+        for target_filename in filesDict:
             # not doing this temp will result in a blank file
-            target_filename = os.path.basename(item)
-            target_absolute = os.path.abspath(item)
-            temp_file = return_joined_filePath(os.path.dirname(item), "temp"+target_filename)
+            target_filename_basename = return_filepath_basename(target_filename)
+            temp_file = return_joined_filePath(return_filepath_dirname(target_filename), "temp"+target_filename_basename)
+            print(temp_file)
             command = [
                     return_ghostscript_callname(),
                     '-sDEVICE=pdfwrite',
@@ -333,7 +324,7 @@ def ghostscript_compression(fileList: list, gs_instance):
                     '-dBATCH',
                     '-dSAFER',
                     f'-sOutputFile={temp_file}',
-                    target_absolute
+                    target_filename
                 ]
             
             # adding custom commands
@@ -341,13 +332,13 @@ def ghostscript_compression(fileList: list, gs_instance):
                 command[2:2] = gs_instance['custom'].split()
             try:
                 subprocess.run(command, check=True, capture_output=True)
-                os.replace(temp_file, target_absolute)
-                progress.log(f"[green]Compressed [/green] {target_filename}")
+                os.replace(temp_file, target_filename)
+                progress.log(f"[green]Compressed [/green] {target_filename_basename}")
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
-                if not os.path.exists(item):
-                    log.warn(f"Failed to compress {os.path.basename(item)}. File not found.")
+                if not os.path.exists(target_filename):
+                    log.warn(f"Failed to compress {return_filepath_basename(target_filename)}. File not found.")
                 else:
                     raise PrettyErrorDisplay(f"""
                 GhostScript failed to run.
@@ -370,69 +361,53 @@ def ghostscript_compression(fileList: list, gs_instance):
                 
             except Exception as e:
                 raise PrettyErrorDisplay("GhostScript compression has failed")
-                
+            
 
-def compress_pdf_list(itemList: list, compressInstance):
+def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInstance=None):
     """
-    Compress pdf main function.
+    Control the entire PDF compression process, including validation, user confirmation, runtime execution, and displaying results.
+    The function measures and compares file sizes before and after compression to report the outcome and time elapsed.
 
     Args:
-        itemList (list): list of PDFs
-        compressMethod (str) : Mode of compression. Either gs or pymupdf
-        compressInstance : Compression settings. Can be either pymupdf or ghostscript
-
+        filesDict (dict): A list of file or directory paths to be processed.
+        mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
+        excludeList (list): A list of file paths to exclude from compression.
+        compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
     """
-    match compressInstance.__class__.__name__:
-        case 'ghostscript_settings': ghostscript_compression(itemList, compressInstance)
-        case 'pymupdf_settings': pymupdf_compression(itemList, compressInstance)
-
-
-
-def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressInstance=None):
-    """
-    Compress runtime
-    Captures list file size two times (before, after) for comparison
-    Display time elapsed as well
-
-    Args:
-        fileList (list): list of the files to be compressed
-        mimecheck: bool enable mimechecking
-        excludeList (list): list of files to be excluded
-        compressMethod (str) : Compression mode
-        compressInstance (class) : Class instance that carries the settings for a specific compression
-    """
-    from pdfsimuti.utils import validate_pdf_list
     
     log.info("Validating files...")
-    validated_pdf_list = validate_pdf_list(fileList, exclude=excludeList,  mimeCheck=mimecheck)
+    validated_pdf_dict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
     log.info("Validation complete")
     
-    if display_overview_confirm(validated_pdf_list, compressInstance):
+    if display_overview_confirm(validated_pdf_dict, compressInstance):
         import time
         
         # 1st Size capture
         start = time.time()
-        initial_file_size = return_fileList_size(validated_pdf_list)
+        print(validated_pdf_dict)
+        initial_file_size = [file_detail['data'] for file_detail in validated_pdf_dict.values()]
         
-        # main function
         log.info("Compression runtime started.")
-        compress_pdf_list(validated_pdf_list, compressInstance)
+        #########################################
+        match compressInstance.__class__.__name__:
+            case 'ghostscript_settings': ghostscript_compression(validated_pdf_dict, compressInstance)
+            case 'pymupdf_settings': pymupdf_compression(validated_pdf_dict, compressInstance)
+        #########################################
         log.info("Compression runtime over.")
         
         # 2nd Size Capture
         end = time.time()
-        final_file_size = return_fileList_size(validated_pdf_list)
+        final_file_size = [os.path.getsize(filename) for filename in validated_pdf_dict]
 
-        
-        # Create a list combining PDFitems, Initial Size & Final Size
-        outcomeFileList = [(name, initial, final) for name, initial, final in zip(validated_pdf_list, initial_file_size, final_file_size)]
-        display_compress_outcome(outcomeFileList, end-start)
+        # create an entry like this => {file_item : (initial_size, final_size)}
+        outcomeFileDict = {file_item : (initial_size, final_size) for file_item, initial_size, final_size in zip(validated_pdf_dict.keys(), initial_file_size, final_file_size)}
+        display_compress_outcome(outcomeFileDict, end-start)
     else:
         print("[red]Aborted[/red]")
 
 
 def compress(
-    filelist: Annotated[List[str], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple")],
+    filelist: Annotated[List[str], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple", metavar="pdf_item")],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
     exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=[None],
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional options", metavar="[gs/ghostscript|pymupdf]")] = "pymupdf",

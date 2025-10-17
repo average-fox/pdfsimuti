@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_list, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
+from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_dict, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
 
          
 app = typer.Typer()
@@ -19,7 +19,7 @@ app = typer.Typer()
 
 class SortOrder(str, Enum):
     """
-    Contains function that handles the sorting of 
+    Contains function that handles the ordering for the merge by sorting them.
 
     Args:
         str : sort type
@@ -44,39 +44,37 @@ class SortOrder(str, Enum):
         return description.get(self)
     
 
-def sort_list(sort_type, items):
+def sort_dict(sort_type: str, files_dict: dict):
     """
-    Sorts a list of items based on the specified sort type.
+    Sort a dictionary of file paths based on the specified criteria.
 
     Args:
-        sort_type (str): The type of sort to perform.
-        items (list): The list of items to sort.
-    
-    Returns:
-        items (list): Sorted List
-    """
-    # Dictionary-Based Approach
-    sort_methods = {
-        "name": lambda: items.sort(),
-        "name_reverse": lambda: items.sort(reverse=True),
-        "modified": lambda: sorted(items, key= lambda x: os.path.getmtime(x))
-    }
-    sort_methods.get(sort_type)()
-    return items
+        sort_type (str): The sorting criterion ('name', 'name_reverse', or 'modified').
+        files_dict (dict): The dictionary of files to be sorted (keys are file paths).
 
+    Returns:
+        list: A sorted list of (key, value) tuples from the dictionary.
+    """
+    match sort_type:
+        case 'name':
+            return sorted(files_dict.items())
+        case 'name_reverse':
+            reversed_sorted = reversed(sorted(files_dict.items()))
+            return reversed_sorted
+        case 'modified':
+            return files_dict.sort(key=os.path.getmtime)
+    
 
 def advanced_filenaming(filename:str) -> str:
     """
-    Advance filenaming allowing naming files with options instead of aborting
-    Can either edit or replace the filename depending on the choice.
-    
-    Returns the filename after choice.
+    Handle risky or ambiguous filenames by presenting the user with interactive options to modify or replace the name.
+    Options include ignoring, replacing characters, removing extensions, or manually inputting a new name.
 
     Args:
-        filename (str): unedited filename
+        filename (str): The original filename that was flagged as risky.
     
     Returns:
-        filename (str): newly edited filename
+        str: The newly edited or user-provided filename.
     """
     from pdfsimuti.utils import text_dedent
     print(text_dedent(f"""
@@ -108,18 +106,15 @@ def advanced_filenaming(filename:str) -> str:
 
 def designate_saving_dirname(filePath) -> str:
     """
-    Designation of the folder path
-    Checks if a folder path exists.
-    If it doesn't, then confirm the user of new folder creation.
-    
-    If the user denies that, folder will be the same as given before and be created later on in `merge_runtime()`
+    Validate and confirm the designated saving directory, prompting the user for creation if it doesn't exist.
+    If denied, the saving folder defaults to the working directory; actual folder creation is deferred to ``merge_runtime()``.
 
     Args:
-        filePath (str): Path of the file
+        filePath: The desired path for the output folder.
 
     Returns:
-        str: Validated File folder path. Path is absolute path.
-    """
+        str: The absolute path of the validated or defaulted output folder.
+    """    
     if not os.path.isdir(filePath):
         print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
         folder_creation_choice = return_confirm(f"Do you wish to create it?")
@@ -130,21 +125,21 @@ def designate_saving_dirname(filePath) -> str:
         # if you are wondering where the os.makedirs is happening, its not here but rather on the merge_runtime()
         # if you are to create it here, either overview had to be scrapped or you cannot notify the user of new folder creation 
         # or you have to use a global variable
+        # don't try that. i did it already.
 
     return os.path.abspath(filePath)
 
 
 def designate_saving_filename(target_file_path:str) -> str:
     """
-    Checks the filetype of the target directory filename.
-    this will keep causing a prompt if the filetype doesn't match the correct type.
-    Only runs if the user wants to add a custom filename instead of the default.
+    Validate and manage the designated output filename, ensuring it has a '.pdf' extension and handling existing file conflicts.
+    It prompts the user to resolve non-PDF extensions or choose to overwrite an existing file.
 
     Args:
-        target_file_path (str): output file path
+        target_file_path (str): The full output path provided by the user, which may include the folder and a custom filename.
 
     Returns:
-        str: File name of the validated file.
+        str: The final, validated basename of the file.
     """
     # if user gives something like folder/ then the filename will be default or otherwise it will be '' which is an error.
     filename = DEFAULT_SAVE_PDF_FILENAME if return_filepath_basename(target_file_path) == "" else return_filepath_basename(target_file_path) 
@@ -172,16 +167,17 @@ def designate_saving_filename(target_file_path:str) -> str:
     return return_filepath_basename(filename)  # This function will return basename only. Path dir is not accepted.
 
 
-def designate_saving_filePath(target_file_path):
+def designate_saving_filePath(target_file_path: str) -> str:
     """
-    Extensive output file validation checker. Checks for filename first, then folder.
+    Validate and normalize the final output file path by separately processing and correcting the filename and the folder path.
+    The process ensures a valid filename and confirms the existence (or creation) of the destination directory.
 
     Args:
-        target_file_path (str): Directory address of the saving file on system
+        target_file_path (str): The user-provided output file path or directory address.
 
     Returns:
-        str: Abstract validated/corrected directory str to save the file
-    """
+        str: The absolute, fully validated, and corrected file path for saving the output. Note that this path isn't validated as `os.path.exists()`
+    """    
     # if user passes . then the working directory will be folder path for scanning
     target_file_basename = return_filepath_basename(target_file_path)
     target_file_dirname = return_filepath_dirname(target_file_path)
@@ -195,12 +191,11 @@ def designate_saving_filePath(target_file_path):
 
 def display_successful_merge_outcome(outputPath:str):
     """
-    Display Successfull merge output. Shows output file location
+    Display an outcome panel showing the successful merge operation and the final output file details.
 
     Args:
-        outputPath (str) : saving directory of the file
+        outputPath (str): The absolute file path where the merged PDF was saved.
     """
-
     outcome_table = Table(show_header=False, expand=False, show_lines=True)
     outcome_table.add_row("[u][b]Filename[/b][/u]", return_filepath_basename(outputPath))
     outcome_table.add_row("[u][b]Folder[/b][/u]", workingDir if return_filepath_dirname(outputPath) == "" else return_filepath_dirname(outputPath))
@@ -209,15 +204,16 @@ def display_successful_merge_outcome(outputPath:str):
     print(Panel(outcome_table, subtitle="MERGE COMPLETED", border_style="green", expand=False))
 
 
-def display_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool, sort:str):
+def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, sort:str):
     """
-    Overview of the entire task before the start of the job.
-    Uses Panel and Table from Rich.
+    Display a comprehensive panel showing all details of the upcoming PDF merge job for user confirmation.
+    This includes the merge order, output path, estimated size, sorting method, and file preservation status.
 
     Args:
-        itemsList (list): validated list of pdf filenames
-        outputFile (str): output file str
-        sort (str): sorting method of the list items
+        filesDict (dict): A validated list of file entries (e.g., tuples or list items containing the file path at index 0).
+        outputPath (str): The final, validated absolute path for the merged output file.
+        preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
+        sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
     """
     fileSize = 0
     table = Table(show_header=False, show_lines=True, highlight=True, expand=False)
@@ -226,37 +222,40 @@ def display_merge_overview(itemsList:list, outputPath:str, preserve_Files: bool,
     inner_table.add_column("Index")
     inner_table.add_column("Filename")
     inner_table.add_column("Absolute Path")
-    for index, item in enumerate(itemsList):
-        inner_table.add_row(str(index+1), return_filepath_basename(item), f'{os.path.abspath(item)}')
+    for index, item in enumerate(filesDict.items()):
+        print(item)
+        inner_table.add_row(str(index+1), return_filepath_basename(item[0]), item[0])
 
     # Calculate estimated size of the merge
-    for i in itemsList: fileSize += os.path.getsize(i) / (1024 * 1024)
+    for item in filesDict: fileSize += os.path.getsize(item[0]) / (1024 * 1024)
     table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", inner_table)
     table.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
     table.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
     table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
-    table.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserve_Files else "[red]Preserve OFF![/red] PDF files will be deleted after merging."}[italic bold]")
+    table.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red] PDF files will be deleted after merging."}[italic bold]")
     table.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
     print("\nPlease confirm the job.")
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
 
-def generate_merged_pdf(itemsList:list, outputFile:str):
+def generate_merged_pdf(itemsDict:dict, outputFile:str):
     """
-    Main engine of the pdf. Uses PyMuPDF to merge files
+    Execute the PDF merging operation using the PyMuPDF (fitz) library.
+
+    It iterates through the dict of files and appends them sequentially into a single output document.
 
     Args:
-        itemsList (list): validated list of pdf filenames
-        outputFile (str): output file str
+        itemsDict (dict): A validated dict of file entries (e.g., tuples where index 0 is the file path) to be merged.
+        outputFile (str): The final, absolute file path for the merged PDF output.
 
     Raises:
-        PrettyErrorDisplay: Display error if failed to merge
-    """
+        PrettyErrorDisplay: If the merging process fails for any reason other than a KeyboardInterrupt.
+    """    
     try:
         doc = fitz.open()
-        for file in itemsList:
-            doc.insert_file(file)
+        for item_entry in itemsDict:
+            doc.insert_file(item_entry)
         doc.save(outputFile)
         doc.close()
         
@@ -267,28 +266,28 @@ def generate_merged_pdf(itemsList:list, outputFile:str):
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
-def merge_runtime(itemsList:list, output:str, preserveFiles:bool, sort:str):
+def merge_runtime(filesDict:list, output:str, preserveFiles:bool, sort:str):
     """
-    Runtime of the merge feature
-    Handles the arrangement of functions for merging
+    Control the entire PDF merging process, orchestrating path validation, user overview confirmation, execution, and cleanup.
+
+    It handles saving directory creation, calls the main merging engine, manages file deletion, and displays the final outcome.
 
     Args:
-        itemsList (list): validated List of PDFs to merge
-        output (str): output name of the merged pdf
-        preserveFiles (bool): preserving files after completion confirmation
-        sort (str): sorting method of the list items
-
+        filesDict (dict): A validated list of PDF file entries to be merged.
+        output (str): The user-defined output file path for the merged PDF.
+        preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after a successful merge.
+        sort (str): The sorting method applied to the list of items before merging.
     """
 
     output = designate_saving_filePath(output)
-    display_merge_overview(itemsList, output, preserveFiles, sort)
+    display_merge_overview(filesDict, output, preserveFiles, sort)
     
     if return_confirm("\nContinue with current settings"):
         if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
-        generate_merged_pdf(itemsList, output)
+        generate_merged_pdf(filesDict, output)
         
         if not preserveFiles:
-            for item in itemsList: os.remove(item)
+            for item_entry in filesDict: os.remove(item_entry[0])
         
         display_successful_merge_outcome(output) # Print success
     else:
@@ -303,12 +302,13 @@ def merge(
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_SAVE_PDF_FILENAME):
 
-    # in case someone pass --mimencheck as --output
+    # in case someone pass --mimecheck as --output
     if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
-    items = validate_pdf_list(items, exclude, mimecheck)
+    validated_dict = validate_pdf_dict(items, exclude, mimecheck)
     
     # If user passes a sort order, update the previous list. Will happen after list validation
-    if sort: items = sort_list(sort, items)
-    merge_runtime(items, output, preserve, sort)
+    if sort:
+        validated_dict = sort_dict(sort, validated_dict)
+    merge_runtime(validated_dict, output, preserve, sort)

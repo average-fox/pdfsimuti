@@ -3,7 +3,6 @@ name = "pdfsimuti"
 version = "0.3.0"
 description = ""
 authors = ["foxtbirdy <foxtbird7@gmail.com>"]
-readme = "README.md"
 packages = [{include = "pdfsimuti", from = "src"}]
 
 [tool.poetry.dependencies]
