@@ -29,8 +29,9 @@ class SortOrder(str, Enum):
         str: sort type and its description
     """
     name = "name"
-    name_reverse = "name_reverse"
+    reverse = "reverse"
     modified = "modified"
+    creation = "creation"
 
     def __str__(self):  
         return self.name.replace("_", " ").capitalize() # Get the name of the class value for overview
@@ -38,8 +39,9 @@ class SortOrder(str, Enum):
     def description(self):
         description = {
             SortOrder.name : "Files are arranged alphabetically",
-            SortOrder.name_reverse : "Files are arranged alphabetically reversed",
-            SortOrder.modified : "Files are arranged based on their modified dates"
+            SortOrder.reverse : "Files are arranged alphabetically reversed",
+            SortOrder.modified : "Files are arranged based on their modified dates",
+            SortOrder.creation : "Files are arranged based on their creation dates"
         }
         return description.get(self)
     
@@ -49,7 +51,7 @@ def sort_dict(sort_type: str, files_dict: dict):
     Sort a dictionary of file paths based on the specified criteria.
 
     Args:
-        sort_type (str): The sorting criterion ('name', 'name_reverse', or 'modified').
+        sort_type (str): The sorting criterion ('name', 'reverse', 'modified' or 'creation).
         files_dict (dict): The dictionary of files to be sorted (keys are file paths).
 
     Returns:
@@ -57,12 +59,13 @@ def sort_dict(sort_type: str, files_dict: dict):
     """
     match sort_type:
         case 'name':
-            return sorted(files_dict.items())
-        case 'name_reverse':
-            reversed_sorted = reversed(sorted(files_dict.items()))
-            return reversed_sorted
+            return dict(sorted(files_dict.items()))
+        case 'reverse':
+            return dict(reversed(sorted(files_dict.items())))
         case 'modified':
-            return files_dict.sort(key=os.path.getmtime)
+            return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
+        case 'creation':
+            return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
     
 
 def advanced_filenaming(filename:str) -> str:
@@ -217,14 +220,13 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     """
     fileSize = 0
     table = Table(show_header=False, show_lines=True, highlight=True, expand=False)
-    
+
     inner_table = Table(show_lines=True)
     inner_table.add_column("Index")
     inner_table.add_column("Filename")
     inner_table.add_column("Absolute Path")
-    for index, item in enumerate(filesDict.items()):
-        print(item)
-        inner_table.add_row(str(index+1), return_filepath_basename(item[0]), item[0])
+    for index, item in enumerate(filesDict):
+        inner_table.add_row(str(index+1), return_filepath_basename(item), item)
 
     # Calculate estimated size of the merge
     for item in filesDict: fileSize += os.path.getsize(item[0]) / (1024 * 1024)
@@ -266,17 +268,17 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str):
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
-def merge_runtime(filesDict:list, output:str, preserveFiles:bool, sort:str):
+def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
     """
     Control the entire PDF merging process, orchestrating path validation, user overview confirmation, execution, and cleanup.
 
     It handles saving directory creation, calls the main merging engine, manages file deletion, and displays the final outcome.
 
     Args:
-        filesDict (dict): A validated list of PDF file entries to be merged.
+        filesDict (dict): A validated dict of PDF file entries to be merged.
         output (str): The user-defined output file path for the merged PDF.
         preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after a successful merge.
-        sort (str): The sorting method applied to the list of items before merging.
+        sort (str): The sorting method applied to the dict of items before merging.
     """
 
     output = designate_saving_filePath(output)
@@ -311,4 +313,5 @@ def merge(
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
         validated_dict = sort_dict(sort, validated_dict)
+        
     merge_runtime(validated_dict, output, preserve, sort)
