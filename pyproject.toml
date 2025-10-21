@@ -1,8 +1,18 @@
+[project]
+requires-python = ">=3.5"
+keywords = ["PDF", "Compression", "Merging", "CLI", "Utility"]
+
+[project.urls]
+repository = "https://github.com/foxtbirdy/pdfsimuti"
+"Bug Tracker" = "https://github.com/foxtbirdy/pdfsimuti/issues"
+
 [tool.poetry]
 name = "pdfsimuti"
 version = "0.3.0"
 description = ""
-authors = ["foxtbirdy <foxtbird7@gmail.com>"]
+authors = [
+    { name = "Ahnaf Tahmid (foxtbirdy)", email = "foxtbird7@gmail.com}
+]
 packages = [{include = "pdfsimuti", from = "src"}]
 
 [tool.poetry.dependencies]
