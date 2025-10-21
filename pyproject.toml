@@ -1,19 +1,23 @@
 [project]
+name = "pdfsimuti"
+version = "0.3.0"
+description = ""
 requires-python = ">=3.5"
 keywords = ["PDF", "Compression", "Merging", "CLI", "Utility"]
+
+authors = [
+    { name = "Ahnaf Tahmid (foxtbirdy)", email = "foxtbird7@gmail.com" }
+]
+packages = [
+    {include = "pdfsimuti", from = "src"}
+]
 
 [project.urls]
 repository = "https://github.com/foxtbirdy/pdfsimuti"
 "Bug Tracker" = "https://github.com/foxtbirdy/pdfsimuti/issues"
 
-[tool.poetry]
-name = "pdfsimuti"
-version = "0.3.0"
-description = ""
-authors = [
-    { name = "Ahnaf Tahmid (foxtbirdy)", email = "foxtbird7@gmail.com}
-]
-packages = [{include = "pdfsimuti", from = "src"}]
+[project.scripts]
+pdfsimuti= "pdfsimuti.main:app"
 
 [tool.poetry.dependencies]
 python = "^3.13.0"
@@ -21,9 +25,6 @@ python-magic = {version = "^0.4.27", platform = "linux"}
 python-magic-bin = {version = "^0.4.14", platform = "win32"}
 pymupdf = "^1.24.12"
 typer = "^0.12.5"
-
-[tool.poetry.scripts]
-pdfsimuti= "pdfsimuti.main:app"
 
 [build-system]
 requires = ["poetry-core"]
