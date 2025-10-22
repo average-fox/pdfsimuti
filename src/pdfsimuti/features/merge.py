@@ -161,8 +161,8 @@ def designate_saving_filename(target_file_path:str) -> str:
         elif os.path.exists(return_joined_filePath(folderpath, filename)):
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
-            if not return_confirm("Do you wish to overwrite this file?"):    
-                print("Filename cannot be same if overwrite isn't allowed")
+            if not return_confirm("Do you wish to overwrite this file?", default=None):    
+                print("\nFilename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
         break
