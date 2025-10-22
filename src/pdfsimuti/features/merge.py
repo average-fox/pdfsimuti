@@ -161,8 +161,8 @@ def designate_saving_filename(target_file_path:str) -> str:
         elif os.path.exists(return_joined_filePath(folderpath, filename)):
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
-            if not return_confirm("Do you wish to overwrite this file?"):    
-                print("Filename cannot be same if overwrite isn't allowed")
+            if not return_confirm("Do you wish to overwrite this file?", default=None):    
+                print("\nFilename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
         break
@@ -241,7 +241,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
 
 
-def generate_merged_pdf(itemsDict:dict, outputFile:str):
+def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
     """
     Execute the PDF merging operation using the PyMuPDF (fitz) library.
 
@@ -255,14 +255,22 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str):
         PrettyErrorDisplay: If the merging process fails for any reason other than a KeyboardInterrupt.
     """    
     try:
-        doc = fitz.open()
-        for item_entry in itemsDict:
-            doc.insert_file(item_entry)
-        doc.save(outputFile)
-        doc.close()
+        # in case the user approves overwrite.
+        # if not done, this will remove the merged file if --no-preserve is active
+        if outputFile in itemsDict:
+            itemsDict.pop(outputFile
+                          )
+        with fitz.open() as doc:
+            for item_entry in itemsDict: doc.insert_file(item_entry)
+            doc.save(outputFile)
+        
+        # only delete after merging
+        if not preserveFiles:
+            for item_entry in itemsDict: 
+                os.remove(item_entry)
         
     except KeyboardInterrupt:
-        print("[red]Aborting...[/red]")
+        print("[red]Aborted[/red]")
         exit()
         
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
@@ -282,14 +290,16 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
     """
 
     output = designate_saving_filePath(output)
-    display_merge_overview(filesDict, output, preserveFiles, sort)
+    display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user
     
     if return_confirm("\nContinue with current settings"):
-        if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
-        generate_merged_pdf(filesDict, output)
-        
         if not preserveFiles:
-            for item_entry in filesDict: os.remove(item_entry[0])
+            print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
+            if not return_confirm("Proceed?", default=None):
+                print("[red]Aborted[/red]")
+                exit()
+        if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
+        generate_merged_pdf(filesDict, output, preserveFiles)
         
         display_successful_merge_outcome(output) # Print success
     else:

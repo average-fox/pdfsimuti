@@ -37,17 +37,18 @@ class PrettyErrorDisplay(ClickException):
         super().__init__(Console().render_str(text_dedent(message)))
         
         
-def return_confirm(msg:str) -> bool:
+def return_confirm(msg:str, default:bool=True) -> bool:
     """
     Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
 
     Args:
-        msg: The confirmation message displayed to the user.
+        msg (str): The confirmation message displayed to the user.
+        default (bool) : Default control behavior
 
     Returns:
         bool: True if confirmed (Y or Enter), False otherwise (n).
     """
-    return typer.confirm(msg, default=True); # default flag means enter key = y
+    return typer.confirm(msg, default=default); # default flag means enter key = y
 
 
 def get_calling_function():
