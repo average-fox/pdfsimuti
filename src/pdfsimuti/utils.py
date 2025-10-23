@@ -322,3 +322,15 @@ def display_rejected_files(rejected_files_dict: dict) -> None:
         table.add_row(str(index+1), os.path.basename(file), os.path.abspath(file), f'[red]{error_type}[/red]')
     
     print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
+
+
+def return_rich_validated_display_block(filesDict:dict):
+    validated_list_table = Table(show_lines=True)
+    validated_list_table.add_column("Index")
+    validated_list_table.add_column("Filename")
+    validated_list_table.add_column("Absolute Path")
+    for index, item in enumerate(filesDict):
+        validated_list_table.add_row(str(index+1), return_filepath_basename(item), item)
+
+    
+    return validated_list_table

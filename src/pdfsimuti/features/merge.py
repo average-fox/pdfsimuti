@@ -218,27 +218,30 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
         preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
         sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
     """
-    fileSize = 0
-    table = Table(show_header=False, show_lines=True, highlight=True, expand=False)
+    from pdfsimuti.utils import return_rich_validated_display_block, text_dedent
+    from rich.console import Group
+    from rich.console import Console
+    from rich.rule import Rule
 
-    inner_table = Table(show_lines=True)
-    inner_table.add_column("Index")
-    inner_table.add_column("Filename")
-    inner_table.add_column("Absolute Path")
-    for index, item in enumerate(filesDict):
-        inner_table.add_row(str(index+1), return_filepath_basename(item), item)
+    fileSize = 0
+    merge_table_details = Table(show_header=False, show_lines=True, highlight=True, expand=True)
 
     # Calculate estimated size of the merge
-    for item in filesDict: fileSize += os.path.getsize(item[0]) / (1024 * 1024)
-    table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", inner_table)
-    table.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
-    table.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
-    table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
-    table.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red] PDF files will be deleted after merging."}[italic bold]")
-    table.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
+    for item in filesDict: fileSize += os.path.getsize(item) / (1024 * 1024)
+    merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
+    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
+    merge_table_details.add_row("[underline bold]Sort Order:", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
+    merge_table_details.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red]\nPDF files will be deleted after merging."}[italic bold]")
+    merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
+    panel_group = Group(
+        Rule("Files Overview"),
+        return_rich_validated_display_block(filesDict),
+        Rule("Merge Overview"),
+        merge_table_details
+    )
     print("\nPlease confirm the job.")
-    print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
+    Console().print(Panel(panel_group, border_style="blue", expand=False))
 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
@@ -258,11 +261,10 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
         # in case the user approves overwrite.
         # if not done, this will remove the merged file if --no-preserve is active
         if outputFile in itemsDict:
-            itemsDict.pop(outputFile
-                          )
+            itemsDict.pop(outputFile)
         with fitz.open() as doc:
             for item_entry in itemsDict: doc.insert_file(item_entry)
-            doc.save(outputFile)
+            doc.save("temp"+outputFile)
         
         # only delete after merging
         if not preserveFiles:
@@ -292,7 +294,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
     output = designate_saving_filePath(output)
     display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user
     
-    if return_confirm("\nContinue with current settings"):
+    if return_confirm("\nMerge with current settings?"):
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
             if not return_confirm("Proceed?", default=None):
@@ -319,7 +321,7 @@ def merge(
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
     validated_dict = validate_pdf_dict(items, exclude, mimecheck)
-    
+
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
         validated_dict = sort_dict(sort, validated_dict)
