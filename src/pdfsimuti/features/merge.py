@@ -260,17 +260,19 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
     try:
         # in case the user approves overwrite.
         # if not done, this will remove the merged file if --no-preserve is active
-        if outputFile in itemsDict:
-            itemsDict.pop(outputFile)
         with fitz.open() as doc:
             for item_entry in itemsDict: doc.insert_file(item_entry)
-            doc.save("temp"+outputFile)
+            doc.save(outputFile)
         
+        if outputFile in itemsDict:
+            itemsDict.pop(outputFile)
+
         # only delete after merging
         if not preserveFiles:
             for item_entry in itemsDict: 
                 os.remove(item_entry)
-        
+
+
     except KeyboardInterrupt:
         print("[red]Aborted[/red]")
         exit()
