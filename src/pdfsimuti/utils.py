@@ -220,7 +220,7 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
         
     elif magic and magic.from_file(filename) != "application/pdf":
         file_validaty = False
-        file_data = f"Mimecheck pass fail \nReceived: {magic.from_file(filename)}"
+        file_data = f"Mimecheck pass fail\nReceived:\n{magic.from_file(filename)}"
         
     elif importlib.util.find_spec('fitz') is not None:
         if importlib.import_module('fitz').open(filename).needs_pass:
@@ -283,11 +283,11 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     
     if exclude: filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
             
-    # TODO: Remove this. it won't be required after doing the BOX-IN design
-    rejected_files_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == False}
-    if len(rejected_files_dict) > 0:
-        display_rejected_files(rejected_files_dict)
-        filesDict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+    # # TODO: Remove this. it won't be required after doing the BOX-IN design
+    # rejected_files_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == False}
+    # if len(rejected_files_dict) > 0:
+    #     display_rejected_files(rejected_files_dict)
+    #     filesDict = {key:value for key, value in filesDict.items() if value['valid'] == True}
     
     if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
@@ -325,14 +325,18 @@ def display_rejected_files(rejected_files_dict: dict) -> None:
 
 
 def return_rich_validated_display_block(filesDict:dict):
+    index = 0
     validated_list_table = Table(show_lines=True)
-    validated_list_table.add_column("Index")
-    validated_list_table.add_column("Filename")
-    validated_list_table.add_column("Absolute Path")
+    validated_list_table.add_column("Index",justify="center", vertical="middle")
+    validated_list_table.add_column("Filename", vertical="middle")
+    validated_list_table.add_column("Absolute Path", vertical="middle")
     validated_list_table.add_column("Status")
-    for index, item in enumerate(filesDict.keys()):
-        validity = "[green]Verified[/green]" if filesDict.get(item)['valid'] else filesDict.get(item)['data']
-        basename = return_filepath_basename(item)
-        validated_list_table.add_row(str(index+1), basename, item, validity)
+    for item in filesDict.keys():
+        valid = filesDict.get(item)['valid']
+        validity = "[green]Verified[/green]" if valid else filesDict.get(item)['data']
+        basename = return_filepath_basename(item) if valid else f"[strike][red]{return_filepath_basename(item)}[/strike][/red]"
+        display_item = item if valid else f"[strike][red]{item}[/strike][/red]"
+        index = index+1 if valid else index
+        validated_list_table.add_row(str(index) if valid else "[red]X[/red]", basename, display_item, validity)
     
     return validated_list_table

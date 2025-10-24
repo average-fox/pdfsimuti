@@ -294,7 +294,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
 
     output = designate_saving_filePath(output)
     display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user
-    
+
     if return_confirm("\nMerge with current settings?"):
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
@@ -302,7 +302,10 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
                 print("[red]Aborted[/red]")
                 exit()
         if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
-        generate_merged_pdf(filesDict, output, preserveFiles)
+
+        # purify dict of rejected items
+        validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+        generate_merged_pdf(validated_dict, output, preserveFiles)
         
         display_successful_merge_outcome(output) # Print success
     else:
@@ -310,6 +313,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
 
 
 def merge(
+        
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
