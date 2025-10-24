@@ -329,8 +329,10 @@ def return_rich_validated_display_block(filesDict:dict):
     validated_list_table.add_column("Index")
     validated_list_table.add_column("Filename")
     validated_list_table.add_column("Absolute Path")
-    for index, item in enumerate(filesDict):
-        validated_list_table.add_row(str(index+1), return_filepath_basename(item), item)
-
+    validated_list_table.add_column("Status")
+    for index, item in enumerate(filesDict.keys()):
+        validity = "[green]Verified[/green]" if filesDict.get(item)['valid'] else filesDict.get(item)['data']
+        basename = return_filepath_basename(item)
+        validated_list_table.add_row(str(index+1), basename, item, validity)
     
     return validated_list_table

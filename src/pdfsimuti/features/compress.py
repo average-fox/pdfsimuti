@@ -193,8 +193,7 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
         bool: True if the user confirms the compression, False otherwise.
     """
     
-    from rich.console import Group
-    from rich.console import Console
+    from rich.console import Group, Console
     from pdfsimuti.utils import return_confirm
     
     print("\nThe following file(s) will be compressed.")

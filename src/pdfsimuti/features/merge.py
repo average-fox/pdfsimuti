@@ -218,7 +218,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
         preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
         sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
     """
-    from pdfsimuti.utils import return_rich_validated_display_block, text_dedent
+    from pdfsimuti.utils import return_rich_validated_display_block
     from rich.console import Group
     from rich.console import Console
     from rich.rule import Rule
@@ -230,14 +230,14 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     for item in filesDict: fileSize += os.path.getsize(item) / (1024 * 1024)
     merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
     merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
-    merge_table_details.add_row("[underline bold]Sort Order:", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
-    merge_table_details.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red]\nPDF files will be deleted after merging."}[italic bold]")
+    merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"{sort} [i]({"Sorting based on arrangement" if sort == None else sort.description() })[/i] ")
+    merge_table_details.add_row("[underline bold]Preserve Mode[/underline bold]:", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red]\nPDF files will be deleted after merging."}[italic bold]")
     merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
     panel_group = Group(
-        Rule("Files Overview"),
+        Rule("Merge Order Overview"),
         return_rich_validated_display_block(filesDict),
-        Rule("Merge Overview"),
+        Rule("Merge Settings"),
         merge_table_details
     )
     print("\nPlease confirm the job.")
@@ -271,7 +271,6 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
         if not preserveFiles:
             for item_entry in itemsDict: 
                 os.remove(item_entry)
-
 
     except KeyboardInterrupt:
         print("[red]Aborted[/red]")
