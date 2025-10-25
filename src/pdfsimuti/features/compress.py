@@ -290,21 +290,28 @@ def ghostscript_compression(filesDict: list, gs_instance):
 
     import subprocess
     from pdfsimuti.utils import return_joined_filePath, return_ghostscript_callname
-    from rich.progress import Progress, SpinnerColumn
+    from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
+
+    columns = [
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+    ]
 
     with Progress(
-        SpinnerColumn(),
-        *Progress.get_default_columns(),
+        *columns, 
         transient=True) as progress:
         
         runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
         log.info("Started GhostScript calling.")
         
-        # TODO : work on this please. fix the items and remove unnecessary codes
         for target_filename in filesDict:
+            file_runtime = progress.add_task(description=f"Compressing: [yellow]{target_filename}[/yellow]", total=None)
             # not doing this temp will result in a blank file
             target_filename_basename = return_filepath_basename(target_filename)
             temp_file = return_joined_filePath(return_filepath_dirname(target_filename), "temp"+target_filename_basename)
+            progress.start_task(file_runtime)
             command = [
                     return_ghostscript_callname(),
                     '-sDEVICE=pdfwrite',
@@ -333,6 +340,7 @@ def ghostscript_compression(filesDict: list, gs_instance):
                 subprocess.run(command, check=True, capture_output=True)
                 os.replace(temp_file, target_filename)
                 progress.log(f"[green]Compressed [/green] Filepath: {target_filename}")
+                progress.remove_task(file_runtime)
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
@@ -360,7 +368,7 @@ def ghostscript_compression(filesDict: list, gs_instance):
                 exit()
                 
             except Exception as e:
-                raise PrettyErrorDisplay("GhostScript compression has failed")
+                raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
             
 
 def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInstance=None):
