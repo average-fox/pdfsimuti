@@ -226,22 +226,22 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
         time_elasped (int): The total time (in seconds) taken for the compression process.
     """
     table = Table(show_lines=True, highlight=True)
-    table.add_column("SI"),
-    table.add_column("File Name")
-    table.add_column("File Location (absolute)")
-    table.add_column("Before (KB)", justify="center")
-    table.add_column("After (KB)", justify="center")
-    table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", justify="center")
+    table.add_column("SI", vertical="middle"),
+    table.add_column("File Name", vertical="middle")
+    table.add_column("File Location (absolute)", vertical="middle")
+    table.add_column("Before (KB)", vertical="middle")
+    table.add_column("After (KB)", vertical="middle")
+    table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", vertical="middle")
 
-    for index, (filename, (initial_size, final_size)) in enumerate(outcomeFilesDict.items(), 1):
-        if not os.path.exists(filename):
+    for index, (filename, filedata) in enumerate(outcomeFilesDict.items()):
+        initial = filedata['initial']
+        final =  filedata['final']
+        if not filedata['validity']:
             # user removed the file during the program runtime
             table.add_row(str(index), f"[strike]{return_filepath_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
         else:
-            print(os.path.exists(filename))
-            print(filename)
-            compression_calculate = abs(round((initial_size - final_size)/initial_size*100, 3))
-            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial_size), str(final_size), f'[green]{compression_calculate}%[/green]' if initial_size > final_size else f'[red]{compression_calculate}%[/red]')
+            compression_calculate = abs(round((initial - final)/initial*100, 3))
+            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial), str(final), f'[green]{compression_calculate}%[/green]' if initial > final else f'[red]{compression_calculate}%[/red]')
             
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
     print(f"Total time taken: {round(time_elasped, 2)} seconds")
@@ -332,12 +332,12 @@ def ghostscript_compression(filesDict: list, gs_instance):
             try:
                 subprocess.run(command, check=True, capture_output=True)
                 os.replace(temp_file, target_filename)
-                progress.log(f"[green]Compressed [/green] {target_filename}")
+                progress.log(f"[green]Compressed [/green] Filepath: {target_filename}")
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
                 if not os.path.exists(target_filename):
-                    log.warn(f"Failed to compress {return_filepath_basename(target_filename)}. File not found.")
+                    log.warning(f"Filepath: {return_filepath_basename(target_filename)} failed to compress. File not found.")
                     os.remove(temp_file)
                 else:
                     raise PrettyErrorDisplay(f"""
@@ -376,23 +376,26 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
     """
     from pdfsimuti.utils import return_confirm
 
-
     log.info("Validating files...")
     filesDict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
     validated_pdf_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
     log.info("Validation complete")
 
+    # Display overview
     display_overview_confirm(filesDict, compressInstance)
+
     if not any(value['valid'] for value in filesDict.values()):
         raise PrettyErrorDisplay("No compatible files to compress.")
     
+    # create an entry like this => {file_item : (validity, initial_size, final_size)}
+    outcomeFileDict = {file_item: {'validity': None, 'initial': os.path.getsize(file_item), 'final': None} for file_item in validated_pdf_dict.keys()}
+
     if return_confirm("\nDo you want to continue with this settings?"):
         import time
         
         # 1st Size capture
-        start = time.time()
-        initial_file_size = [file_detail['data'] for file_detail in validated_pdf_dict.values()]
-        
+        start_time = time.time()
+        # initial_file_size = [file_detail['data'] for file_detail in validated_pdf_dict.values()]
         log.info("Compression runtime started.")
         #########################################
         match compressInstance.__class__.__name__:
@@ -402,17 +405,17 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
         log.info("Compression runtime over.")
         
         # 2nd Size Capture
-        end = time.time()
-        final_file_size = []
-        try:
-            final_file_size = [os.path.getsize(filename) for filename in validated_pdf_dict]
-            for filename in validated_pdf_dict:
-                filename.append(os.path.getsize(filename))
-        except FileNotFoundError:
-            final_file_size.append(None)
-        # create an entry like this => {file_item : (initial_size, final_size)}
-        outcomeFileDict = {file_item : (initial_size, final_size) for file_item, initial_size, final_size in zip(validated_pdf_dict.keys(), initial_file_size, final_file_size)}
-        display_compress_outcome(outcomeFileDict, end-start)
+        end_time = time.time()
+
+        #### This block is created for the case of having a file being removed during runtime but akso to show that to the user
+        for filename, _ in outcomeFileDict.items():
+            try:
+                outcomeFileDict[filename]['final'] = os.path.getsize(filename)
+                outcomeFileDict[filename]['validity'] = True
+            except FileNotFoundError:
+                outcomeFileDict[filename]['validity'] = False
+
+        display_compress_outcome(outcomeFileDict, end_time-start_time)
     else:
         print("[red]Aborted[/red]")
 
