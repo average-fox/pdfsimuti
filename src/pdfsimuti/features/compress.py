@@ -187,13 +187,11 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
         filesDict (dict): A dictionary of validated file paths ready for compression.
         compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
 
-    Returns:
-        bool: True if the user confirms the compression, False otherwise.
     """
     
     from rich.console import Group, Console
     from rich.rule import Rule
-    from pdfsimuti.utils import return_confirm, return_rich_validated_display_block
+    from pdfsimuti.utils import return_rich_validated_display_block
 
     console = Console()
     
@@ -215,8 +213,6 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
         return_rich_validated_display_block(filesDict)
     )
     console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
-    
-    return return_confirm("\nDo you want to continue with this settings?")
 
 
 def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
@@ -238,13 +234,15 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
     table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", justify="center")
 
     for index, (filename, (initial_size, final_size)) in enumerate(outcomeFilesDict.items(), 1):
-        if os.path.exists(filename):
-            compression_calculate = abs(round((initial_size - final_size)/initial_size*100, 3))
-            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial_size), str(final_size), f'[green]{compression_calculate}%[/green]' if initial_size > final_size else f'[red]{compression_calculate}%[/red]')
-        else:
+        if not os.path.exists(filename):
             # user removed the file during the program runtime
             table.add_row(str(index), f"[strike]{return_filepath_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
-    
+        else:
+            print(os.path.exists(filename))
+            print(filename)
+            compression_calculate = abs(round((initial_size - final_size)/initial_size*100, 3))
+            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial_size), str(final_size), f'[green]{compression_calculate}%[/green]' if initial_size > final_size else f'[red]{compression_calculate}%[/red]')
+            
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
     print(f"Total time taken: {round(time_elasped, 2)} seconds")
     
@@ -340,6 +338,7 @@ def ghostscript_compression(filesDict: list, gs_instance):
             except subprocess.CalledProcessError as e:
                 if not os.path.exists(target_filename):
                     log.warn(f"Failed to compress {return_filepath_basename(target_filename)}. File not found.")
+                    os.remove(temp_file)
                 else:
                     raise PrettyErrorDisplay(f"""
                 GhostScript failed to run.
@@ -375,13 +374,19 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
         excludeList (list): A list of file paths to exclude from compression.
         compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
     """
-    
+    from pdfsimuti.utils import return_confirm
+
+
     log.info("Validating files...")
     filesDict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
     validated_pdf_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
     log.info("Validation complete")
+
+    display_overview_confirm(filesDict, compressInstance)
+    if not any(value['valid'] for value in filesDict.values()):
+        raise PrettyErrorDisplay("No compatible files to compress.")
     
-    if display_overview_confirm(filesDict, compressInstance):
+    if return_confirm("\nDo you want to continue with this settings?"):
         import time
         
         # 1st Size capture
@@ -398,8 +403,13 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
         
         # 2nd Size Capture
         end = time.time()
-        final_file_size = [os.path.getsize(filename) for filename in validated_pdf_dict]
-
+        final_file_size = []
+        try:
+            final_file_size = [os.path.getsize(filename) for filename in validated_pdf_dict]
+            for filename in validated_pdf_dict:
+                filename.append(os.path.getsize(filename))
+        except FileNotFoundError:
+            final_file_size.append(None)
         # create an entry like this => {file_item : (initial_size, final_size)}
         outcomeFileDict = {file_item : (initial_size, final_size) for file_item, initial_size, final_size in zip(validated_pdf_dict.keys(), initial_file_size, final_file_size)}
         display_compress_outcome(outcomeFileDict, end-start)
