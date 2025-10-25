@@ -102,10 +102,8 @@ class ghostscript_settings:
         Grey Resolution value: {self.greyResValue}
         Grey Resolution mode: {self.greySample}
         
-        Custom GhostScript Commands: 
-        {self.custom if self.custom else None}
-        
-        Please note, any ghostscript custom command if added can override the values represented here.
+        Custom GhostScript Commands: {"/n"+self.custom if self.custom else None}
+        {"Please note, any ghostscript custom command if added can override the values represented here.\n" if self.custom is not None else ""}
         -----------------------
         """)
 
@@ -189,32 +187,32 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
         filesDict (dict): A dictionary of validated file paths ready for compression.
         compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
 
-    Returns:
-        bool: True if the user confirms the compression, False otherwise.
     """
     
-    from rich.console import Group
-    from rich.console import Console
-    from pdfsimuti.utils import return_confirm
+    from rich.console import Group, Console
+    from rich.rule import Rule
+    from pdfsimuti.utils import return_rich_validated_display_block
+
+    console = Console()
     
     print("\nThe following file(s) will be compressed.")
-    table = Table(show_lines=True, highlight=True)
-    table.add_column("SI")
-    table.add_column("File Name")
-    table.add_column("File Path (Absolute)", justify="center")
-    table.add_column("Size (KB)")
-    
+    compress_table = Table(show_lines=True, highlight=True)
+    compress_table.add_column("SI")
+    compress_table.add_column("File Name")
+    compress_table.add_column("File Path (Absolute)", justify="center")
+    compress_table.add_column("Size (KB)")
+
     
     for index, item in enumerate(filesDict):
-        table.add_row(str(index+1), return_filepath_basename(item), item, str(os.path.getsize(item)))    
+        compress_table.add_row(str(index+1), return_filepath_basename(item), item, str(os.path.getsize(item)))    
     
     panel_group = Group(
-        Console().render_str(f"{compressInstance.display_properties()}"),
-        table, 
+        Rule("Compress Settings"),
+        console.render_str(f"{compressInstance.display_properties()}"),
+        Rule("Selected files for Compression"),
+        return_rich_validated_display_block(filesDict)
     )
-    print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
-    
-    return return_confirm("\nDo you want to continue with this settings?")
+    console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
 
 
 def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
@@ -228,21 +226,23 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
         time_elasped (int): The total time (in seconds) taken for the compression process.
     """
     table = Table(show_lines=True, highlight=True)
-    table.add_column("SI"),
-    table.add_column("File Name")
-    table.add_column("File Location (absolute)")
-    table.add_column("Before (KB)", justify="center")
-    table.add_column("After (KB)", justify="center")
-    table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", justify="center")
+    table.add_column("SI", vertical="middle"),
+    table.add_column("File Name", vertical="middle")
+    table.add_column("File Location (absolute)", vertical="middle")
+    table.add_column("Before (KB)", vertical="middle")
+    table.add_column("After (KB)", vertical="middle")
+    table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", vertical="middle")
 
-    for index, (filename, (initial_size, final_size)) in enumerate(outcomeFilesDict.items(), 1):
-        if os.path.exists(filename):
-            compression_calculate = abs(round((initial_size - final_size)/initial_size*100, 3))
-            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial_size), str(final_size), f'[green]{compression_calculate}%[/green]' if initial_size > final_size else f'[red]{compression_calculate}%[/red]')
-        else:
+    for index, (filename, filedata) in enumerate(outcomeFilesDict.items()):
+        initial = filedata['initial']
+        final =  filedata['final']
+        if not filedata['validity']:
             # user removed the file during the program runtime
             table.add_row(str(index), f"[strike]{return_filepath_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
-    
+        else:
+            compression_calculate = abs(round((initial - final)/initial*100, 3))
+            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial), str(final), f'[green]{compression_calculate}%[/green]' if initial > final else f'[red]{compression_calculate}%[/red]')
+            
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
     print(f"Total time taken: {round(time_elasped, 2)} seconds")
     
@@ -290,22 +290,28 @@ def ghostscript_compression(filesDict: list, gs_instance):
 
     import subprocess
     from pdfsimuti.utils import return_joined_filePath, return_ghostscript_callname
-    from rich.progress import Progress, SpinnerColumn
+    from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
+
+    columns = [
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+    ]
 
     with Progress(
-        SpinnerColumn(),
-        *Progress.get_default_columns(),
+        *columns, 
         transient=True) as progress:
         
         runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
         log.info("Started GhostScript calling.")
         
-        # TODO : work on this please. fix the items and remove unnecessary codes
         for target_filename in filesDict:
+            file_runtime = progress.add_task(description=f"Compressing: [yellow]{target_filename}[/yellow]", total=None)
             # not doing this temp will result in a blank file
             target_filename_basename = return_filepath_basename(target_filename)
             temp_file = return_joined_filePath(return_filepath_dirname(target_filename), "temp"+target_filename_basename)
-            print(temp_file)
+            progress.start_task(file_runtime)
             command = [
                     return_ghostscript_callname(),
                     '-sDEVICE=pdfwrite',
@@ -333,12 +339,14 @@ def ghostscript_compression(filesDict: list, gs_instance):
             try:
                 subprocess.run(command, check=True, capture_output=True)
                 os.replace(temp_file, target_filename)
-                progress.log(f"[green]Compressed [/green] {target_filename_basename}")
+                progress.log(f"[green]Compressed [/green] Filepath: {target_filename}")
+                progress.remove_task(file_runtime)
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
                 if not os.path.exists(target_filename):
-                    log.warn(f"Failed to compress {return_filepath_basename(target_filename)}. File not found.")
+                    log.warning(f"Filepath: {return_filepath_basename(target_filename)} failed to compress. File not found.")
+                    os.remove(temp_file)
                 else:
                     raise PrettyErrorDisplay(f"""
                 GhostScript failed to run.
@@ -360,7 +368,7 @@ def ghostscript_compression(filesDict: list, gs_instance):
                 exit()
                 
             except Exception as e:
-                raise PrettyErrorDisplay("GhostScript compression has failed")
+                raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
             
 
 def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInstance=None):
@@ -374,19 +382,28 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
         excludeList (list): A list of file paths to exclude from compression.
         compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
     """
-    
+    from pdfsimuti.utils import return_confirm
+
     log.info("Validating files...")
-    validated_pdf_dict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
+    filesDict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
+    validated_pdf_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
     log.info("Validation complete")
+
+    # Display overview
+    display_overview_confirm(filesDict, compressInstance)
+
+    if not any(value['valid'] for value in filesDict.values()):
+        raise PrettyErrorDisplay("No compatible files to compress.")
     
-    if display_overview_confirm(validated_pdf_dict, compressInstance):
+    # create an entry like this => {file_item : (validity, initial_size, final_size)}
+    outcomeFileDict = {file_item: {'validity': None, 'initial': os.path.getsize(file_item), 'final': None} for file_item in validated_pdf_dict.keys()}
+
+    if return_confirm("\nDo you want to continue with this settings?"):
         import time
         
         # 1st Size capture
-        start = time.time()
-        print(validated_pdf_dict)
-        initial_file_size = [file_detail['data'] for file_detail in validated_pdf_dict.values()]
-        
+        start_time = time.time()
+        # initial_file_size = [file_detail['data'] for file_detail in validated_pdf_dict.values()]
         log.info("Compression runtime started.")
         #########################################
         match compressInstance.__class__.__name__:
@@ -396,12 +413,17 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
         log.info("Compression runtime over.")
         
         # 2nd Size Capture
-        end = time.time()
-        final_file_size = [os.path.getsize(filename) for filename in validated_pdf_dict]
+        end_time = time.time()
 
-        # create an entry like this => {file_item : (initial_size, final_size)}
-        outcomeFileDict = {file_item : (initial_size, final_size) for file_item, initial_size, final_size in zip(validated_pdf_dict.keys(), initial_file_size, final_file_size)}
-        display_compress_outcome(outcomeFileDict, end-start)
+        #### This block is created for the case of having a file being removed during runtime but akso to show that to the user
+        for filename, _ in outcomeFileDict.items():
+            try:
+                outcomeFileDict[filename]['final'] = os.path.getsize(filename)
+                outcomeFileDict[filename]['validity'] = True
+            except FileNotFoundError:
+                outcomeFileDict[filename]['validity'] = False
+
+        display_compress_outcome(outcomeFileDict, end_time-start_time)
     else:
         print("[red]Aborted[/red]")
 

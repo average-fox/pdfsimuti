@@ -218,27 +218,30 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
         preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
         sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
     """
-    fileSize = 0
-    table = Table(show_header=False, show_lines=True, highlight=True, expand=False)
+    from pdfsimuti.utils import return_rich_validated_display_block
+    from rich.console import Group
+    from rich.console import Console
+    from rich.rule import Rule
 
-    inner_table = Table(show_lines=True)
-    inner_table.add_column("Index")
-    inner_table.add_column("Filename")
-    inner_table.add_column("Absolute Path")
-    for index, item in enumerate(filesDict):
-        inner_table.add_row(str(index+1), return_filepath_basename(item), item)
+    fileSize = 0
+    merge_table_details = Table(show_header=False, show_lines=True, highlight=True, expand=True)
 
     # Calculate estimated size of the merge
-    for item in filesDict: fileSize += os.path.getsize(item[0]) / (1024 * 1024)
-    table.add_row("[underline bold]Files to be merged[/underline bold]:\n(as merge order)", inner_table)
-    table.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
-    table.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
-    table.add_row("[underline bold]Sort Order Mode (Optional):", f"{sort} [i]({"Sorting based on arragement" if sort == None else sort.description() })[/i] ")
-    table.add_row("[underline bold]Preserve Mode:[/underline bold]", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red] PDF files will be deleted after merging."}[italic bold]")
-    table.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
+    for item in filesDict: fileSize += os.path.getsize(item) / (1024 * 1024)
+    merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
+    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
+    merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"{sort} [i]({"Sorting based on arrangement" if sort == None else sort.description() })[/i] ")
+    merge_table_details.add_row("[underline bold]Preserve Mode[/underline bold]:", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red]\nPDF files will be deleted after merging."}[italic bold]")
+    merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
+    panel_group = Group(
+        Rule("Merge Order Overview"),
+        return_rich_validated_display_block(filesDict),
+        Rule("Merge Settings"),
+        merge_table_details
+    )
     print("\nPlease confirm the job.")
-    print(Panel(table, subtitle="[i]MERGING OVERVIEW[/i]", border_style="blue", expand=False))
+    Console().print(Panel(panel_group, border_style="blue", expand=False))
 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
@@ -257,18 +260,18 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
     try:
         # in case the user approves overwrite.
         # if not done, this will remove the merged file if --no-preserve is active
-        if outputFile in itemsDict:
-            itemsDict.pop(outputFile
-                          )
         with fitz.open() as doc:
             for item_entry in itemsDict: doc.insert_file(item_entry)
             doc.save(outputFile)
         
+        if outputFile in itemsDict:
+            itemsDict.pop(outputFile)
+
         # only delete after merging
         if not preserveFiles:
             for item_entry in itemsDict: 
                 os.remove(item_entry)
-        
+
     except KeyboardInterrupt:
         print("[red]Aborted[/red]")
         exit()
@@ -291,15 +294,18 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
 
     output = designate_saving_filePath(output)
     display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user
-    
-    if return_confirm("\nContinue with current settings"):
+
+    if return_confirm("\nMerge with current settings?"):
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
             if not return_confirm("Proceed?", default=None):
                 print("[red]Aborted[/red]")
                 exit()
         if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
-        generate_merged_pdf(filesDict, output, preserveFiles)
+
+        # purify dict of rejected items
+        validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+        generate_merged_pdf(validated_dict, output, preserveFiles)
         
         display_successful_merge_outcome(output) # Print success
     else:
@@ -307,6 +313,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
 
 
 def merge(
+        
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
@@ -319,7 +326,7 @@ def merge(
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
     validated_dict = validate_pdf_dict(items, exclude, mimecheck)
-    
+
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
         validated_dict = sort_dict(sort, validated_dict)

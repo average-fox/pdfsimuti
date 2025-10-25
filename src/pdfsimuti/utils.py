@@ -206,9 +206,13 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
         dict: The updated dictionary entry for the file ``{filename: {"valid": bool, "data": Any}}``
     """
     filename = item[0]
-    file_validaty = item[1]['valid']
-    file_data = item[1]['data']
+    file_validaty = None
+    file_data = None
 
+    try: 
+        file_data = os.path.getsize(filename)
+    except Exception: file_data = "ERROR"
+    
     try:
         magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
     except ModuleNotFoundError:
@@ -220,19 +224,25 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
         
     elif magic and magic.from_file(filename) != "application/pdf":
         file_validaty = False
-        file_data = f"Mimecheck pass fail \nReceived: {magic.from_file(filename)}"
+        file_data = f"Mimecheck pass fail\nReceived:\n{magic.from_file(filename)}"
         
     elif importlib.util.find_spec('fitz') is not None:
-        if importlib.import_module('fitz').open(filename).needs_pass:
-            file_validaty = False
-            file_data = "Password Protected"
+        try:
+            fitz = importlib.import_module('fitz')
+            if fitz.open(filename).needs_pass:
+                file_validaty = False
+                file_data = "Password Protected"
+        except fitz.FileDataError:
+            file_data = "Can't Open File"
     else:
         print("[yellow]CAUTION![/yellow] Package 'PyMuPDF' not found. Skipping password protection check.")
-    
-    if file_validaty is None:
+        file_data = "Unknown.\nFitz not found."
+
+    if file_validaty is None and mimecheck:
         file_validaty = True
-        file_data = os.path.getsize(filename)
-   
+    elif not mimecheck:
+        file_validaty = None
+
     return {filename: {"valid": file_validaty, "data": file_data}}
 
 
@@ -282,12 +292,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
             filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
     
     if exclude: filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
-            
-    # TODO: Remove this. it won't be required after doing the BOX-IN design
-    rejected_files_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == False}
-    if len(rejected_files_dict) > 0:
-        display_rejected_files(rejected_files_dict)
-        filesDict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+    if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
     
     if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
@@ -304,21 +309,31 @@ def validate_pdf_dict(items, exclude, mimeCheck):
             return filesDict
 
 
-def display_rejected_files(rejected_files_dict: dict) -> None:
-    """
-    Generate and display a formatted table listing all files that were rejected during validation.
+def return_rich_validated_display_block(filesDict:dict):
+    index = 0
+    validated_list_table = Table(show_lines=True)
+    validated_list_table.add_column("Index",justify="center", vertical="middle")
+    validated_list_table.add_column("Filename", vertical="middle")
+    validated_list_table.add_column("Absolute Path", vertical="middle")
+    validated_list_table.add_column("Status", vertical="middle")
+    validated_list_table.add_column("Size", vertical="middle")
 
-    Args:
-        rejected_files_dict (dict): A dictionary of rejected file paths and their corresponding rejection causes.
-    """
-    print(f"\n[yellow]CAUTION![/yellow] The following file(s) have been rejected.")
-    table = Table(show_lines=True, highlight=True)
-    table.add_column("File No.", justify = "center", no_wrap=True)
-    table.add_column("File Name", justify = "center", no_wrap=True)
-    table.add_column("File Path (Absolute)", justify = "center", no_wrap=True)
-    table.add_column("Cause", justify = "center", no_wrap=True)
-    
-    for index, (file, error_type) in enumerate(rejected_files_dict.items()): 
-        table.add_row(str(index+1), os.path.basename(file), os.path.abspath(file), f'[red]{error_type}[/red]')
-    
-    print(Panel(table, subtitle="[red]Rejected files[/red]", expand=False))
+    for item in filesDict.keys():
+        valid = filesDict.get(item)['valid']
+        basename = return_filepath_basename(item)
+        size = str(filesDict.get(item)['data'])
+        if valid: 
+            validity = "[green]Verified[/green]" 
+            index = index+1
+        elif valid == None:
+            validity = "[yellow]Unknown[/yellow]"
+            index = index+1
+        else:
+            validity = filesDict.get(item)['data']
+            # TODO: Fix the two errors on the size by creating another key for the dict items
+            size = "[red]ERROR[/red]"
+            item = f"[strike][red]{item}[/strike][/red]"
+            basename = f"[strike][red]{basename}[/strike][/red]"
+
+        validated_list_table.add_row(str(index) if valid else "[red]X[/red]", basename, item, validity, size)
+    return validated_list_table
