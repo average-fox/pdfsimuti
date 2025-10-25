@@ -102,10 +102,8 @@ class ghostscript_settings:
         Grey Resolution value: {self.greyResValue}
         Grey Resolution mode: {self.greySample}
         
-        Custom GhostScript Commands: 
-        {self.custom if self.custom else None}
-        
-        Please note, any ghostscript custom command if added can override the values represented here.
+        Custom GhostScript Commands: {"/n"+self.custom if self.custom else None}
+        {"Please note, any ghostscript custom command if added can override the values represented here.\n" if self.custom is not None else ""}
         -----------------------
         """)
 
@@ -194,24 +192,29 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
     """
     
     from rich.console import Group, Console
-    from pdfsimuti.utils import return_confirm
+    from rich.rule import Rule
+    from pdfsimuti.utils import return_confirm, return_rich_validated_display_block
+
+    console = Console()
     
     print("\nThe following file(s) will be compressed.")
-    table = Table(show_lines=True, highlight=True)
-    table.add_column("SI")
-    table.add_column("File Name")
-    table.add_column("File Path (Absolute)", justify="center")
-    table.add_column("Size (KB)")
-    
+    compress_table = Table(show_lines=True, highlight=True)
+    compress_table.add_column("SI")
+    compress_table.add_column("File Name")
+    compress_table.add_column("File Path (Absolute)", justify="center")
+    compress_table.add_column("Size (KB)")
+
     
     for index, item in enumerate(filesDict):
-        table.add_row(str(index+1), return_filepath_basename(item), item, str(os.path.getsize(item)))    
+        compress_table.add_row(str(index+1), return_filepath_basename(item), item, str(os.path.getsize(item)))    
     
     panel_group = Group(
-        Console().render_str(f"{compressInstance.display_properties()}"),
-        table, 
+        Rule("Compress Settings"),
+        console.render_str(f"{compressInstance.display_properties()}"),
+        Rule("Selected files for Compression"),
+        return_rich_validated_display_block(filesDict)
     )
-    print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False, padding=(1,2)))
+    console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
     
     return return_confirm("\nDo you want to continue with this settings?")
 
@@ -304,7 +307,6 @@ def ghostscript_compression(filesDict: list, gs_instance):
             # not doing this temp will result in a blank file
             target_filename_basename = return_filepath_basename(target_filename)
             temp_file = return_joined_filePath(return_filepath_dirname(target_filename), "temp"+target_filename_basename)
-            print(temp_file)
             command = [
                     return_ghostscript_callname(),
                     '-sDEVICE=pdfwrite',
@@ -332,7 +334,7 @@ def ghostscript_compression(filesDict: list, gs_instance):
             try:
                 subprocess.run(command, check=True, capture_output=True)
                 os.replace(temp_file, target_filename)
-                progress.log(f"[green]Compressed [/green] {target_filename_basename}")
+                progress.log(f"[green]Compressed [/green] {target_filename}")
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
@@ -375,15 +377,15 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
     """
     
     log.info("Validating files...")
-    validated_pdf_dict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
+    filesDict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
+    validated_pdf_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
     log.info("Validation complete")
     
-    if display_overview_confirm(validated_pdf_dict, compressInstance):
+    if display_overview_confirm(filesDict, compressInstance):
         import time
         
         # 1st Size capture
         start = time.time()
-        print(validated_pdf_dict)
         initial_file_size = [file_detail['data'] for file_detail in validated_pdf_dict.values()]
         
         log.info("Compression runtime started.")
