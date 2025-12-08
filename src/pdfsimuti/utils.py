@@ -10,8 +10,8 @@ from rich.panel import Panel
 from click.exceptions import ClickException
 import typer
 
-CURRENT_DIR = os.getcwd()
-DEFAULT_OUTPUT = 'merged.pdf'
+workingDir = os.getcwd()
+DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
 
 def text_dedent(msg : str) -> str:
     """
@@ -37,29 +37,18 @@ class PrettyErrorDisplay(ClickException):
         super().__init__(Console().render_str(text_dedent(message)))
         
         
-def exit_program():
-    print("[bold red]Program Exited[/bold red]")
-    exit()
-    
-
-def return_confirm(msg:str=None, caution:bool=False, default:bool=True) -> bool:
+def return_confirm(msg:str, default:bool=True) -> bool:
     """
     Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
 
     Args:
         msg (str): The confirmation message displayed to the user.
-        caution (bool): Ask twice with extreme caution
         default (bool) : Default control behavior
 
     Returns:
         bool: True if confirmed (Y or Enter), False otherwise (n).
     """
-    if caution:
-        confirm_once = typer.confirm("Proceed to abort?", default=True)
-        if not confirm_once:
-            return typer.confirm("(final) Are you absolutely sure not to abort?", default=False)
-        return False
-    return typer.confirm(msg, default=default)
+    return typer.confirm(msg, default=default); # default flag means enter key = y
 
 
 def get_calling_function():
@@ -72,10 +61,10 @@ def get_calling_function():
     """
     from inspect import currentframe
     
-    return return_basename(currentframe().f_back.f_back.f_code.co_filename)
+    return return_filepath_basename(currentframe().f_back.f_back.f_code.co_filename)
 
 
-def rtn_gs_name() -> str:
+def return_ghostscript_callname() -> str:
     """
     Determine the correct Ghostscript executable name for cross-platform compatibility. 
     It checks the OS and architecture (gs, gswin64c, or gswin32c).
@@ -96,7 +85,7 @@ def rtn_gs_name() -> str:
         
 
         
-def return_basename(item: str) -> str:
+def return_filepath_basename(item: str) -> str:
     """
     Return the basename of a given filepath, regardless of the active directory.
 
@@ -109,7 +98,7 @@ def return_basename(item: str) -> str:
     return os.path.basename(item)
 
 
-def return_dirname(item:str) -> str:
+def return_filepath_dirname(item:str) -> str:
     """
     Return the directory path of a file, excluding the filename.
 
@@ -122,7 +111,7 @@ def return_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def return_abspath(item:str) -> str:
+def return_absolute_path(item:str) -> str:
     """
     Return the normalized absolute path of a file or directory.
 
@@ -190,8 +179,8 @@ def scan_dir_files(filesDict: dict, directory: str) -> dict:
         filesDict (dist): The updated ``filesDict`` containing all unique PDF file paths found in the directory.
 
     """
-    directory = CURRENT_DIR if directory == "." else return_abspath(directory)
-    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == CURRENT_DIR else directory} [/yellow]")
+    directory = workingDir if directory == "." else return_absolute_path(directory)
+    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
     
     for item in os.listdir(directory):
         folder_path = return_joined_filePath(directory, item)
@@ -275,7 +264,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
         dict: A validated dictionary of PDF file paths ready for processing.
     """
     
-    excludeList = [return_abspath(excludeItem) for excludeItem in exclude if excludeItem != None]
+    excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
     filesDict = {}
     
     # start everything from new line
@@ -283,14 +272,14 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     
     # this loop will not scan the items. They will only be added to be scanned on the second loop
     for item in items:
-        item = return_abspath(item)
+        item = return_absolute_path(item)
         if os.path.isdir(item):
             # if item in excludeList, skip the scan
             if item in excludeList:
                 pass
             filesDict = scan_dir_files(filesDict, item)
         elif not os.path.exists(item):
-            print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_abspath(item)}[/yellow] [/i]")
+            print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")
         elif not has_pdf_extension(item):
             print("[yellow]CAUTION![/yellow] Target file not PDF. Extension mismatch.")    
         elif item in filesDict:
@@ -308,7 +297,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
-            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_filepath_dirname(return_absolute_path(item)) for item in items]))}[/i]
         """)
 
     match get_calling_function():
@@ -320,7 +309,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
             return filesDict
 
 
-def return_validated_display(filesDict:dict):
+def return_rich_validated_display_block(filesDict:dict):
     index = 0
     validated_list_table = Table(show_lines=True)
     validated_list_table.add_column("Index",justify="center", vertical="middle")
@@ -331,17 +320,18 @@ def return_validated_display(filesDict:dict):
 
     for item in filesDict.keys():
         valid = filesDict.get(item)['valid']
-        basename = return_basename(item)
-        data = filesDict.get(item)['data']
-        size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. (Please create a new property on dict)
-        if valid:
+        basename = return_filepath_basename(item)
+        size = str(filesDict.get(item)['data'])
+        if valid: 
             validity = "[green]Verified[/green]" 
-            index += 1
+            index = index+1
         elif valid == None:
             validity = "[yellow]Unknown[/yellow]"
-            index += 1
+            index = index+1
         else:
             validity = filesDict.get(item)['data']
+            # TODO: Fix the two errors on the size by creating another key for the dict items
+            size = "[red]ERROR[/red]"
             item = f"[strike][red]{item}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 

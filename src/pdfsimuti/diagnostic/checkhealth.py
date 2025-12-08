@@ -13,7 +13,7 @@ from rich.panel import Panel
 import typer
 from typing_extensions import Annotated
 
-from pdfsimuti.utils import rtn_gs_name
+from pdfsimuti.utils import return_ghostscript_callname
 
 console = Console()
 
@@ -76,7 +76,7 @@ def get_gs_detail():
     
     if not found, nothing happens.
     """
-    gs_name = rtn_gs_name()
+    gs_name = return_ghostscript_callname()
     try: 
         result = subprocess.run([gs_name, '--version'], capture_output=True, text=True)
     except FileNotFoundError: return 0
