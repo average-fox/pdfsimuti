@@ -10,8 +10,8 @@ from rich.panel import Panel
 from click.exceptions import ClickException
 import typer
 
-workingDir = os.getcwd()
-DEFAULT_SAVE_PDF_FILENAME = 'merged.pdf'
+CURRENT_DIR = os.getcwd()
+DEFAULT_OUTPUT = 'merged.pdf'
 
 def text_dedent(msg : str) -> str:
     """
@@ -72,10 +72,10 @@ def get_calling_function():
     """
     from inspect import currentframe
     
-    return return_filepath_basename(currentframe().f_back.f_back.f_code.co_filename)
+    return return_basename(currentframe().f_back.f_back.f_code.co_filename)
 
 
-def return_ghostscript_callname() -> str:
+def rtn_gs_name() -> str:
     """
     Determine the correct Ghostscript executable name for cross-platform compatibility. 
     It checks the OS and architecture (gs, gswin64c, or gswin32c).
@@ -96,7 +96,7 @@ def return_ghostscript_callname() -> str:
         
 
         
-def return_filepath_basename(item: str) -> str:
+def return_basename(item: str) -> str:
     """
     Return the basename of a given filepath, regardless of the active directory.
 
@@ -109,7 +109,7 @@ def return_filepath_basename(item: str) -> str:
     return os.path.basename(item)
 
 
-def return_filepath_dirname(item:str) -> str:
+def return_dirname(item:str) -> str:
     """
     Return the directory path of a file, excluding the filename.
 
@@ -122,7 +122,7 @@ def return_filepath_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def return_absolute_path(item:str) -> str:
+def return_abspath(item:str) -> str:
     """
     Return the normalized absolute path of a file or directory.
 
@@ -190,8 +190,8 @@ def scan_dir_files(filesDict: dict, directory: str) -> dict:
         filesDict (dist): The updated ``filesDict`` containing all unique PDF file paths found in the directory.
 
     """
-    directory = workingDir if directory == "." else return_absolute_path(directory)
-    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == workingDir else directory} [/yellow]")
+    directory = CURRENT_DIR if directory == "." else return_abspath(directory)
+    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == CURRENT_DIR else directory} [/yellow]")
     
     for item in os.listdir(directory):
         folder_path = return_joined_filePath(directory, item)
@@ -275,7 +275,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
         dict: A validated dictionary of PDF file paths ready for processing.
     """
     
-    excludeList = [return_absolute_path(excludeItem) for excludeItem in exclude if excludeItem != None]
+    excludeList = [return_abspath(excludeItem) for excludeItem in exclude if excludeItem != None]
     filesDict = {}
     
     # start everything from new line
@@ -283,14 +283,14 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     
     # this loop will not scan the items. They will only be added to be scanned on the second loop
     for item in items:
-        item = return_absolute_path(item)
+        item = return_abspath(item)
         if os.path.isdir(item):
             # if item in excludeList, skip the scan
             if item in excludeList:
                 pass
             filesDict = scan_dir_files(filesDict, item)
         elif not os.path.exists(item):
-            print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_absolute_path(item)}[/yellow] [/i]")
+            print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_abspath(item)}[/yellow] [/i]")
         elif not has_pdf_extension(item):
             print("[yellow]CAUTION![/yellow] Target file not PDF. Extension mismatch.")    
         elif item in filesDict:
@@ -308,7 +308,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
-            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_filepath_dirname(return_absolute_path(item)) for item in items]))}[/i]
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
         """)
 
     match get_calling_function():
@@ -320,7 +320,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
             return filesDict
 
 
-def return_rich_validated_display_block(filesDict:dict):
+def return_validated_display(filesDict:dict):
     index = 0
     validated_list_table = Table(show_lines=True)
     validated_list_table.add_column("Index",justify="center", vertical="middle")
@@ -331,7 +331,7 @@ def return_rich_validated_display_block(filesDict:dict):
 
     for item in filesDict.keys():
         valid = filesDict.get(item)['valid']
-        basename = return_filepath_basename(item)
+        basename = return_basename(item)
         data = filesDict.get(item)['data']
         size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. (Please create a new property on dict)
         if valid:
