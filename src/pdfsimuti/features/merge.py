@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_dict, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
+from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_dict, return_filepath_basename, return_filepath_dirname, return_absolute_path, return_confirm, PrettyErrorDisplay, workingDir, exit_program, DEFAULT_SAVE_PDF_FILENAME
 
          
 app = typer.Typer()
@@ -82,7 +82,7 @@ def advanced_filenaming(filename:str) -> str:
     from pdfsimuti.utils import text_dedent
     print(text_dedent(f"""
     -----------------------------------------------
-    Detected risky filename ({filename}). What do you want to do?
+    Detected risky filename ({filename}). Select option.
     
     [1] : Ignore warning and add extension to the end. [i]{filename}.pdf[/i]
     [2] : Change all "." to "-" then add extension to the end. [i]{filename.replace(".", "-")}.pdf[/i]
@@ -118,9 +118,19 @@ def designate_saving_dirname(filePath) -> str:
     Returns:
         str: The absolute path of the validated or defaulted output folder.
     """    
-    if not os.path.isdir(filePath):
-        print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
-        folder_creation_choice = return_confirm(f"Do you wish to create it?")
+    if not os.path.isdir(filePath): 
+        print(f"[yellow]\nCAUTION![/yellow] Save path non-existant: {filePath}")
+        # add flag for root-level directory on linux OS
+        import sys
+        if sys.platform == "linux" and filePath[0:5] != "/home":
+            print("[red]WARNING[/red]. Selected output filepath starts from linux root FHS. \nAbort immediately if you don't know what you're doing.")
+            folder_creation_choice = return_confirm(caution=True)
+            if not folder_creation_choice:
+                exit_program()
+        else:
+            print("You can create a new folder there or choose current working directory")
+            folder_creation_choice = return_confirm(f"Create new folder?")
+        
         if not folder_creation_choice:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
             filePath = workingDir
@@ -130,7 +140,7 @@ def designate_saving_dirname(filePath) -> str:
         # or you have to use a global variable
         # don't try that. i did it already.
 
-    return os.path.abspath(filePath)
+    return return_absolute_path(filePath)
 
 
 def designate_saving_filename(target_file_path:str) -> str:
@@ -186,7 +196,7 @@ def designate_saving_filePath(target_file_path: str) -> str:
     target_file_dirname = return_filepath_dirname(target_file_path)
     folder_path = workingDir if target_file_dirname == "" else target_file_dirname
     
-    working_dir = designate_saving_dirname(folder_path)
+    working_dir = designate_saving_dirname(return_absolute_path(target_file_dirname))
     outputFileName = designate_saving_filename(return_joined_filePath(working_dir, target_file_basename))
 
     return return_joined_filePath(working_dir, outputFileName)
@@ -273,9 +283,7 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
                 os.remove(item_entry)
 
     except KeyboardInterrupt:
-        print("[red]Aborted[/red]")
-        exit()
-        
+        exit_program()
     except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
 
 
@@ -295,7 +303,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
     output = designate_saving_filePath(output)
     display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user
 
-    if return_confirm("\nMerge with current settings?"):
+    if return_confirm("\nMerge with current settings?", default=False):
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
             if not return_confirm("Proceed?", default=None):
@@ -309,8 +317,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
         
         display_successful_merge_outcome(output) # Print success
     else:
-        print("[red]Aborted[/red]")
-
+        exit_program()
 
 def merge(
         

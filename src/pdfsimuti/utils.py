@@ -37,18 +37,29 @@ class PrettyErrorDisplay(ClickException):
         super().__init__(Console().render_str(text_dedent(message)))
         
         
-def return_confirm(msg:str, default:bool=True) -> bool:
+def exit_program():
+    print("[bold red]Program Exited[/bold red]")
+    exit()
+    
+
+def return_confirm(msg:str=None, caution:bool=False, default:bool=True) -> bool:
     """
     Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
 
     Args:
         msg (str): The confirmation message displayed to the user.
+        caution (bool): Ask twice with extreme caution
         default (bool) : Default control behavior
 
     Returns:
         bool: True if confirmed (Y or Enter), False otherwise (n).
     """
-    return typer.confirm(msg, default=default); # default flag means enter key = y
+    if caution:
+        confirm_once = typer.confirm("Proceed to abort?", default=True)
+        if not confirm_once:
+            return typer.confirm("(final) Are you absolutely sure not to abort?", default=False)
+        return False
+    return typer.confirm(msg, default=default)
 
 
 def get_calling_function():
@@ -321,17 +332,16 @@ def return_rich_validated_display_block(filesDict:dict):
     for item in filesDict.keys():
         valid = filesDict.get(item)['valid']
         basename = return_filepath_basename(item)
-        size = str(filesDict.get(item)['data'])
-        if valid: 
+        data = filesDict.get(item)['data']
+        size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. (Please create a new property on dict)
+        if valid:
             validity = "[green]Verified[/green]" 
-            index = index+1
+            index += 1
         elif valid == None:
             validity = "[yellow]Unknown[/yellow]"
-            index = index+1
+            index += 1
         else:
             validity = filesDict.get(item)['data']
-            # TODO: Fix the two errors on the size by creating another key for the dict items
-            size = "[red]ERROR[/red]"
             item = f"[strike][red]{item}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
