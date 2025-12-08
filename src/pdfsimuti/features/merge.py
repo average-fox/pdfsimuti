@@ -11,7 +11,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import return_joined_filePath, has_pdf_extension, validate_pdf_dict, return_filepath_basename, return_filepath_dirname, return_confirm, PrettyErrorDisplay, workingDir, DEFAULT_SAVE_PDF_FILENAME
+from pdfsimuti.utils import return_joined_filePath, return_basename, return_dirname, return_abspath, return_confirm
+from pdfsimuti.utils import has_pdf_extension, validate_pdf_dict, exit_program
+from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
          
 app = typer.Typer()
@@ -82,7 +84,7 @@ def advanced_filenaming(filename:str) -> str:
     from pdfsimuti.utils import text_dedent
     print(text_dedent(f"""
     -----------------------------------------------
-    Detected risky filename ({filename}). What do you want to do?
+    Detected risky filename ({filename}). Select option.
     
     [1] : Ignore warning and add extension to the end. [i]{filename}.pdf[/i]
     [2] : Change all "." to "-" then add extension to the end. [i]{filename.replace(".", "-")}.pdf[/i]
@@ -107,7 +109,7 @@ def advanced_filenaming(filename:str) -> str:
         break
 
 
-def designate_saving_dirname(filePath) -> str:
+def designate_dirname(filePath) -> str:
     """
     Validate and confirm the designated saving directory, prompting the user for creation if it doesn't exist.
     If denied, the saving folder defaults to the working directory; actual folder creation is deferred to ``merge_runtime()``.
@@ -118,35 +120,45 @@ def designate_saving_dirname(filePath) -> str:
     Returns:
         str: The absolute path of the validated or defaulted output folder.
     """    
-    if not os.path.isdir(filePath):
-        print(f"[yellow]\nCAUTION![/yellow] Saving folder '{filePath}' doesn't exist")
-        folder_creation_choice = return_confirm(f"Do you wish to create it?")
+    if not os.path.isdir(filePath): 
+        print(f"[yellow]\nCAUTION![/yellow] Save path non-existant: {filePath}")
+        # add flag for root-level directory on linux OS
+        import sys
+        if sys.platform == "linux" and filePath[0:5] != "/home":
+            print("[red]WARNING[/red]. Selected output filepath starts from linux root FHS. \nAbort immediately if you don't know what you're doing.")
+            folder_creation_choice = return_confirm(caution=True)
+            if not folder_creation_choice:
+                exit_program()
+        else:
+            print("You can create a new folder there or choose current working directory")
+            folder_creation_choice = return_confirm(f"Create new folder?")
+        
         if not folder_creation_choice:
             print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
-            filePath = workingDir
+            filePath = CURRENT_DIR
             
         # if you are wondering where the os.makedirs is happening, its not here but rather on the merge_runtime()
         # if you are to create it here, either overview had to be scrapped or you cannot notify the user of new folder creation 
         # or you have to use a global variable
         # don't try that. i did it already.
 
-    return os.path.abspath(filePath)
+    return return_abspath(filePath)
 
 
-def designate_saving_filename(target_file_path:str) -> str:
+def designate_filename(target:str) -> str:
     """
     Validate and manage the designated output filename, ensuring it has a '.pdf' extension and handling existing file conflicts.
     It prompts the user to resolve non-PDF extensions or choose to overwrite an existing file.
 
     Args:
-        target_file_path (str): The full output path provided by the user, which may include the folder and a custom filename.
+        target (str): The full output path provided by the user, which may include the folder and a custom filename.
 
     Returns:
         str: The final, validated basename of the file.
     """
     # if user gives something like folder/ then the filename will be default or otherwise it will be '' which is an error.
-    filename = DEFAULT_SAVE_PDF_FILENAME if return_filepath_basename(target_file_path) == "" else return_filepath_basename(target_file_path) 
-    folderpath = return_filepath_dirname(target_file_path)
+    filename = DEFAULT_OUTPUT if return_basename(target) == "" else return_basename(target) 
+    folderpath = return_dirname(target)
     
     while True:
         if not has_pdf_extension(filename):
@@ -167,27 +179,27 @@ def designate_saving_filename(target_file_path:str) -> str:
                 continue
         break
     
-    return return_filepath_basename(filename)  # This function will return basename only. Path dir is not accepted.
+    return return_basename(filename)  # This function will return basename only. Path dir is not accepted.
 
 
-def designate_saving_filePath(target_file_path: str) -> str:
+def designate_saving_filePath(target: str) -> str:
     """
     Validate and normalize the final output file path by separately processing and correcting the filename and the folder path.
     The process ensures a valid filename and confirms the existence (or creation) of the destination directory.
 
     Args:
-        target_file_path (str): The user-provided output file path or directory address.
+        target (str): The user-provided output file path or directory address.
 
     Returns:
         str: The absolute, fully validated, and corrected file path for saving the output. Note that this path isn't validated as `os.path.exists()`
     """    
     # if user passes . then the working directory will be folder path for scanning
-    target_file_basename = return_filepath_basename(target_file_path)
-    target_file_dirname = return_filepath_dirname(target_file_path)
-    folder_path = workingDir if target_file_dirname == "" else target_file_dirname
+    target_file_basename = return_basename(target)
+    target_file_dirname = return_dirname(target)
+    folder_path = CURRENT_DIR if target_file_dirname == "" else target_file_dirname
     
-    working_dir = designate_saving_dirname(folder_path)
-    outputFileName = designate_saving_filename(return_joined_filePath(working_dir, target_file_basename))
+    working_dir = designate_dirname(return_abspath(target_file_dirname))
+    outputFileName = designate_filename(return_joined_filePath(working_dir, target_file_basename))
 
     return return_joined_filePath(working_dir, outputFileName)
 
@@ -200,8 +212,8 @@ def display_successful_merge_outcome(outputPath:str):
         outputPath (str): The absolute file path where the merged PDF was saved.
     """
     outcome_table = Table(show_header=False, expand=False, show_lines=True)
-    outcome_table.add_row("[u][b]Filename[/b][/u]", return_filepath_basename(outputPath))
-    outcome_table.add_row("[u][b]Folder[/b][/u]", workingDir if return_filepath_dirname(outputPath) == "" else return_filepath_dirname(outputPath))
+    outcome_table.add_row("[u][b]Filename[/b][/u]", return_basename(outputPath))
+    outcome_table.add_row("[u][b]Folder[/b][/u]", CURRENT_DIR if return_dirname(outputPath) == "" else return_dirname(outputPath))
     outcome_table.add_row("[u][b]Absolute Path[/b][/u]", outputPath)
 
     print(Panel(outcome_table, subtitle="MERGE COMPLETED", border_style="green", expand=False))
@@ -218,7 +230,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
         preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
         sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
     """
-    from pdfsimuti.utils import return_rich_validated_display_block
+    from pdfsimuti.utils import return_validated_display
     from rich.console import Group
     from rich.console import Console
     from rich.rule import Rule
@@ -228,15 +240,15 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
 
     # Calculate estimated size of the merge
     for item in filesDict: fileSize += os.path.getsize(item) / (1024 * 1024)
-    merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_filepath_basename(outputPath)}[/i]")
-    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_filepath_dirname(outputPath)}[italic yellow]")
+    merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_basename(outputPath)}[/i]")
+    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_dirname(outputPath)}[italic yellow]")
     merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"{sort} [i]({"Sorting based on arrangement" if sort == None else sort.description() })[/i] ")
     merge_table_details.add_row("[underline bold]Preserve Mode[/underline bold]:", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red]\nPDF files will be deleted after merging."}[italic bold]")
     merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
     panel_group = Group(
         Rule("Merge Order Overview"),
-        return_rich_validated_display_block(filesDict),
+        return_validated_display(filesDict),
         Rule("Merge Settings"),
         merge_table_details
     )
@@ -273,10 +285,8 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
                 os.remove(item_entry)
 
     except KeyboardInterrupt:
-        print("[red]Aborted[/red]")
-        exit()
-        
-    except Exception as e:  raise PrettyErrorDisplay(f"Error. \n{e}")
+        exit_program()
+    except Exception as e:  raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
 
 
 def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
@@ -293,24 +303,27 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
     """
 
     output = designate_saving_filePath(output)
+    output_dir = Path(output).parent
     display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user
-
-    if return_confirm("\nMerge with current settings?"):
+    
+    if return_confirm("\nMerge with current settings?", default=False):
+        
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
             if not return_confirm("Proceed?", default=None):
-                print("[red]Aborted[/red]")
-                exit()
-        if not os.path.isdir(Path(output).parent): os.makedirs(Path(output).parent)
-
+                exit_program()        
+        if not os.path.isdir(output_dir): 
+            try: os.makedirs(output_dir)
+            except PermissionError:
+                raise PrettyErrorDisplay(f"Program failed. Unable to create directory: {output_dir}")
+        
         # purify dict of rejected items
         validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
         generate_merged_pdf(validated_dict, output, preserveFiles)
         
         display_successful_merge_outcome(output) # Print success
     else:
-        print("[red]Aborted[/red]")
-
+        exit_program()
 
 def merge(
         
@@ -319,7 +332,7 @@ def merge(
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
-    output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_SAVE_PDF_FILENAME):
+    output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_OUTPUT):
 
     # in case someone pass --mimecheck as --output
     if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":

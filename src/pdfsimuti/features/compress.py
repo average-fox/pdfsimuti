@@ -17,7 +17,7 @@ logging.basicConfig(
     level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
 )
 
-from pdfsimuti.utils import return_filepath_basename, return_filepath_dirname, validate_pdf_dict
+from pdfsimuti.utils import return_basename, return_dirname, validate_pdf_dict
 
 app = typer.Typer()
 log = logging.getLogger("rich")    
@@ -58,7 +58,6 @@ class ghostscript_settings:
         self.colorConversion = colorConversion
         self.custom = custom
         self.validate_gs_custom_commands(custom)
-
 
     
     def __getitem__(self, key):
@@ -191,7 +190,7 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
     
     from rich.console import Group, Console
     from rich.rule import Rule
-    from pdfsimuti.utils import return_rich_validated_display_block
+    from pdfsimuti.utils import return_validated_display
 
     console = Console()
     
@@ -204,13 +203,13 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
 
     
     for index, item in enumerate(filesDict):
-        compress_table.add_row(str(index+1), return_filepath_basename(item), item, str(os.path.getsize(item)))    
+        compress_table.add_row(str(index+1), return_basename(item), item, str(os.path.getsize(item)))    
     
     panel_group = Group(
         Rule("Compress Settings"),
         console.render_str(f"{compressInstance.display_properties()}"),
         Rule("Selected files for Compression"),
-        return_rich_validated_display_block(filesDict)
+        return_validated_display(filesDict)
     )
     console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
 
@@ -238,10 +237,10 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
         final =  filedata['final']
         if not filedata['validity']:
             # user removed the file during the program runtime
-            table.add_row(str(index), f"[strike]{return_filepath_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
+            table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
         else:
             compression_calculate = abs(round((initial - final)/initial*100, 3))
-            table.add_row(str(index), return_filepath_basename(filename), filename, str(initial), str(final), f'[green]{compression_calculate}%[/green]' if initial > final else f'[red]{compression_calculate}%[/red]')
+            table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{compression_calculate}%[/green]' if initial > final else f'[red]{compression_calculate}%[/red]')
             
     print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
     print(f"Total time taken: {round(time_elasped, 2)} seconds")
@@ -264,11 +263,11 @@ def pymupdf_compression(filesDict: list, fitz_instance):
         try:
             with fitz.open(item) as doc:
                 # temp files created to solve incremental saving issue
-                temp_file = item + ".temp"
-                doc.save(temp_file, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-            os.replace(temp_file, item)
+                temp = item + ".temp"
+                doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+            os.replace(temp, item)
         except ValueError:
-            log.warn(f"CAUTION. '{return_filepath_basename(item)}' cannot be compressed")
+            log.warn(f"CAUTION. '{return_basename(item)}' cannot be compressed")
             continue
         except Exception as e: 
             raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
@@ -289,7 +288,7 @@ def ghostscript_compression(filesDict: list, gs_instance):
             raise PrettyErrorDisplay("Program terminated for safety.")   
 
     import subprocess
-    from pdfsimuti.utils import return_joined_filePath, return_ghostscript_callname
+    from pdfsimuti.utils import return_joined_filePath, rtn_gs_name
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
 
     columns = [
@@ -306,14 +305,14 @@ def ghostscript_compression(filesDict: list, gs_instance):
         runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
         log.info("Started GhostScript calling.")
         
-        for target_filename in filesDict:
-            file_runtime = progress.add_task(description=f"Compressing: [yellow]{target_filename}[/yellow]", total=None)
+        for target in filesDict:
+            file_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
             # not doing this temp will result in a blank file
-            target_filename_basename = return_filepath_basename(target_filename)
-            temp_file = return_joined_filePath(return_filepath_dirname(target_filename), "temp"+target_filename_basename)
+            target_basename = return_basename(target)
+            temp = return_joined_filePath(return_dirname(target), "temp"+target_basename)
             progress.start_task(file_runtime)
             command = [
-                    return_ghostscript_callname(),
+                    rtn_gs_name(),
                     '-sDEVICE=pdfwrite',
                     f'-dCompatibilityLevel={gs_instance['compatibility']}',
                     f'-dEmbedAllFonts={gs_instance['embedAllFonts']}',
@@ -329,8 +328,8 @@ def ghostscript_compression(filesDict: list, gs_instance):
                     '-dQuiet',
                     '-dBATCH',
                     '-dSAFER',
-                    f'-sOutputFile={temp_file}',
-                    target_filename
+                    f'-sOutputFile={temp}',
+                    target
                 ]
             
             # adding custom commands
@@ -338,15 +337,15 @@ def ghostscript_compression(filesDict: list, gs_instance):
                 command[2:2] = gs_instance['custom'].split()
             try:
                 subprocess.run(command, check=True, capture_output=True)
-                os.replace(temp_file, target_filename)
-                progress.log(f"[green]Compressed [/green] Filepath: {target_filename}")
+                os.replace(temp, target)
+                progress.log(f"[green]Compressed [/green] Filepath: {target}")
                 progress.remove_task(file_runtime)
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
-                if not os.path.exists(target_filename):
-                    log.warning(f"Filepath: {return_filepath_basename(target_filename)} failed to compress. File not found.")
-                    os.remove(temp_file)
+                if not os.path.exists(target):
+                    log.warning(f"Filepath: {return_basename(target)} failed to compress. File not found.")
+                    os.remove(temp)
                 else:
                     raise PrettyErrorDisplay(f"""
                 GhostScript failed to run.
@@ -364,7 +363,7 @@ def ghostscript_compression(filesDict: list, gs_instance):
                 
             except KeyboardInterrupt:
                 print("[red]Aborting...[/red]")
-                if os.path.exists(temp_file): os.remove(temp_file)
+                if os.path.exists(temp): os.remove(temp_file)
                 exit()
                 
             except Exception as e:
