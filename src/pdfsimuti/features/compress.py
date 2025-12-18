@@ -8,6 +8,7 @@ from enum import Enum
 from rich import print
 from rich.table import Table
 from rich.panel import Panel
+from rich.console import Console, Group
 
 from pdfsimuti.utils import PrettyErrorDisplay
 
@@ -186,25 +187,11 @@ def display_overview_confirm(filesDict: dict, compressInstance) -> bool:
         filesDict (dict): A dictionary of validated file paths ready for compression.
         compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
 
-    """
-    
-    from rich.console import Group, Console
+    """    
     from rich.rule import Rule
     from pdfsimuti.utils import return_validated_display
 
     console = Console()
-    
-    print("\nThe following file(s) will be compressed.")
-    compress_table = Table(show_lines=True, highlight=True)
-    compress_table.add_column("SI")
-    compress_table.add_column("File Name")
-    compress_table.add_column("File Path (Absolute)", justify="center")
-    compress_table.add_column("Size (KB)")
-
-    
-    for index, item in enumerate(filesDict):
-        compress_table.add_row(str(index+1), return_basename(item), item, str(os.path.getsize(item)))    
-    
     panel_group = Group(
         Rule("Compress Settings"),
         console.render_str(f"{compressInstance.display_properties()}"),
@@ -224,13 +211,13 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
         outcomeFilesDict (dict): A dictionary mapping file paths to a tuple of (initial_size, final_size).
         time_elasped (int): The total time (in seconds) taken for the compression process.
     """
-    table = Table(show_lines=True, highlight=True)
+    table = Table(show_lines=True, highlight=True, )
     table.add_column("SI", vertical="middle"),
     table.add_column("File Name", vertical="middle")
     table.add_column("File Location (absolute)", vertical="middle")
-    table.add_column("Before (KB)", vertical="middle")
-    table.add_column("After (KB)", vertical="middle")
-    table.add_column("Compression\n [green]Green[/green]=Good\n[red]Red[/red]=Bad", vertical="middle")
+    table.add_column("Before (KB)", vertical="middle", justify="center")
+    table.add_column("After (KB)", vertical="middle", justify="center")
+    table.add_column("Outcome", vertical="middle", justify="center")
 
     for index, (filename, filedata) in enumerate(outcomeFilesDict.items()):
         initial = filedata['initial']
@@ -242,8 +229,10 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: int):
             compression_calculate = abs(round((initial - final)/initial*100, 3))
             table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{compression_calculate}%[/green]' if initial > final else f'[red]{compression_calculate}%[/red]')
             
-    print(Panel(table, subtitle="Compression Completed", border_style="bright_green", expand=False))
-    print(f"Total time taken: {round(time_elasped, 2)} seconds")
+    outcome_print_group = Group(
+            table,
+            f"\nTotal time taken: {round(time_elasped, 2)} seconds")
+    print(Panel(outcome_print_group, subtitle="Compression Completed", border_style="bright_green", expand=False))
     
 
 def pymupdf_compression(filesDict: list, fitz_instance):   

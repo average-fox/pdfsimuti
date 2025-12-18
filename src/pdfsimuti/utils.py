@@ -97,6 +97,7 @@ def rtn_gs_name() -> str:
 
         
 def return_basename(item: str) -> str:
+    
     """
     Return the basename of a given filepath, regardless of the active directory.
 
@@ -321,17 +322,26 @@ def validate_pdf_dict(items, exclude, mimeCheck):
 
 
 def return_validated_display(filesDict:dict):
+    """
+    Returns the display output of files validated and rejected.
+    
+    Args:
+        filesDict (dict): dict to validate the list from.
+
+    Returns:
+        str: validation outcome
+    """
     index = 0
     validated_list_table = Table(show_lines=True)
-    validated_list_table.add_column("Index",justify="center", vertical="middle")
+    validated_list_table.add_column("SI", justify="center", vertical="middle")
     validated_list_table.add_column("Filename", vertical="middle")
-    validated_list_table.add_column("Absolute Path", vertical="middle")
+    validated_list_table.add_column("Abspath", vertical="middle", overflow="fold")
     validated_list_table.add_column("Status", vertical="middle")
-    validated_list_table.add_column("Size", vertical="middle")
+    validated_list_table.add_column("Size", vertical="middle", justify="center")
 
-    for item in filesDict.keys():
+    for item in filesDict.keys(): 
         valid = filesDict.get(item)['valid']
-        basename = return_basename(item)
+        basename = os.path.splitext(return_basename(item))[0]
         data = filesDict.get(item)['data']
         size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. (Please create a new property on dict)
         if valid:
