@@ -196,7 +196,6 @@ def designate_saving_filePath(target: str) -> str:
     # if user passes . then the working directory will be folder path for scanning
     target_file_basename = return_basename(target)
     target_file_dirname = return_dirname(target)
-    folder_path = CURRENT_DIR if target_file_dirname == "" else target_file_dirname
     
     working_dir = designate_dirname(return_abspath(target_file_dirname))
     outputFileName = designate_filename(return_joined_filePath(working_dir, target_file_basename))
@@ -230,7 +229,6 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
         preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
         sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
     """
-    from pdfsimuti.utils import return_validated_display
     from rich.console import Group
     from rich.console import Console
     from rich.rule import Rule
@@ -247,8 +245,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
     panel_group = Group(
-        Rule("Merge Order Overview"),
-        return_validated_display(filesDict),
+
         Rule("Merge Settings"),
         merge_table_details
     )

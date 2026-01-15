@@ -4,8 +4,6 @@ import struct # windows os + ghostScript only. Required to get CPU bit since gsw
 import sys
 
 from rich import print
-from rich.table import Table
-from rich.panel import Panel
 
 from click.exceptions import ClickException
 import typer
@@ -275,13 +273,15 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     Returns:
         dict: A validated dictionary of PDF file paths ready for processing.
     """
-    
+
     excludeList = [return_abspath(excludeItem) for excludeItem in exclude if excludeItem != None]
     filesDict = {}
-    
+
     # start everything from new line
     print()
     
+    if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
+
     # this loop will not scan the items. They will only be added to be scanned on the second loop
     for item in items:
         item = return_abspath(item)
@@ -299,24 +299,32 @@ def validate_pdf_dict(items, exclude, mimeCheck):
         else:
             filesDict[item] = {"valid": None, "data": None}
     
+    # file that are existant are then scanned one by one
     for file_entry in filesDict.items():
         if file_entry[0] not in exclude:
             filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
     
+    # if exclude exists then rewrite old filesDict with new one excluded from the mentioned items
     if exclude: filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
-    if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
     
+    # abort if no pdf files are found
     if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
         """)
+    else: print(return_validated_display(filesDict))
+
+    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
+    final_validated_file_count = 0
+    for item in filesDict.keys():
+        if filesDict.get(item)['valid']: ++final_validated_file_count
 
     match get_calling_function():
         case "compress.py": 
             return filesDict
         case "merge.py":
-            if len(filesDict) <= 1:
+            if final_validated_file_count <= 1:
                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
             return filesDict
 
@@ -331,6 +339,7 @@ def return_validated_display(filesDict:dict):
     Returns:
         str: validation outcome
     """
+    from rich.table import Table
     index = 0
     validated_list_table = Table(show_lines=True)
     validated_list_table.add_column("SI", justify="center", vertical="middle")
