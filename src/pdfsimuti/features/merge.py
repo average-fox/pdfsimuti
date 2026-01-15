@@ -232,6 +232,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     from rich.console import Group
     from rich.console import Console
     from rich.rule import Rule
+    from pdfsimuti.utils import return_validated_display # display file status despite the result
 
     fileSize = 0
     merge_table_details = Table(show_header=False, show_lines=True, highlight=True, expand=True)
@@ -245,7 +246,8 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
     panel_group = Group(
-
+        Rule("Merge Order Overview"),
+        return_validated_display(filesDict),
         Rule("Merge Settings"),
         merge_table_details
     )

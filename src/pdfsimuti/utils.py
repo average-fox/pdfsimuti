@@ -275,6 +275,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     """
 
     excludeList = [return_abspath(excludeItem) for excludeItem in exclude if excludeItem != None]
+    unvalidated_files = [return_abspath(item) for item in items]
     filesDict = {}
 
     # start everything from new line
@@ -283,8 +284,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
 
     # this loop will not scan the items. They will only be added to be scanned on the second loop
-    for item in items:
-        item = return_abspath(item)
+    for item in unvalidated_files:
         if os.path.isdir(item):
             # if item in excludeList, skip the scan
             if item in excludeList:
@@ -313,18 +313,21 @@ def validate_pdf_dict(items, exclude, mimeCheck):
             No compatible PDF files found.
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
         """)
-    else: print(return_validated_display(filesDict))
 
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
     final_validated_file_count = 0
     for item in filesDict.keys():
-        if filesDict.get(item)['valid']: ++final_validated_file_count
+        valid = filesDict.get(item)['valid']
+        # None is a false bool. You have to check it twice to properly distinguish it.
+        if valid == None or True:
+            if not valid: final_validated_file_count += 1
 
     match get_calling_function():
         case "compress.py": 
             return filesDict
         case "merge.py":
             if final_validated_file_count <= 1:
+                print(return_validated_display(filesDict))
                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
             return filesDict
 
