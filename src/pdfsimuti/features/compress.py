@@ -18,7 +18,7 @@ logging.basicConfig(
     level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
 )
 
-from pdfsimuti.utils import return_basename, return_dirname, validate_pdf_dict
+from pdfsimuti.utils import return_basename, return_dirname
 
 app = typer.Typer()
 log = logging.getLogger("rich")    
@@ -352,28 +352,28 @@ def ghostscript_compression(filesDict: list, gs_instance):
                 
             except KeyboardInterrupt:
                 print("[red]Aborting...[/red]")
-                if os.path.exists(temp): os.remove(temp_file)
+                if os.path.exists(temp): os.remove(temp)
                 exit()
                 
             except Exception as e:
                 raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
             
 
-def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInstance=None):
+def compress_runtime(fileList: list, mimecheck: bool, excludeList, compressInstance=None):
     """
     Control the entire PDF compression process, including validation, user confirmation, runtime execution, and displaying results.
     The function measures and compares file sizes before and after compression to report the outcome and time elapsed.
 
     Args:
-        filesDict (dict): A list of file or directory paths to be processed.
+        fileList (list): A list of file or directory paths to be processed.
         mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
         excludeList (list): A list of file paths to exclude from compression.
         compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
     """
-    from pdfsimuti.utils import return_confirm
+    from pdfsimuti.utils import return_confirm, validate_pdf_dict
 
     log.info("Validating files...")
-    filesDict = validate_pdf_dict(filesDict, exclude=excludeList,  mimeCheck=mimecheck)
+    filesDict = validate_pdf_dict(fileList, exclude=excludeList,  mimeCheck=mimecheck)
     validated_pdf_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
     log.info("Validation complete")
 
@@ -419,7 +419,7 @@ def compress_runtime(filesDict: list, mimecheck: bool, excludeList, compressInst
 def compress(
     filelist: Annotated[List[str], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple", metavar="pdf_item")],
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
-    exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=[None],
+    exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=None,
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional options", metavar="[gs/ghostscript|pymupdf]")] = "pymupdf",
     
     garbage: Annotated[int, typer.Option(max=4, min=0, help="PyMuPDF garbage strength control", rich_help_panel="PyMuPDF Settings")] = 4,

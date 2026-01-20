@@ -2,6 +2,7 @@ import os
 import importlib
 import struct # windows os + ghostScript only. Required to get CPU bit since gswin64c and gswin32c are different
 import sys
+from pathlib import Path
 
 from rich import print
 
@@ -176,31 +177,39 @@ def return_joined_filePath(folderpath:str, filename:str) -> str:
     return os.path.join(folderpath, filename)
 
 
-def scan_dir_files(filesDict: dict, directory: str) -> dict:
-    """
-    Scan a specified directory, identify files with a '.pdf' extension, and add them to a dictionary for validation. 
-    Duplicate files encountered are noted and ignored.
+def scan_file(itemList: list) -> list:
 
-    Args:
-        filesDict (dict): The dictionary used to store file paths and their validation status.
-        directory (str): The path to the directory to scan for PDF files.
-
-    Returns:
-        filesDict (dist): The updated ``filesDict`` containing all unique PDF file paths found in the directory.
-
-    """
-    directory = CURRENT_DIR if directory == "." else return_abspath(directory)
-    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == CURRENT_DIR else directory} [/yellow]")
-    
-    for item in os.listdir(directory):
-        folder_path = return_joined_filePath(directory, item)
-        if has_pdf_extension(folder_path):
-            if folder_path not in filesDict: 
-                filesDict[folder_path] = {"valid": None, "data": None}
+    return_list = []
+    for item in itemList:
+        file = Path(item).resolve()
+        # item can be either a file or a directory but not both
+        if file.is_dir():
+            for folder_item in file.glob("*.pdf"):
+                folder_item = str(folder_item.resolve())
+                if folder_item not in return_list: 
+                    return_list.append(folder_item)
+                else:
+                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {folder_item}")
+        # if dir but it doesn't exist
+        else:
+            if not file.is_file:
+                print(f"[red]WARNING![/red] FOLDER not found: [i] [yellow]{str(file)}[/yellow] [/i]")
+        
+        # TODO: once has_pdf_extensions() is replaced with Pathlib, patch this up.
+        if file.is_file() and not file.is_dir():
+            if file.suffix.lower() == ".pdf":
+                if str(file) not in return_list:
+                    return_list.append(str(file))
+                else:
+                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {str(file)}")
             else:
-                print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {folder_path}")    
+                print(f"[red]WARNING![/red] File not PDF: {str(file)}")
+        else:
+            if not file.is_dir():
+                print(f"[red]WARNING![/red] File not found: [i] [yellow]{str(file)}[/yellow] [/i]")
 
-    return filesDict
+    return return_list
+
 
 
 def update_file_dict_entry(item: tuple, mimecheck: bool):
@@ -273,39 +282,16 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     Returns:
         dict: A validated dictionary of PDF file paths ready for processing.
     """
+    unvalidated_files = scan_file(items)
+    excludeList = scan_file(exclude) if exclude else []
+    filesDict = {item_entry: {"valid": None, "data": None} for item_entry in ([item for item in unvalidated_files if item not in excludeList] if exclude else unvalidated_files)}
 
-    excludeList = [return_abspath(excludeItem) for excludeItem in exclude if excludeItem != None]
-    unvalidated_files = [return_abspath(item) for item in items]
-    filesDict = {}
-
-    # start everything from new line
-    print()
-    
     if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
 
-    # this loop will not scan the items. They will only be added to be scanned on the second loop
-    for item in unvalidated_files:
-        if os.path.isdir(item):
-            # if item in excludeList, skip the scan
-            if item in excludeList:
-                pass
-            filesDict = scan_dir_files(filesDict, item)
-        elif not os.path.exists(item):
-            print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_abspath(item)}[/yellow] [/i]")
-        elif not has_pdf_extension(item):
-            print("[yellow]CAUTION![/yellow] Target file not PDF. Extension mismatch.")    
-        elif item in filesDict:
-            print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {item}")
-        else:
-            filesDict[item] = {"valid": None, "data": None}
-    
     # file that are existant are then scanned one by one
     for file_entry in filesDict.items():
-        if file_entry[0] not in exclude:
-            filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
-    
-    # if exclude exists then rewrite old filesDict with new one excluded from the mentioned items
-    if exclude: filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
+        filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
+
     
     # abort if no pdf files are found
     if len(filesDict) == 0:
@@ -315,6 +301,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
         """)
 
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
+    # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
     for item in filesDict.keys():
         valid = filesDict.get(item)['valid']
