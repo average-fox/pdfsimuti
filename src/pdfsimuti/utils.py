@@ -243,16 +243,16 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
         
     elif magic and magic.from_file(filename) != "application/pdf":
         file_validaty = False
-        file_data = f"Mimecheck pass fail\nReceived:\n{magic.from_file(filename)}"
+        file_data = f"Mimecheck pass failed.\nReceived:[yellow]\n{magic.from_file(filename)}[/yellow]"
         
     elif importlib.util.find_spec('fitz') is not None:
         try:
             fitz = importlib.import_module('fitz')
             if fitz.open(filename).needs_pass:
                 file_validaty = False
-                file_data = "Password Protected"
+                file_data = "Password Protected."
         except fitz.FileDataError:
-            file_data = "Can't Open File"
+            file_data = "Can't Open File."
     else:
         print("[yellow]CAUTION![/yellow] Package 'PyMuPDF' not found. Skipping password protection check.")
         file_data = "Unknown.\nFitz not found."
@@ -292,7 +292,6 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     for file_entry in filesDict.items():
         filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
 
-    
     # abort if no pdf files are found
     if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
@@ -305,9 +304,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     final_validated_file_count = 0
     for item in filesDict.keys():
         valid = filesDict.get(item)['valid']
-        # None is a false bool. You have to check it twice to properly distinguish it.
-        if valid == None or True:
-            if not valid: final_validated_file_count += 1
+        if valid == None or valid == True: final_validated_file_count+=1
 
     match get_calling_function():
         case "compress.py": 
@@ -327,7 +324,7 @@ def return_validated_display(filesDict:dict):
         filesDict (dict): dict to validate the list from.
 
     Returns:
-        str: validation outcome
+        str: validation outcome (rich-based)
     """
     from rich.table import Table
     index = 0
@@ -342,7 +339,7 @@ def return_validated_display(filesDict:dict):
         valid = filesDict.get(item)['valid']
         basename = os.path.splitext(return_basename(item))[0]
         data = filesDict.get(item)['data']
-        size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. (Please create a new property on dict)
+        size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. # TODO: pls optimize this
         if valid:
             validity = "[green]Verified[/green]" 
             index += 1
@@ -354,5 +351,8 @@ def return_validated_display(filesDict:dict):
             item = f"[strike][red]{item}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
-        validated_list_table.add_row(str(index) if valid else "[red]X[/red]", basename, item, validity, size)
+        # its a string conversion rather than type conversion.
+        output = str(index) if valid == None or valid == True else "[red]X[/red]"
+        validated_list_table.add_row(output, basename, item, validity, size)
+
     return validated_list_table
