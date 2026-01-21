@@ -2,10 +2,9 @@ import os
 import importlib
 import struct # windows os + ghostScript only. Required to get CPU bit since gswin64c and gswin32c are different
 import sys
+from pathlib import Path
 
 from rich import print
-from rich.table import Table
-from rich.panel import Panel
 
 from click.exceptions import ClickException
 import typer
@@ -178,31 +177,39 @@ def return_joined_filePath(folderpath:str, filename:str) -> str:
     return os.path.join(folderpath, filename)
 
 
-def scan_dir_files(filesDict: dict, directory: str) -> dict:
-    """
-    Scan a specified directory, identify files with a '.pdf' extension, and add them to a dictionary for validation. 
-    Duplicate files encountered are noted and ignored.
+def scan_file(itemList: list) -> list:
 
-    Args:
-        filesDict (dict): The dictionary used to store file paths and their validation status.
-        directory (str): The path to the directory to scan for PDF files.
-
-    Returns:
-        filesDict (dist): The updated ``filesDict`` containing all unique PDF file paths found in the directory.
-
-    """
-    directory = CURRENT_DIR if directory == "." else return_abspath(directory)
-    print(f"ADDDING FOLDER: [yellow]{"CURRENT DIRECTORY" if directory == CURRENT_DIR else directory} [/yellow]")
-    
-    for item in os.listdir(directory):
-        folder_path = return_joined_filePath(directory, item)
-        if has_pdf_extension(folder_path):
-            if folder_path not in filesDict: 
-                filesDict[folder_path] = {"valid": None, "data": None}
+    return_list = []
+    for item in itemList:
+        file = Path(item).resolve()
+        # item can be either a file or a directory but not both
+        if file.is_dir():
+            for folder_item in file.glob("*.pdf"):
+                folder_item = str(folder_item.resolve())
+                if folder_item not in return_list: 
+                    return_list.append(folder_item)
+                else:
+                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {folder_item}")
+        # if dir but it doesn't exist
+        else:
+            if not file.is_file:
+                print(f"[red]WARNING![/red] FOLDER not found: [i] [yellow]{str(file)}[/yellow] [/i]")
+        
+        # TODO: once has_pdf_extensions() is replaced with Pathlib, patch this up.
+        if file.is_file() and not file.is_dir():
+            if file.suffix.lower() == ".pdf":
+                if str(file) not in return_list:
+                    return_list.append(str(file))
+                else:
+                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {str(file)}")
             else:
-                print(f"[yellow]CAUTION[/yellow]! Duplicate file found and ignored: {folder_path}")    
+                print(f"[red]WARNING![/red] File not PDF: {str(file)}")
+        else:
+            if not file.is_dir():
+                print(f"[red]WARNING![/red] File not found: [i] [yellow]{str(file)}[/yellow] [/i]")
 
-    return filesDict
+    return return_list
+
 
 
 def update_file_dict_entry(item: tuple, mimecheck: bool):
@@ -236,16 +243,16 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
         
     elif magic and magic.from_file(filename) != "application/pdf":
         file_validaty = False
-        file_data = f"Mimecheck pass fail\nReceived:\n{magic.from_file(filename)}"
+        file_data = f"Mimecheck pass failed.\nReceived:[yellow]\n{magic.from_file(filename)}[/yellow]"
         
     elif importlib.util.find_spec('fitz') is not None:
         try:
             fitz = importlib.import_module('fitz')
             if fitz.open(filename).needs_pass:
                 file_validaty = False
-                file_data = "Password Protected"
+                file_data = "Password Protected."
         except fitz.FileDataError:
-            file_data = "Can't Open File"
+            file_data = "Can't Open File."
     else:
         print("[yellow]CAUTION![/yellow] Package 'PyMuPDF' not found. Skipping password protection check.")
         file_data = "Unknown.\nFitz not found."
@@ -275,48 +282,36 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     Returns:
         dict: A validated dictionary of PDF file paths ready for processing.
     """
-    
-    excludeList = [return_abspath(excludeItem) for excludeItem in exclude if excludeItem != None]
-    filesDict = {}
-    
-    # start everything from new line
-    print()
-    
-    # this loop will not scan the items. They will only be added to be scanned on the second loop
-    for item in items:
-        item = return_abspath(item)
-        if os.path.isdir(item):
-            # if item in excludeList, skip the scan
-            if item in excludeList:
-                pass
-            filesDict = scan_dir_files(filesDict, item)
-        elif not os.path.exists(item):
-            print(f"[red]WARNING![/red] FOLDER/ITEM not found: [i] [yellow]{return_abspath(item)}[/yellow] [/i]")
-        elif not has_pdf_extension(item):
-            print("[yellow]CAUTION![/yellow] Target file not PDF. Extension mismatch.")    
-        elif item in filesDict:
-            print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {item}")
-        else:
-            filesDict[item] = {"valid": None, "data": None}
-    
-    for file_entry in filesDict.items():
-        if file_entry[0] not in exclude:
-            filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
-    
-    if exclude: filesDict = {key:value for key,value in filesDict.items() if key not in excludeList}
+    unvalidated_files = scan_file(items)
+    excludeList = scan_file(exclude) if exclude else []
+    filesDict = {item_entry: {"valid": None, "data": None} for item_entry in ([item for item in unvalidated_files if item not in excludeList] if exclude else unvalidated_files)}
+
     if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
-    
+
+    # file that are existant are then scanned one by one
+    for file_entry in filesDict.items():
+        filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
+
+    # abort if no pdf files are found
     if len(filesDict) == 0:
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
         """)
 
+    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
+    # this loop checks between true/false and none. if none then it's validation is unknown.
+    final_validated_file_count = 0
+    for item in filesDict.keys():
+        valid = filesDict.get(item)['valid']
+        if valid == None or valid == True: final_validated_file_count+=1
+
     match get_calling_function():
         case "compress.py": 
             return filesDict
         case "merge.py":
-            if len(filesDict) <= 1:
+            if final_validated_file_count <= 1:
+                print(return_validated_display(filesDict))
                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
             return filesDict
 
@@ -329,8 +324,9 @@ def return_validated_display(filesDict:dict):
         filesDict (dict): dict to validate the list from.
 
     Returns:
-        str: validation outcome
+        str: validation outcome (rich-based)
     """
+    from rich.table import Table
     index = 0
     validated_list_table = Table(show_lines=True)
     validated_list_table.add_column("SI", justify="center", vertical="middle")
@@ -343,7 +339,7 @@ def return_validated_display(filesDict:dict):
         valid = filesDict.get(item)['valid']
         basename = os.path.splitext(return_basename(item))[0]
         data = filesDict.get(item)['data']
-        size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. (Please create a new property on dict)
+        size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. # TODO: pls optimize this
         if valid:
             validity = "[green]Verified[/green]" 
             index += 1
@@ -355,5 +351,8 @@ def return_validated_display(filesDict:dict):
             item = f"[strike][red]{item}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
-        validated_list_table.add_row(str(index) if valid else "[red]X[/red]", basename, item, validity, size)
+        # its a string conversion rather than type conversion.
+        output = str(index) if valid == None or valid == True else "[red]X[/red]"
+        validated_list_table.add_row(output, basename, item, validity, size)
+
     return validated_list_table

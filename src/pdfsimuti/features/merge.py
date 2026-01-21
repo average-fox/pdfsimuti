@@ -196,7 +196,6 @@ def designate_saving_filePath(target: str) -> str:
     # if user passes . then the working directory will be folder path for scanning
     target_file_basename = return_basename(target)
     target_file_dirname = return_dirname(target)
-    folder_path = CURRENT_DIR if target_file_dirname == "" else target_file_dirname
     
     working_dir = designate_dirname(return_abspath(target_file_dirname))
     outputFileName = designate_filename(return_joined_filePath(working_dir, target_file_basename))
@@ -230,10 +229,10 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
         preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
         sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
     """
-    from pdfsimuti.utils import return_validated_display
     from rich.console import Group
     from rich.console import Console
     from rich.rule import Rule
+    from pdfsimuti.utils import return_validated_display # display file status despite the result
 
     fileSize = 0
     merge_table_details = Table(show_header=False, show_lines=True, highlight=True, expand=True)
@@ -329,7 +328,7 @@ def merge(
         
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[None],
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=None,
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_OUTPUT):
