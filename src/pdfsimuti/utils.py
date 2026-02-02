@@ -12,7 +12,7 @@ import typer
 CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
 
-def text_dedent(msg : str) -> str:
+def text_dedent(msg) -> str:
     """
     Remove common leading whitespace and strip surrounding space/newlines.
 
@@ -33,9 +33,13 @@ class PrettyErrorDisplay(ClickException):
     
     def __init__(self, message):
         from rich.console import Console
-        super().__init__(Console().render_str(text_dedent(message)))
+        from io import StringIO
+        console = Console(file=StringIO(), force_terminal=True)
+        with console.capture() as capture: console.print(text_dedent(message))
         
+        super().__init__(capture.get())
         
+
 def exit_program():
     print("[bold red]Program Exited[/bold red]")
     exit()
