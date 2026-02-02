@@ -15,6 +15,7 @@ from pdfsimuti.utils import return_joined_filePath, return_basename, return_dirn
 from pdfsimuti.utils import has_pdf_extension, validate_pdf_dict, exit_program
 from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
+from typing import Optional
          
 app = typer.Typer()
 
@@ -49,7 +50,7 @@ class SortOrder(str, Enum):
         return description.get(self)
     
 
-def sort_dict(sort_type: str, files_dict: dict):
+def sort_dict(sort_type, files_dict):
     """
     Sort a dictionary of file paths based on the specified criteria.
 
@@ -289,7 +290,7 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
     except Exception as e:  raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
 
 
-def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
+def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
     """
     Control the entire PDF merging process, orchestrating path validation, user overview confirmation, execution, and cleanup.
 
@@ -318,7 +319,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
                 raise PrettyErrorDisplay(f"Program failed. Unable to create directory: {output_dir}")
         
         # purify dict of rejected items
-        validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+        validated_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == True}
         generate_merged_pdf(validated_dict, output, preserveFiles)
         
         display_successful_merge_outcome(output) # Print success
@@ -329,7 +330,7 @@ def merge(
         
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = SortOrder.normal,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=None,
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_OUTPUT):
