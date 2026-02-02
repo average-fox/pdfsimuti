@@ -212,7 +212,7 @@ def scan_file(itemList: list) -> list:
 
 
 
-def update_file_dict_entry(item: tuple, mimecheck: bool):
+def update_file_dict_entry(item: tuple, mimecheck: bool) -> dict:
     """
     Validate a single file dictionary entry by performing readability, MIME type, and password checks. 
     It updates the 'valid' and 'data' fields based on the outcome of these checks.
@@ -228,15 +228,24 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
     file_validaty = None
     file_data = None
 
+    # get size of files
     try: 
         file_data = os.path.getsize(filename)
     except Exception: file_data = "ERROR"
-    
+
+    # confirm magic exists
     try:
         magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
     except ModuleNotFoundError:
         raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
-        
+
+    # confirm fitz exists
+    try:
+        fitz = importlib.import_module('fitz')
+    except ModuleNotFoundError:
+        fitz = None
+        print("[yellow]CAUTION![/yellow] PyMuPDF (fitz) not found. Skipping password protection check.")
+
     if not check_file_readability(filename):
         file_validaty = False
         file_data = "Unreadable file"
@@ -244,17 +253,16 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
     elif magic and magic.from_file(filename) != "application/pdf":
         file_validaty = False
         file_data = f"Mimecheck pass failed.\nReceived:[yellow]\n{magic.from_file(filename)}[/yellow]"
-        
-    elif importlib.util.find_spec('fitz') is not None:
+    
+    # TODO: either you fix this or change it with true try/except
+    elif fitz:
         try:
-            fitz = importlib.import_module('fitz')
             if fitz.open(filename).needs_pass:
                 file_validaty = False
-                file_data = "Password Protected."
+                file_data = 'Password Protected'
         except fitz.FileDataError:
-            file_data = "Can't Open File."
+            file_data = "Can't Open file"
     else:
-        print("[yellow]CAUTION![/yellow] Package 'PyMuPDF' not found. Skipping password protection check.")
         file_data = "Unknown.\nFitz not found."
 
     if file_validaty is None and mimecheck:
