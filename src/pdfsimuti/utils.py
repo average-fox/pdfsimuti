@@ -255,7 +255,6 @@ def update_file_dict_entry(item: tuple, mimecheck: bool) -> dict:
         file_validaty = False
         file_data = f"Mimecheck pass failed.\nReceived:[yellow]\n{magic.from_file(filename)}[/yellow]"
     
-    # TODO: either you fix this or change it with true try/except
     elif fitz:
         try:
             if fitz.open(filename).needs_pass:
@@ -303,6 +302,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
 
     # abort if no pdf files are found
     if len(filesDict) == 0:
+
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
@@ -311,8 +311,9 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
-    for item in filesDict.keys():
-        valid = filesDict.get(item)['valid']
+
+    for item in filesDict.values():
+        valid = item['valid']
         if valid == None or valid == True: final_validated_file_count+=1
 
     match get_calling_function():
@@ -344,10 +345,10 @@ def return_validated_display(filesDict:dict):
     validated_list_table.add_column("Status", vertical="middle")
     validated_list_table.add_column("Size", vertical="middle", justify="center")
 
-    for item in filesDict.keys(): 
-        valid = filesDict.get(item)['valid']
-        basename = os.path.splitext(return_basename(item))[0]
-        data = filesDict.get(item)['data']
+    for key, value in filesDict.items(): 
+        valid = value['valid']
+        basename = os.path.splitext(return_basename(key))[0]
+        data = value['data']
         size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. # TODO: pls optimize this
         if valid:
             validity = "[green]Verified[/green]" 
@@ -356,12 +357,12 @@ def return_validated_display(filesDict:dict):
             validity = "[yellow]Unknown[/yellow]"
             index += 1
         else:
-            validity = filesDict.get(item)['data']
-            item = f"[strike][red]{item}[/strike][/red]"
+            validity = value['data']
+            key = f"[strike][red]{key}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
         # its a string conversion rather than type conversion.
         output = str(index) if valid == None or valid == True else "[red]X[/red]"
-        validated_list_table.add_row(output, basename, item, validity, size)
+        validated_list_table.add_row(output, basename, key, validity, size)
 
     return validated_list_table
