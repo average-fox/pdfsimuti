@@ -69,9 +69,9 @@ def get_calling_function():
     Returns:
         str: The basename of the caller's Python file.
     """
-    from inspect import currentframe
-    
-    return return_basename(currentframe().f_back.f_back.f_code.co_filename)
+    # thanks to https://stackoverflow.com/questions/3711184/how-to-use-inspect-to-get-the-callers-info-from-callee-in-python
+    from inspect import getouterframes
+    return return_basename(getouterframes(sys._getframe(1))[1].filename)
 
 
 def rtn_gs_name() -> str:
@@ -86,6 +86,7 @@ def rtn_gs_name() -> str:
     
     # only linux and windows environments are supported. if there are others, well open an issue then :)
     # string appending is used here. its much less complicated.
+    # intellsence will keep warning about this but its okay.
     if sys.platform == "win32":
         gs_name+="win"
         if 8*struct.calcsize("P"): gs_name+="64c"  
