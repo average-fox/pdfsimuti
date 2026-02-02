@@ -15,6 +15,7 @@ from pdfsimuti.utils import return_joined_filePath, return_basename, return_dirn
 from pdfsimuti.utils import has_pdf_extension, validate_pdf_dict, exit_program
 from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
+from typing import Optional
          
 app = typer.Typer()
 
@@ -30,7 +31,7 @@ class SortOrder(str, Enum):
     Returns:
         str: sort type and its description
     """
-    name = "name"
+    normal = "normal"
     reverse = "reverse"
     modified = "modified"
     creation = "creation"
@@ -38,9 +39,10 @@ class SortOrder(str, Enum):
     def __str__(self):  
         return self.name.replace("_", " ").capitalize() # Get the name of the class value for overview
     
+
     def description(self):
         description = {
-            SortOrder.name : "Files are arranged alphabetically",
+            SortOrder.normal : "Files are arranged alphabetically",
             SortOrder.reverse : "Files are arranged alphabetically reversed",
             SortOrder.modified : "Files are arranged based on their modified dates",
             SortOrder.creation : "Files are arranged based on their creation dates"
@@ -48,11 +50,11 @@ class SortOrder(str, Enum):
         return description.get(self)
     
 
-def sort_dict(sort_type: str, files_dict: dict):
+def sort_dict(sort_type, files_dict):
     """
     Sort a dictionary of file paths based on the specified criteria.
 
-    Args:
+    Args: 
         sort_type (str): The sorting criterion ('name', 'reverse', 'modified' or 'creation).
         files_dict (dict): The dictionary of files to be sorted (keys are file paths).
 
@@ -60,12 +62,12 @@ def sort_dict(sort_type: str, files_dict: dict):
         list: A sorted list of (key, value) tuples from the dictionary.
     """
     match sort_type:
-        case 'name':
+        case 'normal':
             return dict(sorted(files_dict.items()))
         case 'reverse':
             return dict(reversed(sorted(files_dict.items())))
         case 'modified':
-            return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
+            return dict(sorted(files_dict.items(), key=lambda item: os.path.getmtime(item[0])))
         case 'creation':
             return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
     
@@ -173,7 +175,7 @@ def designate_filename(target:str) -> str:
         elif os.path.exists(return_joined_filePath(folderpath, filename)):
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
-            if not return_confirm("Do you wish to overwrite this file?", default=None):    
+            if not return_confirm("Do you wish to overwrite this file?"):    
                 print("\nFilename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
@@ -241,7 +243,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     for item in filesDict: fileSize += os.path.getsize(item) / (1024 * 1024)
     merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f"[i]{return_basename(outputPath)}[/i]")
     merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f"[italic yellow]{return_dirname(outputPath)}[italic yellow]")
-    merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"{sort} [i]({"Sorting based on arrangement" if sort == None else sort.description() })[/i] ")
+    merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"{sort}. [i]{SortOrder(sort).description()}[/i] ")
     merge_table_details.add_row("[underline bold]Preserve Mode[/underline bold]:", f"[italic bold]{"[green]Preserve ON![/green]" if preserveFiles else "[red]Preserve OFF![/red]\nPDF files will be deleted after merging."}[italic bold]")
     merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
@@ -288,7 +290,7 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
     except Exception as e:  raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
 
 
-def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
+def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
     """
     Control the entire PDF merging process, orchestrating path validation, user overview confirmation, execution, and cleanup.
 
@@ -309,7 +311,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
         
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
-            if not return_confirm("Proceed?", default=None):
+            if not return_confirm("Proceed?"):
                 exit_program()        
         if not os.path.isdir(output_dir): 
             try: os.makedirs(output_dir)
@@ -317,7 +319,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
                 raise PrettyErrorDisplay(f"Program failed. Unable to create directory: {output_dir}")
         
         # purify dict of rejected items
-        validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+        validated_dict = {key:value['data'] for key, value in filesDict.items() if value['valid'] == True}
         generate_merged_pdf(validated_dict, output, preserveFiles)
         
         display_successful_merge_outcome(output) # Print success
@@ -327,8 +329,8 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
 def merge(
         
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
-    sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = None,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=None,
+    sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = SortOrder.normal,
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_OUTPUT):

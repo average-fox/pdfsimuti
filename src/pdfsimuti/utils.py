@@ -12,7 +12,7 @@ import typer
 CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
 
-def text_dedent(msg : str) -> str:
+def text_dedent(msg) -> str:
     """
     Remove common leading whitespace and strip surrounding space/newlines.
 
@@ -33,15 +33,19 @@ class PrettyErrorDisplay(ClickException):
     
     def __init__(self, message):
         from rich.console import Console
-        super().__init__(Console().render_str(text_dedent(message)))
+        from io import StringIO
+        console = Console(file=StringIO(), force_terminal=True)
+        with console.capture() as capture: console.print(text_dedent(message))
         
+        super().__init__(capture.get())
         
+
 def exit_program():
     print("[bold red]Program Exited[/bold red]")
     exit()
     
 
-def return_confirm(msg:str=None, caution:bool=False, default:bool=True) -> bool:
+def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
     """
     Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
 
@@ -69,9 +73,9 @@ def get_calling_function():
     Returns:
         str: The basename of the caller's Python file.
     """
-    from inspect import currentframe
-    
-    return return_basename(currentframe().f_back.f_back.f_code.co_filename)
+    # thanks to https://stackoverflow.com/questions/3711184/how-to-use-inspect-to-get-the-callers-info-from-callee-in-python
+    from inspect import getouterframes
+    return return_basename(getouterframes(sys._getframe(1))[1].filename)
 
 
 def rtn_gs_name() -> str:
@@ -86,6 +90,7 @@ def rtn_gs_name() -> str:
     
     # only linux and windows environments are supported. if there are others, well open an issue then :)
     # string appending is used here. its much less complicated.
+    # intellsence will keep warning about this but its okay.
     if sys.platform == "win32":
         gs_name+="win"
         if 8*struct.calcsize("P"): gs_name+="64c"  
@@ -212,7 +217,7 @@ def scan_file(itemList: list) -> list:
 
 
 
-def update_file_dict_entry(item: tuple, mimecheck: bool):
+def update_file_dict_entry(item: tuple, mimecheck: bool) -> dict:
     """
     Validate a single file dictionary entry by performing readability, MIME type, and password checks. 
     It updates the 'valid' and 'data' fields based on the outcome of these checks.
@@ -228,15 +233,24 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
     file_validaty = None
     file_data = None
 
+    # get size of files
     try: 
         file_data = os.path.getsize(filename)
     except Exception: file_data = "ERROR"
-    
+
+    # confirm magic exists
     try:
         magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
     except ModuleNotFoundError:
         raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
-        
+
+    # confirm fitz exists
+    try:
+        fitz = importlib.import_module('fitz')
+    except ModuleNotFoundError:
+        fitz = None
+        print("[yellow]CAUTION![/yellow] PyMuPDF (fitz) not found. Skipping password protection check.")
+
     if not check_file_readability(filename):
         file_validaty = False
         file_data = "Unreadable file"
@@ -244,17 +258,15 @@ def update_file_dict_entry(item: tuple, mimecheck: bool):
     elif magic and magic.from_file(filename) != "application/pdf":
         file_validaty = False
         file_data = f"Mimecheck pass failed.\nReceived:[yellow]\n{magic.from_file(filename)}[/yellow]"
-        
-    elif importlib.util.find_spec('fitz') is not None:
+    
+    elif fitz:
         try:
-            fitz = importlib.import_module('fitz')
             if fitz.open(filename).needs_pass:
                 file_validaty = False
-                file_data = "Password Protected."
+                file_data = 'Password Protected'
         except fitz.FileDataError:
-            file_data = "Can't Open File."
+            file_data = "Can't Open file"
     else:
-        print("[yellow]CAUTION![/yellow] Package 'PyMuPDF' not found. Skipping password protection check.")
         file_data = "Unknown.\nFitz not found."
 
     if file_validaty is None and mimecheck:
@@ -294,6 +306,7 @@ def validate_pdf_dict(items, exclude, mimeCheck):
 
     # abort if no pdf files are found
     if len(filesDict) == 0:
+
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
@@ -302,8 +315,9 @@ def validate_pdf_dict(items, exclude, mimeCheck):
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
-    for item in filesDict.keys():
-        valid = filesDict.get(item)['valid']
+
+    for item in filesDict.values():
+        valid = item['valid']
         if valid == None or valid == True: final_validated_file_count+=1
 
     match get_calling_function():
@@ -335,10 +349,10 @@ def return_validated_display(filesDict:dict):
     validated_list_table.add_column("Status", vertical="middle")
     validated_list_table.add_column("Size", vertical="middle", justify="center")
 
-    for item in filesDict.keys(): 
-        valid = filesDict.get(item)['valid']
-        basename = os.path.splitext(return_basename(item))[0]
-        data = filesDict.get(item)['data']
+    for key, value in filesDict.items(): 
+        valid = value['valid']
+        basename = os.path.splitext(return_basename(key))[0]
+        data = value['data']
         size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. # TODO: pls optimize this
         if valid:
             validity = "[green]Verified[/green]" 
@@ -347,12 +361,12 @@ def return_validated_display(filesDict:dict):
             validity = "[yellow]Unknown[/yellow]"
             index += 1
         else:
-            validity = filesDict.get(item)['data']
-            item = f"[strike][red]{item}[/strike][/red]"
+            validity = value['data']
+            key = f"[strike][red]{key}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
         # its a string conversion rather than type conversion.
         output = str(index) if valid == None or valid == True else "[red]X[/red]"
-        validated_list_table.add_row(output, basename, item, validity, size)
+        validated_list_table.add_row(output, basename, key, validity, size)
 
     return validated_list_table
