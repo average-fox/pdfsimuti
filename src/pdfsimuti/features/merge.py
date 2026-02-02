@@ -173,7 +173,7 @@ def designate_filename(target:str) -> str:
         elif os.path.exists(return_joined_filePath(folderpath, filename)):
             print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
-            if not return_confirm("Do you wish to overwrite this file?", default=None):    
+            if not return_confirm("Do you wish to overwrite this file?"):    
                 print("\nFilename cannot be same if overwrite isn't allowed")
                 filename = typer.prompt("Enter saving filename again: ")
                 continue
@@ -309,7 +309,7 @@ def merge_runtime(filesDict:dict, output:str, preserveFiles:bool, sort:str):
         
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
-            if not return_confirm("Proceed?", default=None):
+            if not return_confirm("Proceed?"):
                 exit_program()        
         if not os.path.isdir(output_dir): 
             try: os.makedirs(output_dir)

@@ -41,7 +41,7 @@ def exit_program():
     exit()
     
 
-def return_confirm(msg:str=None, caution:bool=False, default:bool=True) -> bool:
+def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
     """
     Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
 
