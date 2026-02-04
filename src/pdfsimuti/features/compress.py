@@ -18,7 +18,7 @@ logging.basicConfig(
     level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
 )
 
-from pdfsimuti.utils import return_basename, return_dirname
+from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
 
 app = typer.Typer()
 log = logging.getLogger("rich")
@@ -240,22 +240,20 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: float):
 def preserve_files(target_filepath: list):
         
     import datetime
-    from pdfsimuti.utils import CURRENT_DIR
 
-    folder_path = os.path.join(CURRENT_DIR, f'pdfsimuti-compressed-files-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}')
+    folder_path = os.path.join(CURRENT_DIR, f'pdfsimuti-compressed-files-{datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}')
     
     if not os.path.exists(folder_path): 
-        log.info('creating preserve folder over working directory')
+        log.info('Creating preserve folder over working directory')
         try:
             os.makedirs(folder_path)
         except Exception as e: 
             raise PrettyErrorDisplay(f'''
                 Unable to create preserve folder: {str(folder_path)}
+                Program terminated.
                 Error output: {e}''')
     
     saving_filepath = [os.path.join(folder_path, os.path.basename(target)) for target in target_filepath]
-    print(saving_filepath)
-    print('hi')
 
     return saving_filepath
     
@@ -415,6 +413,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compres
     # Display overview
     display_overview_confirm(filesDict, compressInstance, preserve_choice)
 
+    if preserve_choice: print(f'Preserve choice is enabled. Files will be stored over working directory.\nSaving directory: {CURRENT_DIR}')
     if return_confirm("\nDo you want to continue with this settings?"):
         import time
         
@@ -464,14 +463,14 @@ def compress(
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
     exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=[],
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional options", metavar="[gs/ghostscript|pymupdf]")] = compressMethodChoice.pymupdf,
-    preserve: Annotated[bool, typer.Option(help="Preserve file on compress", rich_help_panel='Additional options')]=False,
+    preserve: Annotated[bool, typer.Option(help="Preserve file on compress. Will be saved in a folder on the working directory.", rich_help_panel='Additional options')]=False,
     garbage: Annotated[int, typer.Option(max=4, min=0, help="PyMuPDF garbage strength control", rich_help_panel="PyMuPDF Settings")] = 4,
 
     compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify ghostscript compatibility mode", rich_help_panel="GhostScript options")] = gsCompatibilityChoice.one_seven,
     presets: Annotated[gsPDFshrinkPresets, typer.Option("-p", "--presets", help="Specify ghostscript pdf compression presets", rich_help_panel="GhostScript options")] = gsPDFshrinkPresets.ebook,
     gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Commands must be case-sensitive. Can override everything.", rich_help_panel="GhostScript options")] = '',
     embedFonts: Annotated[bool, typer.Option(help="Embed fonts in PDF for cross-platform font support", rich_help_panel="GhostScript options")] = True,
-    colorConversion: Annotated[gsColorConversionStrategy, typer.Option("-cc", "--colorConversion", help="Change color space of the document.", case_sensitive=False, rich_help_panel="GhostScript options")] = gsColorConversionStrategy.leaveColorUnchanged,
+    colorConversion: Annotated[gsColorConversionStrategy, typer.Option("-cc", "--colorConversion", help="[red](Caution!)[/red] Change color space of the document.", case_sensitive=False, rich_help_panel="GhostScript options")] = gsColorConversionStrategy.leaveColorUnchanged,
     
     color_down:Annotated[bool, typer.Option(help="Enable reduction of color images", rich_help_panel="GhostScript options (Color Down Sampling)")] = True,
     color_res: Annotated[int, typer.Option(min=0, help="Target DPI for color image resolution. Low DPI = More pixalated", rich_help_panel="GhostScript options (Color Down Sampling)")] = 150,
