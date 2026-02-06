@@ -167,19 +167,8 @@ def has_pdf_extension(filename: str) -> bool:
     return filename.lower().split(".")[-1] == "pdf" and filename != "pdf"
 
 
-def return_joined_filePath(folderpath:str, filename:str) -> str:
-    """
-    Construct a full file path by safely joining a folder path and a filename. 
-    This is primarily used for generating paths that may not yet exist on the filesystem.
-
-    Args:
-        folderpath (str): The directory or folder name.
-        filename (str): The file name.
-
-    Returns:
-        str: The full, combined path string.
-    """
-    return os.path.join(folderpath, filename)
+def return_joined_filePath(filePath1:str, filePath2:str) -> str:
+    return os.path.join(filePath1, filePath2)
 
 
 def scan_file(itemList: list) -> list:
