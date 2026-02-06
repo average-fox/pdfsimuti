@@ -10,8 +10,6 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.console import Console, Group
 
-from pdfsimuti.utils import PrettyErrorDisplay
-
 import logging
 from rich.logging import RichHandler
 logging.basicConfig(
@@ -19,18 +17,17 @@ logging.basicConfig(
 )
 
 from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
+from pdfsimuti.utils import PrettyErrorDisplay
 
 app = typer.Typer()
 log = logging.getLogger("rich")
 
-class pymupdf_settings:
+class Fitz_settings:
     def __init__(self, garbageStrength):
         self.garbageStrength = garbageStrength
-        
-            
+             
     def __getitem__(self, key):
         return getattr(self, key)
-    
     
     def display_properties(self, preserve_choice):
         from pdfsimuti.utils import text_dedent
@@ -45,7 +42,7 @@ class pymupdf_settings:
         """)
 
 
-class ghostscript_settings:
+class GS_settings:
     def __init__(self, compatibility, presets ,enableEmbedFonts, enableColorSampling ,colorResValue, colorSample, enableGreySampling, greyResValue, greySample, colorConversion, custom):
         self.compatibility = compatibility
         self.presets = presets
@@ -57,15 +54,13 @@ class ghostscript_settings:
         self.greyResValue = greyResValue
         self.greySample = greySample.capitalize()
         self.colorConversion = colorConversion
-        
+
         # process custom commands
         self.custom = custom
         self.validate_gs_custom_commands(custom)
-
     
     def __getitem__(self, key):
         return getattr(self, key)
-
     
     def validate_gs_custom_commands(self, custom_commands):
         if custom_commands != '':
@@ -187,7 +182,7 @@ def display_overview_confirm(filesDict, compressInstance, preserve_choice):
 
     Args:
         filesDict (dict): A dictionary of validated file paths ready for compression.
-        compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
+        compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
 
     """    
     from rich.rule import Rule
@@ -258,7 +253,7 @@ def preserve_files(target_filepath: list):
     return saving_filepath
     
 
-def pymupdf_compression(target_list: list, saving_list: list,  fitz_instance):   
+def fitz_compression(target_list: list, saving_list: list,  fitz_instance):   
     """
     Execute PyMuPDF (fitz) compression on a list of PDF files with specified settings.
 
@@ -267,9 +262,10 @@ def pymupdf_compression(target_list: list, saving_list: list,  fitz_instance):
     Args:
         target_list (list): A list of file paths to be compressed.
         saving_list (list): A list of file paths that will be saved at compressed.
-        fitz_instance (instance): An instance of ``pymupdf_settings`` containing the compression parameters.
+        fitz_instance (instance): An instance of ``Fitz_settings`` containing the compression parameters.
     """
     import fitz
+    
     for (target, savefile) in zip(target_list, saving_list):
         try:
             with fitz.open(target) as doc:
@@ -284,14 +280,14 @@ def pymupdf_compression(target_list: list, saving_list: list,  fitz_instance):
             raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
     
 
-def ghostscript_compression(target_list: list, saving_list: list, gs_instance):
+def gs_compression(target_list: list, saving_list: list, gs_instance):
     """
     Execute PDF compression on a list of files by calling the Ghostscript command-line utility with customized settings.
 
     Args:
         target_list (list): A list of file paths to be compressed.
         saving_list (list): A list of file paths that will be saved at compressed.
-        gs_instance (instance): An instance of ``ghostscript_settings`` containing all Ghostscript parameters.
+        gs_instance (instance): An instance of ``GS_settings`` containing all Ghostscript parameters.
     """
 
     import subprocess
@@ -397,7 +393,7 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compres
         fileList (list): A list of file or directory paths to be processed.
         mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
         excludeList (list): A list of file paths to exclude from compression.
-        compressInstance (instance): An instance of either ``ghostscript_settings`` or ``pymupdf_settings``.
+        compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
     
     """
     from pdfsimuti.utils import return_confirm, validate_pdf_dict
@@ -429,17 +425,13 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compres
 
         #########################################
         match compressInstance.__class__.__name__:
-            case 'ghostscript_settings': ghostscript_compression(validated_pdf_list, saving_file_list, compressInstance)
-            case 'pymupdf_settings': pymupdf_compression(validated_pdf_list, saving_file_list, compressInstance)
+            case 'GS_settings': gs_compression(validated_pdf_list, saving_file_list, compressInstance)
+            case 'Fitz_settings': fitz_compression(validated_pdf_list, saving_file_list, compressInstance)
         #########################################
         log.info("Compression runtime over.")
         
         # 2nd Size Capture: Concluding Runtime
         end_time = time.time()
-        # final_file_sizes = [os.path.getsize(file_item) for file_item in saving_file_list]
-        
-        # create an entry like this => {file_item : (validity, initial_size, final_size)}
-        
         outcomeFileDict = {file_item: {'validity': None, 'initial': file_size, 'final': 0} for file_item, file_size in zip(saving_file_list, initial_file_sizes)}
 
         # TODO: optimize the code for validated_pdf_list against validated_pdf_dict
@@ -492,10 +484,10 @@ def compress(
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
     elif compressMethod == ("gs" or "ghostscript"):
-        compressInstance = ghostscript_settings(compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
+        compressInstance = GS_settings(compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
     
     elif compressMethod == "pymupdf":
-        compressInstance = pymupdf_settings(garbageStrength=garbage)
+        compressInstance = Fitz_settings(garbageStrength=garbage)
 
     # compress runtime handles the main load
     compress_runtime(filelist, mimecheck, exclude, compressInstance, preserve_choice=preserve)
