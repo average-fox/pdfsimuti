@@ -266,57 +266,132 @@ def update_file_dict_entry(item: tuple, mimecheck: bool) -> dict:
     return {filename: {"valid": file_validaty, "data": file_data}}
 
 
-def validate_pdf_dict(items, exclude, mimeCheck):
-    """
-    Perform multi-step validation and cleanup of a list of file and directory paths for eligible PDF files. 
-    It handles directory and extension scanning before passing it to `update_file_dict_entry()` for validation.
 
-    Args:
-        items (list): An unchecked list of file or directory paths.
-        exclude (list): A list of file paths to explicitly exclude from the final results.
-        mimeCheck (bool): Boolean flag to enable/disable external MIME type validation using the 'magic' package.
+def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
+    
+    # verify fitz 
+    try:
+        fitz = importlib.import_module('fitz')
+    except ModuleNotFoundError:
+        fitz = None
+        print("[yellow]CAUTION![/yellow] PyMuPDF (fitz) not found. Skipping password protection check.")
 
-    Raises:
-        PrettyErrorDisplay: If no compatible PDF files are found, or if the calling script 
-            (e.g., 'merge.py') requires a minimum number of files that isn't met.
+    # confirm magic exists. if it doesnt and user still approves it; raise error
+    try:
+        magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
+    except ModuleNotFoundError:
+        raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
 
-    Returns:
-        dict: A validated dictionary of PDF file paths ready for processing.
-    """
-    unvalidated_files = scan_file(items)
+    # start main validation
+    for file_items in filesDict.items():
+        file_name = file_items[0]
+        file_mime = magic.from_file(file_items[0]) if magic else None
+        # 1. get size of the file
+        try:
+            file_items[1]['initial_size'] = Path(file_name).stat().st_size
+        except Exception:
+            file_items[1]['valid'] = False
+            file_items[1]['state'] = 'ERROR'
+
+        # 2. check file readability
+        if not check_file_readability(file_items[0]):
+            file_items[1]['valid'] = False
+            file_items[1]['state'] = "Unreadable file"
+
+        # 3. check file mime
+        elif magic and file_mime != "application/pdf":
+            file_items[1]['valid'] = False
+            file_items[1]['state'] = f"Mimecheck pass failed.\nReceived:[yellow]\n{file_mime}[/yellow]"
+
+        # 4. check password protection (use fitz)
+        elif fitz:
+            try:
+                if fitz.open(file_items[0]).needs_pass:
+                    file_items[1]['valid'] = False
+                    file_items[1]['state'] = 'Password Protected'
+            except fitz.FileDataError:
+                file_items[1]['state'] = "Can't Open file."
+            
+        if file_items[1]['valid'] is None and mimecheck:
+            file_items[1]['valid'] = True
+        elif not mimecheck:
+            file_items[1]['valid'] = None
+        
+
+    return filesDict
+
+            
+def validate_pdf_dict(filesDict, exclude, mimecheck):
+    unvalidated_files = scan_file(filesDict)
     excludeList = scan_file(exclude) if exclude else []
-    filesDict = {item_entry: {"valid": None, "data": None} for item_entry in ([item for item in unvalidated_files if item not in excludeList] if exclude else unvalidated_files)}
 
-    if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
+    if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")  
 
-    # file that are existant are then scanned one by one
-    for file_entry in filesDict.items():
-        filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
+    newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
+    validatedFilesDict = return_validate_pdf_dict(newFilesDict, mimecheck)
 
-    # abort if no pdf files are found
     if len(filesDict) == 0:
-
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
-            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
         """)
+
 
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
 
-    for item in filesDict.values():
-        valid = item['valid']
+    for item in validatedFilesDict.items():
+        valid = item[1]['valid']
         if valid == None or valid == True: final_validated_file_count+=1
 
     match get_calling_function():
         case "compress.py": 
-            return filesDict
+            return validatedFilesDict
+        
         case "merge.py":
             if final_validated_file_count <= 1:
-                print(return_validated_display(filesDict))
                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
-            return filesDict
+        
+            return validatedFilesDict
+
+# def validate_pdf_dict(items, exclude, mimeCheck):
+#     unvalidated_files = scan_file(items)
+#     excludeList = scan_file(exclude) if exclude else []
+#     filesDict = {item_entry: {"valid": None, "data": None} for item_entry in ([item for item in unvalidated_files if item not in excludeList] if exclude else unvalidated_files)}
+
+    
+#     print(new_validate_pdf_dict(filesDict, exclude, mimeCheck))
+    
+#     if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
+
+#     # file that are existant are then scanned one by one
+#     for file_entry in filesDict.items():
+#         filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
+
+#     # abort if no pdf files are found
+#     if len(filesDict) == 0:
+#         raise PrettyErrorDisplay(f"""
+#             No compatible PDF files found.
+#             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
+#         """)
+
+#     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
+#     # this loop checks between true/false and none. if none then it's validation is unknown.
+#     final_validated_file_count = 0
+
+#     for item in filesDict.values():
+#         valid = item['valid']
+#         if valid == None or valid == True: final_validated_file_count+=1
+
+#     match get_calling_function():
+#         case "compress.py": 
+#             return filesDict
+#         case "merge.py":
+#             if final_validated_file_count <= 1:
+#                 print(return_validated_display(filesDict))
+#                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
+#             return filesDict
 
 
 def return_validated_display(filesDict:dict):
@@ -338,11 +413,12 @@ def return_validated_display(filesDict:dict):
     validated_list_table.add_column("Status", vertical="middle")
     validated_list_table.add_column("Size", vertical="middle", justify="center")
 
-    for key, value in filesDict.items(): 
-        valid = value['valid']
-        basename = os.path.splitext(return_basename(key))[0]
-        data = value['data']
-        size = str(data) if type(data) == int else "[red]X[/red]" # if the data is not a int then it is a str containing error. # TODO: pls optimize this
+    for file_item in filesDict.items(): 
+        valid = file_item[1]['valid']
+        file_name = file_item[0]
+        basename = os.path.splitext(return_basename(file_item[0]))[0]
+        state = file_item[1]['state']
+        size = str(file_item[1]['initial_size']) if state else "[red]X[/red]" # if the data is not a int then it is a str containing error. # TODO: pls optimize this
         if valid:
             validity = "[green]Verified[/green]" 
             index += 1
@@ -350,12 +426,13 @@ def return_validated_display(filesDict:dict):
             validity = "[yellow]Unknown[/yellow]"
             index += 1
         else:
-            validity = value['data']
-            key = f"[strike][red]{key}[/strike][/red]"
+            # state is false
+            validity = state
+            file_name = f"[strike][red]{file_name}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
         # its a string conversion rather than type conversion.
-        output = str(index) if valid == None or valid == True else "[red]X[/red]"
-        validated_list_table.add_row(output, basename, key, validity, size)
+        file_index = str(index) if valid == None or valid == True else "[red]X[/red]"
+        validated_list_table.add_row(file_index, basename, file_name, validity, size)
 
     return validated_list_table
