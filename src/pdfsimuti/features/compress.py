@@ -224,8 +224,8 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: float):
             # user removed the file during the program runtime
             table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
         else:
-            compression_calculate = abs(round((initial - final)/initial*100, 3))
-            table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{compression_calculate}%[/green]' if initial > final else f'[red]{compression_calculate}%[/red]')
+            compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
+            table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
             
     outcome_print_group = Group(
             table,

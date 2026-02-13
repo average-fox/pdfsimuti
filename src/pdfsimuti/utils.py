@@ -189,7 +189,6 @@ def scan_file(itemList: list) -> list:
             if not file.is_file:
                 print(f"[red]WARNING![/red] FOLDER not found: [i] [yellow]{str(file)}[/yellow] [/i]")
         
-        # TODO: once has_pdf_extensions() is replaced with Pathlib, patch this up.
         if file.is_file() and not file.is_dir():
             if file.suffix.lower() == ".pdf":
                 if str(file) not in return_list:
@@ -336,7 +335,6 @@ def validate_pdf_dict(filesDict, exclude, mimecheck):
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
         """)
 
-
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
@@ -354,44 +352,6 @@ def validate_pdf_dict(filesDict, exclude, mimecheck):
                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
         
             return validatedFilesDict
-
-# def validate_pdf_dict(items, exclude, mimeCheck):
-#     unvalidated_files = scan_file(items)
-#     excludeList = scan_file(exclude) if exclude else []
-#     filesDict = {item_entry: {"valid": None, "data": None} for item_entry in ([item for item in unvalidated_files if item not in excludeList] if exclude else unvalidated_files)}
-
-    
-#     print(new_validate_pdf_dict(filesDict, exclude, mimeCheck))
-    
-#     if not mimeCheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")      
-
-#     # file that are existant are then scanned one by one
-#     for file_entry in filesDict.items():
-#         filesDict.update(update_file_dict_entry(file_entry, mimeCheck))
-
-#     # abort if no pdf files are found
-#     if len(filesDict) == 0:
-#         raise PrettyErrorDisplay(f"""
-#             No compatible PDF files found.
-#             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in items]))}[/i]
-#         """)
-
-#     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
-#     # this loop checks between true/false and none. if none then it's validation is unknown.
-#     final_validated_file_count = 0
-
-#     for item in filesDict.values():
-#         valid = item['valid']
-#         if valid == None or valid == True: final_validated_file_count+=1
-
-#     match get_calling_function():
-#         case "compress.py": 
-#             return filesDict
-#         case "merge.py":
-#             if final_validated_file_count <= 1:
-#                 print(return_validated_display(filesDict))
-#                 raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
-#             return filesDict
 
 
 def return_validated_display(filesDict:dict):
