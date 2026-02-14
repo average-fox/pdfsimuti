@@ -177,14 +177,17 @@ def scan_file(itemList: list) -> list:
     for item in itemList:
         file = Path(item).resolve()
         # item can be either a file or a directory but not both
+        # if item is dir,
         if file.is_dir():
+            # look for pdf in the directory
             for folder_item in file.glob("*.pdf"):
                 folder_item = str(folder_item.resolve())
+                # duplicate guard
                 if folder_item not in return_list: 
                     return_list.append(folder_item)
                 else:
                     print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {folder_item}")
-        # if dir but it doesn't exist
+        # if dir but it doesn't exist,
         else:
             if not file.is_file:
                 print(f"[red]WARNING![/red] FOLDER not found: [i] [yellow]{str(file)}[/yellow] [/i]")
@@ -204,105 +207,44 @@ def scan_file(itemList: list) -> list:
     return return_list
 
 
-
-def update_file_dict_entry(item: tuple, mimecheck: bool) -> dict:
-    """
-    Validate a single file dictionary entry by performing readability, MIME type, and password checks. 
-    It updates the 'valid' and 'data' fields based on the outcome of these checks.
-
-    Args:
-        item (tuple): A tuple containing the file path and its current dictionary entry
-        mimecheck (bool): Flag to indicate if the external 'magic' library should be used for MIME type validation.
-
-    Returns:
-        dict: The updated dictionary entry for the file ``{filename: {"valid": bool, "data": Any}}``
-    """
-    filename = item[0]
-    file_validaty = None
-    file_data = None
-
-    # get size of files
-    try: 
-        file_data = os.path.getsize(filename)
-    except Exception: file_data = "ERROR"
-
-    # confirm magic exists
-    try:
-        magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
-    except ModuleNotFoundError:
-        raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
-
-    # confirm fitz exists
-    try:
-        fitz = importlib.import_module('fitz')
-    except ModuleNotFoundError:
-        fitz = None
-        print("[yellow]CAUTION![/yellow] PyMuPDF (fitz) not found. Skipping password protection check.")
-
-    if not check_file_readability(filename):
-        file_validaty = False
-        file_data = "Unreadable file"
-        
-    elif magic and magic.from_file(filename) != "application/pdf":
-        file_validaty = False
-        file_data = f"Mimecheck pass failed.\nReceived:[yellow]\n{magic.from_file(filename)}[/yellow]"
-    
-    elif fitz:
-        try:
-            if fitz.open(filename).needs_pass:
-                file_validaty = False
-                file_data = 'Password Protected'
-        except fitz.FileDataError:
-            file_data = "Can't Open file"
-    else:
-        file_data = "Unknown.\nFitz not found."
-
-    if file_validaty is None and mimecheck:
-        file_validaty = True
-    elif not mimecheck:
-        file_validaty = None
-
-    return {filename: {"valid": file_validaty, "data": file_data}}
-
-
-
 def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
     
-    # verify fitz 
+    # 1. verify fitz 
     try:
         fitz = importlib.import_module('fitz')
     except ModuleNotFoundError:
         fitz = None
         print("[yellow]CAUTION![/yellow] PyMuPDF (fitz) not found. Skipping password protection check.")
 
-    # confirm magic exists. if it doesnt and user still approves it; raise error
+    # 2. confirm magic exists. 
+    # if it doesnt and user still approves it; raise error
     try:
         magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
     except ModuleNotFoundError:
         raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
 
-    # start main validation
+    # 3. start validation loop over dict
     for file_items in filesDict.items():
         file_name = file_items[0]
         file_mime = magic.from_file(file_items[0]) if magic else None
-        # 1. get size of the file
+        # 3.1. get size of the file
         try:
             file_items[1]['initial_size'] = Path(file_name).stat().st_size
         except Exception:
             file_items[1]['valid'] = False
             file_items[1]['state'] = 'ERROR'
 
-        # 2. check file readability
+        # 3.2. check file readability
         if not check_file_readability(file_items[0]):
             file_items[1]['valid'] = False
             file_items[1]['state'] = "Unreadable file"
 
-        # 3. check file mime
+        # 3.3. check file mime
         elif magic and file_mime != "application/pdf":
             file_items[1]['valid'] = False
             file_items[1]['state'] = f"Mimecheck pass failed.\nReceived:[yellow]\n{file_mime}[/yellow]"
 
-        # 4. check password protection (use fitz)
+        # 3.4. check password protection (uses fitz)
         elif fitz:
             try:
                 if fitz.open(file_items[0]).needs_pass:
@@ -310,12 +252,12 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
                     file_items[1]['state'] = 'Password Protected'
             except fitz.FileDataError:
                 file_items[1]['state'] = "Can't Open file."
-            
+        
+        # 3.5 state file validity. if none; that meant mimecheck is disabled.
         if file_items[1]['valid'] is None and mimecheck:
             file_items[1]['valid'] = True
         elif not mimecheck:
             file_items[1]['valid'] = None
-        
 
     return filesDict
 
@@ -338,11 +280,12 @@ def validate_pdf_dict(filesDict, exclude, mimecheck):
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
-
     for item in validatedFilesDict.items():
         valid = item[1]['valid']
         if valid == None or valid == True: final_validated_file_count+=1
 
+    # different feature require different form of filesDict
+    # merge requires fileDict length to be greater than 1. compress doesn't have any requirements.
     match get_calling_function():
         case "compress.py": 
             return validatedFilesDict
@@ -356,13 +299,16 @@ def validate_pdf_dict(filesDict, exclude, mimecheck):
 
 def return_validated_display(filesDict:dict):
     """
-    Returns the display output of files validated and rejected.
+    Returns a Rich table as output for terminal print.
+    Table only show the state of the files before operation
+    Takes a dict which it expects to have absolute filename, validity, state of the file and size.
+    If valid is not True, they will be displayed as X and red strikethroughs.
     
     Args:
-        filesDict (dict): dict to validate the list from.
+        filesDict (dict): dict containing information of the files and their properties.
 
     Returns:
-        str: validation outcome (rich-based)
+        str: Rich-based table output as string
     """
     from rich.table import Table
     index = 0
@@ -378,7 +324,7 @@ def return_validated_display(filesDict:dict):
         file_name = file_item[0]
         basename = os.path.splitext(return_basename(file_item[0]))[0]
         state = file_item[1]['state']
-        size = str(file_item[1]['initial_size']) if state else "[red]X[/red]" # if the data is not a int then it is a str containing error. # TODO: pls optimize this
+        size = str(file_item[1]['initial_size'])
         if valid:
             validity = "[green]Verified[/green]" 
             index += 1
@@ -388,10 +334,11 @@ def return_validated_display(filesDict:dict):
         else:
             # state is false
             validity = state
+            size = "[red]X[/red]"
             file_name = f"[strike][red]{file_name}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
-        # its a string conversion rather than type conversion.
+        # Rich table doesn't take any 'int' type
         file_index = str(index) if valid == None or valid == True else "[red]X[/red]"
         validated_list_table.add_row(file_index, basename, file_name, validity, size)
 

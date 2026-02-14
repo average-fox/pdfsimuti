@@ -183,7 +183,6 @@ def display_overview_confirm(filesDict, compressInstance, preserve_choice):
     Args:
         filesDict (dict): A dictionary of validated file paths ready for compression.
         compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
-
     """    
     from rich.rule import Rule
     from pdfsimuti.utils import return_validated_display
@@ -198,15 +197,17 @@ def display_overview_confirm(filesDict, compressInstance, preserve_choice):
     console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
 
 
-def display_compress_outcome(outcomeFilesDict : dict, time_elasped: float):
+def display_compress_outcome(filesDict : dict, time_elasped: float):
     """
     Display the results of the compression process in a formatted table, showing file size changes and total time elapsed.
-    
     Compression percentage is color-coded to indicate reduction (Green) or increase (Red) in size.
 
+    Display format:
+        filename (absolute), filename (basename), initial size, final size, outcome
+
     Args:
-        outcomeFilesDict (dict): A dictionary mapping file paths to a tuple of (initial_size, final_size).
-        time_elasped (int): The total time (in seconds) taken for the compression process.
+        filesDict (dict): Dict that contains the files absolute path and their properties. func() requires filename, initial_size and final_size
+        time_elasped (float): The total time (in seconds) taken for the compression process.
     """
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI", vertical="middle")
@@ -216,13 +217,16 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: float):
     table.add_column("After (KB)", vertical="middle", justify="center")
     table.add_column("Outcome", vertical="middle", justify="center")
 
-    for index, file_entry in enumerate(outcomeFilesDict.items()):
+    for index, file_entry in enumerate(filesDict.items()):
         initial = file_entry[1]['initial_size']
         final =  file_entry[1]['final_size']
         filename = file_entry[1]['saving_path']
         if not file_entry[1]['valid']:
             # user removed the file during the program runtime
             table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
+        elif final == 0:
+            table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
+
         else:
             compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
             table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')

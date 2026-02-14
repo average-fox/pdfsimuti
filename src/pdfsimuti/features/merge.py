@@ -15,8 +15,6 @@ from pdfsimuti.utils import return_joined_filePath, return_basename, return_dirn
 from pdfsimuti.utils import has_pdf_extension, validate_pdf_dict, exit_program
 from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
-from typing import Optional
-         
 app = typer.Typer()
 
 
@@ -291,7 +289,8 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
 
     except KeyboardInterrupt:
         exit_program()
-    except Exception as e:  raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
+    except Exception as e:  
+        raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
 
 
 def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
@@ -324,14 +323,15 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
         
         # purify dict of rejected items
         validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+
         generate_merged_pdf(validated_dict, output, preserveFiles)
-        
-        display_successful_merge_outcome(output) # Print success
+        # at this point, merge is sucessful
+        display_successful_merge_outcome(output)
     else:
         exit_program()
 
+
 def merge(
-        
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = SortOrder.none,
     exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[],
