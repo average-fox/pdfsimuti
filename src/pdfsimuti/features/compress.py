@@ -183,7 +183,6 @@ def display_overview_confirm(filesDict, compressInstance, preserve_choice):
     Args:
         filesDict (dict): A dictionary of validated file paths ready for compression.
         compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
-
     """    
     from rich.rule import Rule
     from pdfsimuti.utils import return_validated_display
@@ -198,15 +197,17 @@ def display_overview_confirm(filesDict, compressInstance, preserve_choice):
     console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
 
 
-def display_compress_outcome(outcomeFilesDict : dict, time_elasped: float):
+def display_compress_outcome(filesDict : dict, time_elasped: float):
     """
     Display the results of the compression process in a formatted table, showing file size changes and total time elapsed.
-    
     Compression percentage is color-coded to indicate reduction (Green) or increase (Red) in size.
 
+    Display format:
+        filename (absolute), filename (basename), initial size, final size, outcome
+
     Args:
-        outcomeFilesDict (dict): A dictionary mapping file paths to a tuple of (initial_size, final_size).
-        time_elasped (int): The total time (in seconds) taken for the compression process.
+        filesDict (dict): Dict that contains the files absolute path and their properties. func() requires filename, initial_size and final_size
+        time_elasped (float): The total time (in seconds) taken for the compression process.
     """
     table = Table(show_lines=True, highlight=True)
     table.add_column("SI", vertical="middle")
@@ -216,15 +217,19 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: float):
     table.add_column("After (KB)", vertical="middle", justify="center")
     table.add_column("Outcome", vertical="middle", justify="center")
 
-    for index, (filename, filedata) in enumerate(outcomeFilesDict.items()):
-        initial = filedata['initial']
-        final =  filedata['final']
-        if not filedata['validity']:
+    for index, file_entry in enumerate(filesDict.items()):
+        initial = file_entry[1]['initial_size']
+        final =  file_entry[1]['final_size']
+        filename = file_entry[1]['saving_path']
+        if not file_entry[1]['valid']:
             # user removed the file during the program runtime
             table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
+        elif final == 0:
+            table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
+
         else:
-            compression_calculate = abs(round((initial - final)/initial*100, 3))
-            table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{compression_calculate}%[/green]' if initial > final else f'[red]{compression_calculate}%[/red]')
+            compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
+            table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
             
     outcome_print_group = Group(
             table,
@@ -232,64 +237,42 @@ def display_compress_outcome(outcomeFilesDict : dict, time_elasped: float):
     print(Panel(outcome_print_group, subtitle="Compression Completed", border_style="bright_green", expand=False))
     
 
-def preserve_files(target_filepath: list):
-        
+def designate_saving_filepath(targetDict: dict):
     import datetime
-
     folder_path = os.path.join(CURRENT_DIR, f'pdfsimuti-compressed-files-{datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}')
-    
-    if not os.path.exists(folder_path): 
-        log.info('Creating preserve folder over working directory')
-        try:
-            os.makedirs(folder_path)
-        except Exception as e: 
-            raise PrettyErrorDisplay(f'''
-                Unable to create preserve folder: {str(folder_path)}
-                Program terminated.
-                Error output: {e}''')
-    
-    saving_filepath = [os.path.join(folder_path, os.path.basename(target)) for target in target_filepath]
 
-    return saving_filepath
+    os.mkdir(folder_path)
+    for file_entry in targetDict.items():
+        file_entry[1]['saving_path'] = os.path.join(folder_path, os.path.basename(file_entry[0]))
+    
+    return targetDict
     
 
-def fitz_compression(target_list: list, saving_list: list,  fitz_instance):   
-    """
-    Execute PyMuPDF (fitz) compression on a list of PDF files with specified settings.
-
-    The compression uses incremental saving logic with a temporary file to ensure safe operation.
-
-    Args:
-        target_list (list): A list of file paths to be compressed.
-        saving_list (list): A list of file paths that will be saved at compressed.
-        fitz_instance (instance): An instance of ``Fitz_settings`` containing the compression parameters.
-    """
+def fitz_compression(filesDict: dict,  fitz_instance):
     import fitz
     
-    for (target, savefile) in zip(target_list, saving_list):
+    for file_entry in filesDict.items():
+        target = file_entry[0]
+        target_savingPath = file_entry[1]['saving_path']
         try:
             with fitz.open(target) as doc:
                 # temp files created to solve incremental saving issue
-                temp = (target + ".temp") if target == savefile else savefile
+                temp = (target + ".temp") if target == target_savingPath else target_savingPath
                 doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-            if target == savefile: os.replace(temp, target)
+                file_entry[1]['final_size'] = os.path.getsize(temp)
+            if target == target_savingPath: os.replace(temp, target)
         except ValueError:
             log.warning(f"CAUTION. '{return_basename(target)}' cannot be compressed")
+            file_entry[1]['valid'] = False
+            file_entry[1]['state'] = 'Failed to merge'
             continue
         except Exception as e: 
             raise PrettyErrorDisplay(f"Error. PyMuPDF failed to run\n{e}")    
     
+    return filesDict
 
-def gs_compression(target_list: list, saving_list: list, gs_instance):
-    """
-    Execute PDF compression on a list of files by calling the Ghostscript command-line utility with customized settings.
 
-    Args:
-        target_list (list): A list of file paths to be compressed.
-        saving_list (list): A list of file paths that will be saved at compressed.
-        gs_instance (instance): An instance of ``GS_settings`` containing all Ghostscript parameters.
-    """
-
+def gs_compression(filesDict: dict, gs_instance):
     import subprocess
     from pdfsimuti.utils import return_joined_filePath, rtn_gs_name
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
@@ -311,15 +294,18 @@ def gs_compression(target_list: list, saving_list: list, gs_instance):
         *columns, 
         transient=True) as progress:
         
-        runtime = progress.add_task(description="GhostScript is running...", total=len(target_list))
+        runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
         log.info("Started GhostScript calling.")
 
-        for (target, savefile) in zip(target_list, saving_list):
-            file_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
-            # a temp file ensures the output won't be a blank file
+        for file_entry in filesDict.items():
+            target = file_entry[0]
+            target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
             target_basename = return_basename(target)
-            temp = return_joined_filePath(return_dirname(target), "temp"+target_basename) if target == savefile else savefile
-            progress.start_task(file_runtime)
+            target_savingpath = file_entry[1]['saving_path']
+
+            # a temp file ensures the output won't be a blank file
+            temp = return_joined_filePath(return_dirname(target), "temp"+target_basename) if target == target_savingpath else target_savingpath
+            progress.start_task(target_runtime)
             command = [
                     rtn_gs_name(),
                     '-sDEVICE=pdfwrite',
@@ -347,10 +333,11 @@ def gs_compression(target_list: list, saving_list: list, gs_instance):
 
             try:
                 subprocess.run(command, check=True, capture_output=True)
-                if target == savefile:
+                file_entry[1]['final_size'] = os.path.getsize(temp)
+                if target == target_savingpath:
                     os.replace(temp, target)
-                progress.log(f"[green]Compressed [/green] Filepath: {target}")
-                progress.remove_task(file_runtime)
+                progress.log(f"[green]Compressed[/green] Filepath: {target}")
+                progress.remove_task(target_runtime)
                 progress.update(runtime, advance=1)
                 
             except subprocess.CalledProcessError as e:
@@ -359,6 +346,8 @@ def gs_compression(target_list: list, saving_list: list, gs_instance):
                 if not os.path.exists(target):
                     log.warning(f"Filepath: {return_basename(target)} failed to compress. File not found.")
                     os.remove(temp)
+                    file_entry[1]['valid'] = False
+                    file_entry[1]['state'] = 'Failed to compress'
                 else:
                     raise PrettyErrorDisplay(f"""
                 GhostScript failed to run.
@@ -382,6 +371,8 @@ def gs_compression(target_list: list, saving_list: list, gs_instance):
                 
             except Exception as e:
                 raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
+    
+    return filesDict
             
 
 def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compressInstance, preserve_choice):
@@ -396,56 +387,47 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compres
         compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
     
     """
-    from pdfsimuti.utils import return_confirm, validate_pdf_dict
+    from pdfsimuti.utils import validate_pdf_dict, return_confirm
 
     log.info("Validating files...")
     filesDict = validate_pdf_dict(fileList, excludeList, mimecheck)
-    validated_pdf_list = [key for key, value in (filesDict or {}).items() if value['valid'] == True] # Inline Guard. Avoiding type checker
-    if len(validated_pdf_list) == 0:
+
+    validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid']}
+
+    if len(validated_pdf_dict) == 0:
         raise PrettyErrorDisplay("No compatible files to compress.")
     
     log.info("Validation complete")
     
-    # Display overview
+    # Display overview before confirm
     display_overview_confirm(filesDict, compressInstance, preserve_choice)
 
-    if preserve_choice: print(f'Preserve choice is enabled. Files will be stored over working directory.\nSaving directory: {CURRENT_DIR}')
+
     if return_confirm("\nDo you want to continue with this settings?"):
         import time
-        
 
         # 1st size capture: Initial Runtime
         start_time = time.time()
-        initial_file_sizes = [os.path.getsize(file_item) for file_item in validated_pdf_list]
         log.info("Compression runtime started.")
 
         # if preserve is enabled, the save files are changed. if not, they are same value as target which meant overwrite.
-        if preserve_choice: saving_file_list = preserve_files(validated_pdf_list)
-        else: saving_file_list = validated_pdf_list
-
+        if preserve_choice: 
+            validated_pdf_dict = designate_saving_filepath(validated_pdf_dict)
+            print(f'Preserve choice is enabled. Files will be stored over working directory.\nSaving directory: {CURRENT_DIR}')
+        
         #########################################
         match compressInstance.__class__.__name__:
-            case 'GS_settings': gs_compression(validated_pdf_list, saving_file_list, compressInstance)
-            case 'Fitz_settings': fitz_compression(validated_pdf_list, saving_file_list, compressInstance)
+            case 'GS_settings': validated_pdf_dict = gs_compression(validated_pdf_dict, compressInstance)
+            case 'Fitz_settings': validated_pdf_dict = fitz_compression(validated_pdf_dict, compressInstance)
         #########################################
         log.info("Compression runtime over.")
         
         # 2nd Size Capture: Concluding Runtime
         end_time = time.time()
-        outcomeFileDict = {file_item: {'validity': None, 'initial': file_size, 'final': 0} for file_item, file_size in zip(saving_file_list, initial_file_sizes)}
 
-        # TODO: optimize the code for validated_pdf_list against validated_pdf_dict
-        # TODO: use final_file_sizes to detect missing files. 0 size files are rejected.
-
-        for filename, _ in outcomeFileDict.items():
-            try:
-                outcomeFileDict[filename]['final'] = os.path.getsize(filename)
-                outcomeFileDict[filename]['validity'] = True
-            except FileNotFoundError:
-                outcomeFileDict[filename]['validity'] = False
 
         # Display compress outcome.
-        display_compress_outcome(outcomeFileDict, float(end_time-start_time))
+        display_compress_outcome(validated_pdf_dict, float(end_time-start_time))
     else:
         print("[red]Aborted[/red]")
 
