@@ -334,16 +334,22 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
 def merge(
     items: Annotated[List[str], typer.Argument(help="PDF files to merge.", rich_help_panel="Required")],
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = SortOrder.none,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional Options")]=[],
+    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging.", rich_help_panel="Additional Options", metavar="FILEPATH")]=[],
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
+    source: Annotated[str, typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional Options", metavar=".txt FILE")] = '',
+    excludeSource: Annotated[str, typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional Options", metavar=".txt FILE")] = '',
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf, file.pdf, folder/", rich_help_panel="Options")]=DEFAULT_OUTPUT):
 
     # in case someone pass --mimecheck as --output
     if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
+    elif source == '--excludesource' or excludeSource == "--source":
+        raise PrettyErrorDisplay("--excludeSource & --source are mutually exclusive.")
+    elif source == '--source' or excludeSource == '--excludesource':
+        raise PrettyErrorDisplay("Can't add same option flag as value.")
     
-    validated_dict = validate_pdf_dict(items, exclude, mimecheck)
+    validated_dict = validate_pdf_dict(items, source, exclude, excludeSource, mimecheck)
 
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
