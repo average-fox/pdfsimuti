@@ -171,6 +171,25 @@ def return_joined_filePath(filePath1:str, filePath2:str) -> str:
     return os.path.join(filePath1, filePath2)
 
 
+def txt_reader(filePath:str) -> list:
+    """
+    Read a text file and return a list of non-empty, stripped lines.
+
+    Args:
+        filePath (str): The path to the text file to read.
+    Returns:
+        list: A list of non-empty lines from the text file, with whitespace stripped.
+    """
+    lines = []
+    with open(filePath, 'r') as file:
+        lines = [line.strip() for line in file if line.strip()]
+    
+    for line in lines:
+        if not os.path.exists(line):
+            print(f"[red]WARNING![/red] File not found: [i] [yellow]{line}[/yellow] [/i]")
+    return lines
+
+
 def scan_file(itemList: list) -> list:
 
     return_list = []
@@ -262,7 +281,9 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
     return filesDict
 
             
-def validate_pdf_dict(filesDict, exclude, mimecheck):
+def validate_pdf_dict(filesDict, source, exclude, excludeSource, mimecheck):
+    filesDict.append(txt_reader(source)) if source else None
+    exclude.append(txt_reader(excludeSource)) if excludeSource else None
     unvalidated_files = scan_file(filesDict)
     excludeList = scan_file(exclude) if exclude else []
 
@@ -271,11 +292,6 @@ def validate_pdf_dict(filesDict, exclude, mimecheck):
     newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
     validatedFilesDict = return_validate_pdf_dict(newFilesDict, mimecheck)
 
-    if len(filesDict) == 0:
-        raise PrettyErrorDisplay(f"""
-            No compatible PDF files found.
-            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
-        """)
 
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
     # this loop checks between true/false and none. if none then it's validation is unknown.
@@ -284,6 +300,14 @@ def validate_pdf_dict(filesDict, exclude, mimecheck):
         valid = item[1]['valid']
         if valid == None or valid == True: final_validated_file_count+=1
 
+    # this works not only for merge but also for compress. If no valid files are found, it shouldn't proceeed.
+    if final_validated_file_count == 0:
+        print(return_validated_display(validatedFilesDict))
+        raise PrettyErrorDisplay(f"""
+            No compatible PDF files found.
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
+        """)
+    
     # different feature require different form of filesDict
     # merge requires fileDict length to be greater than 1. compress doesn't have any requirements.
     match get_calling_function():
