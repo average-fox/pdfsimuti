@@ -23,7 +23,7 @@ def version_callback(value:bool):
         raise typer.Exit()
 
 
-@app.callback(epilog="Author: @[link=www.github.com/foxtbirdy]foxtbirdy[/link]")
+@app.callback(epilog="Author: @foxes_nteq_dogs")
 def main(version: Annotated[
     Optional[bool],
     typer.Option("--version", "-v", callback=version_callback, is_eager=True, help="Show version & exit")] = None,
@@ -83,3 +83,6 @@ app.command(
     - Verbose level 3: Verbose 1 + 2 + effect on the program.
     """
     )(checkhealth.checkhealth)
+
+
+if __name__ == "__main__": app()
