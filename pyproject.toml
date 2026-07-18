@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.urls]
-repository = "https://github.com/foxtbirdy/pdfsimuti"
-"Bug Tracker" = "https://github.com/foxtbirdy/pdfsimuti/issues"
+repository = "https://github.com/average-fox/pdfsimuti"
+"Bug Tracker" = "https://github.com/average-fox/pdfsimuti/issues"
 
 [project.scripts]
 pdfsimuti = "pdfsimuti.main:app"
@@ -32,3 +32,4 @@ pdfsimuti = "pdfsimuti.main:app"
 [build-system]
 requires = ["uv_build>=0.9.8,<0.10.0"]
 build-backend = "uv_build"
+
