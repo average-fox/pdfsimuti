@@ -153,44 +153,25 @@ def check_file_readability(item: str) -> bool:
     return os.path.isfile(item) and os.access(item, os.R_OK)
 
 
-def has_pdf_extension(filename: str) -> bool:
-    """
-    Check if a file or path has the '.pdf' extension, ignoring case. 
-    It specifically prevents false positives like "file/pdf" and excludes the string "pdf".
-
-    Args: 
-        filename (str): The filename or filepath to check.
-
-    Returns:
-        bool: True if the filename has a valid '.pdf' extension, False otherwise.
-    """
-    return filename.lower().split(".")[-1] == "pdf" and filename != "pdf"
+def get_file_extension(filename: str) -> str:
+    return filename.lower().split(".")[-1].lower()
 
 
 def return_joined_filePath(filePath1:str, filePath2:str) -> str:
     return os.path.join(filePath1, filePath2)
 
 
-def txt_reader(filePath:str) -> list:
-    """
-    Read a text file and return a list of non-empty, stripped lines.
+def txt_file_reader(victimFile, filePath:str) -> list:
 
-    Args:
-        filePath (str): The path to the text file to read.
-    Returns:
-        list: A list of non-empty lines from the text file, with whitespace stripped.
-    """
-    lines = []
+    if get_file_extension(filePath) != "txt": return victimFile
+
     with open(filePath, 'r') as file:
-        lines = [line.strip() for line in file if line.strip()]
-    
-    for line in lines:
-        if not os.path.exists(line):
-            print(f"[red]WARNING![/red] File not found: [i] [yellow]{line}[/yellow] [/i]")
-    return lines
+        victimFile.extend(line.strip() for line in file)
+
+    return victimFile
 
 
-def scan_file(itemList: list) -> list:
+def scan_items_entry(itemList: list) -> list:
 
     return_list = []
     for item in itemList:
@@ -281,19 +262,26 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
     return filesDict
 
             
-def validate_pdf_dict(filesDict, source, exclude, excludeSource, mimecheck):
-    filesDict.append(txt_reader(source)) if source else None
-    exclude.append(txt_reader(excludeSource)) if excludeSource else None
-    unvalidated_files = scan_file(filesDict)
-    excludeList = scan_file(exclude) if exclude else []
+def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
+
+    # without this , append in validate_pdf_dict() will trigger a TypeError
+    items = items or []
+
+
+    exclude= txt_file_reader(exclude, excludeSource) if excludeSource else exclude
+    items = txt_file_reader(items, source) if source else items
+
+    unvalidated_files = scan_items_entry(items)
+    excludeList = scan_items_entry(exclude) if exclude else []
 
     if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")  
 
+    # template for file dict
     newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
     validatedFilesDict = return_validate_pdf_dict(newFilesDict, mimecheck)
 
 
-    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
+    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and type of the file (mimecheck)
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
     for item in validatedFilesDict.items():

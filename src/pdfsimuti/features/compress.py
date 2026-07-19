@@ -1,7 +1,7 @@
 import typer
 import os
 
-from typing_extensions import Annotated
+from typing_extensions import Annotated, Optional
 from typing import List
 from enum import Enum
 
@@ -375,7 +375,7 @@ def gs_compression(filesDict: dict, gs_instance):
     return filesDict
             
 
-def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compressInstance, preserve_choice):
+def compress_runtime(fileList: list|None, source, mimecheck: bool, exclude: list, excludeSource,  compressInstance, preserve_choice):
     """
     Control the entire PDF compression process, including validation, user confirmation, runtime execution, and displaying results.
     The function measures and compares file sizes before and after compression to report the outcome and time elapsed.
@@ -383,14 +383,14 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compres
     Args:
         fileList (list): A list of file or directory paths to be processed.
         mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
-        excludeList (list): A list of file paths to exclude from compression.
+        exclude (list): A list of file paths to exclude from compression.
         compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
     
     """
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
 
     log.info("Validating files...")
-    filesDict = validate_pdf_dict(fileList, excludeList, mimecheck)
+    filesDict = validate_pdf_dict(fileList, source,  exclude, excludeSource,  mimecheck)
 
     validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid']}
 
@@ -433,9 +433,12 @@ def compress_runtime(fileList: list, mimecheck: bool, excludeList: list, compres
 
 
 def compress(
-    filelist: Annotated[List[str], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple", metavar="pdf_item")],
+    items: Annotated[Optional[List[str]], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple.", metavar="pdf_item")] = None,
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
     exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=[],
+    source: Annotated[str, typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = '',
+    excludeSource: Annotated[str, typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = '',
+    
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional options", metavar="[gs/ghostscript|pymupdf]")] = compressMethodChoice.pymupdf,
     preserve: Annotated[bool, typer.Option(help="Preserve file on compress. Will be saved in a folder on the working directory.", rich_help_panel='Additional options')]=False,
     garbage: Annotated[int, typer.Option(max=4, min=0, help="PyMuPDF garbage strength control", rich_help_panel="PyMuPDF Settings")] = 4,
@@ -472,4 +475,4 @@ def compress(
         compressInstance = Fitz_settings(garbageStrength=garbage)
 
     # compress runtime handles the main load
-    compress_runtime(filelist, mimecheck, exclude, compressInstance, preserve_choice=preserve)
+    compress_runtime(items, source, mimecheck, exclude, excludeSource, compressInstance, preserve_choice=preserve)
