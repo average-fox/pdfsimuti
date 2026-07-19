@@ -288,7 +288,6 @@ def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
 
     # this works not only for merge but also for compress. If no valid files are found, it shouldn't proceeed.
     if final_validated_file_count == 0:
-        print(return_validated_display(validatedFilesDict))
         raise PrettyErrorDisplay(f"""
             No compatible PDF files found.
             \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
