@@ -263,18 +263,16 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
 
             
 def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
+    print("\n")
 
-    # without this , append in validate_pdf_dict() will trigger a TypeError
-    items = items or []
-
-
-    exclude= txt_file_reader(exclude, excludeSource) if excludeSource else exclude
+    items = items or [] # without this, item will be treated as NoneType
     items = txt_file_reader(items, source) if source else items
-
+    exclude= txt_file_reader(exclude, excludeSource) if excludeSource else exclude
+    
     unvalidated_files = scan_items_entry(items)
     excludeList = scan_items_entry(exclude) if exclude else []
 
-    if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")  
+    if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled! Corrupted files can disrupt the process.")  
 
     # template for file dict
     newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
@@ -329,7 +327,7 @@ def return_validated_display(filesDict:dict):
     validated_list_table.add_column("Filename", vertical="middle")
     validated_list_table.add_column("Abspath", vertical="middle", overflow="fold")
     validated_list_table.add_column("Status", vertical="middle")
-    validated_list_table.add_column("Size", vertical="middle", justify="center")
+    validated_list_table.add_column("Size (KB)", vertical="middle", justify="center")
 
     for file_item in filesDict.items(): 
         valid = file_item[1]['valid']
