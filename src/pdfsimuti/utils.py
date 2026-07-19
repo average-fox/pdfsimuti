@@ -153,25 +153,25 @@ def check_file_readability(item: str) -> bool:
     return os.path.isfile(item) and os.access(item, os.R_OK)
 
 
-def has_pdf_extension(filename: str) -> bool:
-    """
-    Check if a file or path has the '.pdf' extension, ignoring case. 
-    It specifically prevents false positives like "file/pdf" and excludes the string "pdf".
-
-    Args: 
-        filename (str): The filename or filepath to check.
-
-    Returns:
-        bool: True if the filename has a valid '.pdf' extension, False otherwise.
-    """
-    return filename.lower().split(".")[-1] == "pdf" and filename != "pdf"
+def get_file_extension(filename: str) -> str:
+    return filename.lower().split(".")[-1].lower()
 
 
 def return_joined_filePath(filePath1:str, filePath2:str) -> str:
     return os.path.join(filePath1, filePath2)
 
 
-def scan_file(itemList: list) -> list:
+def txt_file_reader(victimFile, filePath:str) -> list:
+
+    if get_file_extension(filePath) != "txt": return victimFile
+
+    with open(filePath, 'r') as file:
+        victimFile.extend(line.strip() for line in file)
+
+    return victimFile
+
+
+def scan_items_entry(itemList: list) -> list:
 
     return_list = []
     for item in itemList:
@@ -262,28 +262,37 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
     return filesDict
 
             
-def validate_pdf_dict(filesDict, exclude, mimecheck):
-    unvalidated_files = scan_file(filesDict)
-    excludeList = scan_file(exclude) if exclude else []
+def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
+    print("\n")
 
-    if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled!")  
+    items = items or [] # without this, item will be treated as NoneType
+    items = txt_file_reader(items, source) if source else items
+    exclude= txt_file_reader(exclude, excludeSource) if excludeSource else exclude
+    
+    unvalidated_files = scan_items_entry(items)
+    excludeList = scan_items_entry(exclude) if exclude else []
 
+    if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled! Corrupted files can disrupt the process.")  
+
+    # template for file dict
     newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
     validatedFilesDict = return_validate_pdf_dict(newFilesDict, mimecheck)
 
-    if len(filesDict) == 0:
-        raise PrettyErrorDisplay(f"""
-            No compatible PDF files found.
-            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
-        """)
 
-    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and nature
+    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and type of the file (mimecheck)
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
     for item in validatedFilesDict.items():
         valid = item[1]['valid']
         if valid == None or valid == True: final_validated_file_count+=1
 
+    # this works not only for merge but also for compress. If no valid files are found, it shouldn't proceeed.
+    if final_validated_file_count == 0:
+        raise PrettyErrorDisplay(f"""
+            No compatible PDF files found.
+            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
+        """)
+    
     # different feature require different form of filesDict
     # merge requires fileDict length to be greater than 1. compress doesn't have any requirements.
     match get_calling_function():
@@ -317,7 +326,7 @@ def return_validated_display(filesDict:dict):
     validated_list_table.add_column("Filename", vertical="middle")
     validated_list_table.add_column("Abspath", vertical="middle", overflow="fold")
     validated_list_table.add_column("Status", vertical="middle")
-    validated_list_table.add_column("Size", vertical="middle", justify="center")
+    validated_list_table.add_column("Size (KB)", vertical="middle", justify="center")
 
     for file_item in filesDict.items(): 
         valid = file_item[1]['valid']
