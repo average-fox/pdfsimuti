@@ -221,12 +221,9 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         initial = file_entry[1]['initial_size']
         final =  file_entry[1]['final_size']
         filename = file_entry[1]['saving_path']
-        if not file_entry[1]['valid']:
+        if not file_entry[1]['valid'] or final == 0:
             # user removed the file during the program runtime
             table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
-        elif final == 0:
-            table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]ERROR[/red]", "[red]ERROR[/red]", "[red]ERROR[/red]")
-
         else:
             compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
             table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
@@ -299,6 +296,7 @@ def gs_compression(filesDict: dict, gs_instance):
 
         for file_entry in filesDict.items():
             target = file_entry[0]
+            if (os.path.getsize(target) >= 5000000): log.info(f"File too large (>500mb). May take a while.")
             target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
             target_basename = return_basename(target)
             target_savingpath = file_entry[1]['saving_path']
