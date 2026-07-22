@@ -17,7 +17,6 @@ from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
 app = typer.Typer()
 
-
 class SortOrder(str, Enum):
     """
     Contains function that handles the ordering for the merge by sorting them.
@@ -144,7 +143,6 @@ def designate_dirname(filePath) -> str:
         # if you are wondering where the os.makedirs is happening, its not here but rather on the merge_runtime()
         # if you are to create it here, either overview had to be scrapped or you cannot notify the user of new folder creation 
         # or you have to use a global variable
-        # don't try that. i did it already.
 
     return return_abspath(filePath)
 
@@ -175,7 +173,7 @@ def designate_filename(target:str) -> str:
             continue
 
         elif os.path.exists(return_joined_filePath(folderpath, filename)):
-            print(f"\n[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
+            print(f"[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
             
             if not return_confirm("Do you wish to overwrite this file? (Default: Y)"):    
                 print("\nFilename cannot be same if overwrite isn't allowed")
@@ -257,6 +255,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     )
     print("\nPlease confirm the job.")
     Console().print(Panel(panel_group, border_style="blue", expand=False))
+    if fileSize > 100: print(f"\nEstimated file size is big. Merge operations will take a while. {fileSize}")
 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
@@ -271,12 +270,22 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
 
     Raises:
         PrettyErrorDisplay: If the merging process fails for any reason other than a KeyboardInterrupt.
-    """    
+    """ 
+    import logging
+    from rich.logging import RichHandler
+    logging.basicConfig(
+        level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
+    )   
+    log = logging.getLogger("rich")
+
     try:
+        log.info("Started merge operations.")
         # in case the user approves overwrite.
         # if not done, this will remove the merged file if --no-preserve is active
         with fitz.open() as doc:
-            for item_entry in itemsDict.keys(): doc.insert_file(item_entry)
+            for item_entry in itemsDict.keys():
+                doc.insert_file(item_entry)
+                log.info(f'Inserted file: {item_entry}')
             doc.save(outputFile)
         
         if outputFile in itemsDict:
@@ -287,8 +296,12 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
             for item_entry in itemsDict: 
                 os.remove(item_entry)
 
+        log.info("Merge operations completed.")
+        
     except KeyboardInterrupt:
         exit_program()
+    except ValueError:
+        raise PrettyErrorDisplay(f"Fatal. PyMuPDF unable to read data. Run with mimechecking.")
     except Exception as e:  
         raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
 
