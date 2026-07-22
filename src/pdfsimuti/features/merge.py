@@ -255,7 +255,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     )
     print("\nPlease confirm the job.")
     Console().print(Panel(panel_group, border_style="blue", expand=False))
-    if fileSize > 100: print(f"\nEstimated file size is big. Merge operations will take a while. {fileSize}")
+    if fileSize > 100: print(f"\nEstimated file size is big. Merge operations will take a while.")
 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
