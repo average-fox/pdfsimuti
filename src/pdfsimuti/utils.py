@@ -263,7 +263,6 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
 
             
 def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
-    print("\n")
 
     items = items or [] # without this, item will be treated as NoneType
     items = txt_file_reader(items, source) if source else items
@@ -278,7 +277,6 @@ def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
     newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
     validatedFilesDict = return_validate_pdf_dict(newFilesDict, mimecheck)
 
-
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and type of the file (mimecheck)
     # this loop checks between true/false and none. if none then it's validation is unknown.
     final_validated_file_count = 0
@@ -288,10 +286,7 @@ def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
 
     # this works not only for merge but also for compress. If no valid files are found, it shouldn't proceeed.
     if final_validated_file_count == 0:
-        raise PrettyErrorDisplay(f"""
-            No compatible PDF files found.
-            \n[u]Search Locations[/u]: \n[i]{"\n".join(set([return_dirname(return_abspath(item)) for item in validatedFilesDict.keys()]))}[/i]
-        """)
+        raise PrettyErrorDisplay("No compatible PDF files found.")
     
     # different feature require different form of filesDict
     # merge requires fileDict length to be greater than 1. compress doesn't have any requirements.
@@ -326,14 +321,14 @@ def return_validated_display(filesDict:dict):
     validated_list_table.add_column("Filename", vertical="middle")
     validated_list_table.add_column("Abspath", vertical="middle", overflow="fold")
     validated_list_table.add_column("Status", vertical="middle")
-    validated_list_table.add_column("Size (KB)", vertical="middle", justify="center")
+    validated_list_table.add_column("Size (MB)", vertical="middle", justify="center")
 
     for file_item in filesDict.items(): 
         valid = file_item[1]['valid']
         file_name = file_item[0]
         basename = os.path.splitext(return_basename(file_item[0]))[0]
         state = file_item[1]['state']
-        size = str(file_item[1]['initial_size'])
+        size = f"{file_item[1]['initial_size']/ (1024 * 1024):.3f}"
         if valid:
             validity = "[green]Verified[/green]" 
             index += 1
@@ -349,6 +344,6 @@ def return_validated_display(filesDict:dict):
 
         # Rich table doesn't take any 'int' type
         file_index = str(index) if valid == None or valid == True else "[red]X[/red]"
-        validated_list_table.add_row(file_index, basename, file_name, validity, size)
+        validated_list_table.add_row(file_index, basename, file_name, validity, str(size))
 
     return validated_list_table
