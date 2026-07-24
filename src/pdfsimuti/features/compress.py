@@ -273,6 +273,7 @@ def fitz_compression(filesDict: dict,  fitz_instance):
             with fitz.open(target) as doc:
                 # temp files created to solve incremental saving issue
                 temp = (target + ".temp") if target == target_savingPath else target_savingPath
+                if (os.path.getsize(target) >= 262144000): log.info(f"File too large (>250mb). May take a while.") # 250mb in bytes
                 doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
                 
                 log.info(f"Compressed Filepath: {target}")
@@ -319,7 +320,7 @@ def gs_compression(filesDict: dict, gs_instance):
 
         for file_entry in filesDict.items():
             target = file_entry[0]
-            if (os.path.getsize(target) >= 5000000): log.info(f"File too large (>500mb). May take a while.")
+            if (os.path.getsize(target) >= 262144000): log.info(f"File too large (>250mb). May take a while.") # 250mb in bytes
             target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
             target_basename = return_basename(target)
             target_savingpath = file_entry[1]['saving_path']
@@ -386,6 +387,7 @@ def gs_compression(filesDict: dict, gs_instance):
             except KeyboardInterrupt:
                 print("[red]Aborting...[/red]")
                 if os.path.exists(temp): os.remove(temp)
+                print("Incomplete output file deleted. " + temp)
                 exit()
                 
             except Exception as e:
@@ -488,6 +490,9 @@ def compress(
     
     elif compressMethod == "pymupdf":
         compressInstance = Fitz_settings(garbageStrength=garbage)
+    
+    if items == None and not source:
+        raise PrettyErrorDisplay("No filepaths were added to compress.py or with --source")
 
     # compress runtime handles the main load
     compress_runtime(items, source, mimecheck, exclude, excludeSource, compressInstance, preserve_choice=preserve)

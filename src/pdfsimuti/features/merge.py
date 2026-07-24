@@ -364,5 +364,9 @@ def merge(
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
         validated_dict = sort_dict(sort, validated_dict)
+    
+    if items == None and not source:
+        raise PrettyErrorDisplay("No filepaths were added to merge.py or with --source")
+
         
     merge_runtime(validated_dict, output, preserve, sort)

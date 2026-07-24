@@ -263,7 +263,6 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
 
             
 def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
-    print("\n")
 
     items = items or [] # without this, item will be treated as NoneType
     items = txt_file_reader(items, source) if source else items
