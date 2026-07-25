@@ -227,7 +227,7 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         filename = file_entry[1]['saving_path']
         if not file_entry[1]['valid'] or final == 0:
             # user removed the file during the program runtime
-            table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
+            table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
             compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
             table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
@@ -273,21 +273,25 @@ def fitz_compression(filesDict: dict,  fitz_instance):
             with fitz.open(target) as doc:
                 # temp files created to solve incremental saving issue
                 temp = (target + ".temp") if target == target_savingPath else target_savingPath
-                if (os.path.getsize(target) >= 262144000): log.info(f"File too large (>250mb). May take a while.") # 250mb in bytes
-                doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-                
-                log.info(f"Compressed Filepath: {target}")
-                file_entry[1]['valid'] = True
+                if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
                 file_entry[1]['final_size'] = os.path.getsize(temp)
-                file_entry[1]['state'] = "Compressed"
+                if (file_entry[1]['initial_size'] <= file_entry[1]['final_size']):
+                    log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
+                    file_entry[1]['valid'] = False
+                    file_entry[1]['state'] = 'Unchanged'
+                else:
+                    doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+                    file_entry[1]['valid'] = True
+                    file_entry[1]['state'] = "Compressed"
+                    log.info(f"Compressed Filepath: {target}")
             
-            if target == target_savingPath: 
-                os.replace(temp, target)
-
+                    if target == target_savingPath: 
+                        os.replace(temp, target)
+                        
         except Exception as e: 
             log.error(f"CAUTION. '{return_basename(target)}' cannot be compressed")
             file_entry[1]['valid'] = False
-            file_entry[1]['state'] = 'Failed to merge'
+            file_entry[1]['state'] = 'PyMuPDF failure'
     
     
     return filesDict
@@ -320,7 +324,7 @@ def gs_compression(filesDict: dict, gs_instance):
 
         for file_entry in filesDict.items():
             target = file_entry[0]
-            if (os.path.getsize(target) >= 262144000): log.info(f"File too large (>250mb). May take a while.") # 250mb in bytes
+            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
             target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
             target_basename = return_basename(target)
             target_savingpath = file_entry[1]['saving_path']
@@ -356,14 +360,22 @@ def gs_compression(filesDict: dict, gs_instance):
             try:
                 subprocess.run(command, check=True, capture_output=True)
                 file_entry[1]['final_size'] = os.path.getsize(temp)
-                if target == target_savingpath:
-                    os.replace(temp, target)
-                progress.log(f"[green]Compressed[/green] Filepath: {target}")
-                file_entry[1]['valid'] = True
-                file_entry[1]['state'] = "Compressed"
+
+                if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
+                    log.warning(f"File '{target_basename}' not compressed. Resulted file size not smaller.")
+                    file_entry[1]['valid'] = False
+                    file_entry[1]['state'] = 'Unchanged'
+                else:
+                    # only works if --preserve is not enabled.
+                    if target == target_savingpath:
+                        os.replace(temp, target)
+                    progress.log(f"[green]Compressed[/green] Filepath: {target}")
+                    file_entry[1]['valid'] = True
+                    file_entry[1]['state'] = "Compressed"
+                
                 progress.remove_task(target_runtime)
                 progress.update(runtime, advance=1)
-                
+                    
             except subprocess.CalledProcessError as e:
                 # two types of errors can occur here. either the file got removed during operation or ghostscript failed to run.
                 # if file removed during operation, script will still continue
