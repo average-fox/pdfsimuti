@@ -236,7 +236,7 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
             else: 
                 table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
-            compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
+            compression_calculate = str(abs(round((initial - final)/initial*100, 4)))
             table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
 
     messenge = (
@@ -505,7 +505,7 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
         
         # 2nd Size Capture: Concluding Runtime
         end_time = time.time()
-        
+
         # Display compress outcome.
         display_compress_outcome(validated_pdf_dict, float(end_time-start_time))
     else:
