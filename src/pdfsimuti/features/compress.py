@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 
 from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
-from pdfsimuti.utils import PrettyErrorDisplay
+from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
 app = typer.Typer()
 log = logging.getLogger("rich")
@@ -30,7 +30,6 @@ class Fitz_settings:
         return getattr(self, key)
     
     def display_properties(self, preserve_choice):
-        from pdfsimuti.utils import text_dedent
         return text_dedent(f"""
         Compression mode: PyMuPDF
         Preserve files: {preserve_choice}
@@ -82,7 +81,6 @@ class GS_settings:
         
 
     def display_properties(self, preserve_choice):
-        from pdfsimuti.utils import text_dedent
         return text_dedent(f"""
         Compression mode: GhostScript
         -----------------------
@@ -270,7 +268,7 @@ def designate_preserve_saveFolder(targetDict: dict):
 def fitz_compression(filesDict: dict,  fitz_instance):
     import fitz
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
-    from pdfsimuti.utils import text_dedent
+
 
     columns = [
         TextColumn("[progress.description]{task.description}"),
