@@ -274,22 +274,28 @@ def fitz_compression(filesDict: dict,  fitz_instance):
                 # temp files created to solve incremental saving issue
                 temp = (target + ".temp") if target == target_savingPath else target_savingPath
                 if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
+                
+                doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
                 file_entry[1]['final_size'] = os.path.getsize(temp)
+                
                 if (file_entry[1]['initial_size'] <= file_entry[1]['final_size']):
                     log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
+                    os.remove(temp)
                     file_entry[1]['valid'] = False
                     file_entry[1]['state'] = 'Unchanged'
                 else:
-                    doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
                     file_entry[1]['valid'] = True
                     file_entry[1]['state'] = "Compressed"
                     log.info(f"Compressed Filepath: {target}")
             
                     if target == target_savingPath: 
                         os.replace(temp, target)
-                        
+
         except Exception as e: 
-            log.error(f"CAUTION. '{return_basename(target)}' cannot be compressed")
+            log.error(f"""
+            CAUTION. '{return_basename(target)}' cannot be compressed
+            Error type: {e}
+            """)
             file_entry[1]['valid'] = False
             file_entry[1]['state'] = 'PyMuPDF failure'
     
@@ -365,6 +371,7 @@ def gs_compression(filesDict: dict, gs_instance):
                     log.warning(f"File '{target_basename}' not compressed. Resulted file size not smaller.")
                     file_entry[1]['valid'] = False
                     file_entry[1]['state'] = 'Unchanged'
+                    os.remove(temp)
                 else:
                     # only works if --preserve is not enabled.
                     if target == target_savingpath:
