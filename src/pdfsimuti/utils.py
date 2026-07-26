@@ -185,7 +185,7 @@ def scan_items_entry(itemList: list) -> list:
             for folder_item in file.glob("*.pdf"):
                 folder_item = str(folder_item.resolve())
                 # duplicate guard
-                if folder_item not in return_list: 
+                if folder_item not in return_list:
                     return_list.append(folder_item)
                 else:
                     print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {folder_item}")
@@ -259,6 +259,9 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
         # 3.5 state file validity. if none; that meant mimecheck is disabled.
         if file_items[1]['valid'] is None and mimecheck:
             file_items[1]['valid'] = True
+        elif file_items[1]['initial_size'] == 0:
+            file_items[1]['valid'] = False
+            file_items[1]['state'] = "[red]File is empty[/red]"
         elif not mimecheck:
             file_items[1]['valid'] = None
 
