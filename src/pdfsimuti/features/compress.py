@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 
 from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
-from pdfsimuti.utils import PrettyErrorDisplay
+from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
 app = typer.Typer()
 log = logging.getLogger("rich")
@@ -30,7 +30,6 @@ class Fitz_settings:
         return getattr(self, key)
     
     def display_properties(self, preserve_choice):
-        from pdfsimuti.utils import text_dedent
         return text_dedent(f"""
         Compression mode: PyMuPDF
         Preserve files: {preserve_choice}
@@ -82,7 +81,6 @@ class GS_settings:
         
 
     def display_properties(self, preserve_choice):
-        from pdfsimuti.utils import text_dedent
         return text_dedent(f"""
         Compression mode: GhostScript
         -----------------------
@@ -213,6 +211,9 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         filesDict (dict): Dict that contains the files absolute path and their properties. func() requires filename, initial_size and final_size
         time_elasped (float): The total time (in seconds) taken for the compression process.
     """
+    result_reverted = False
+    failed_count = 0
+    
     table = Table(show_lines=True, highlight=True, expand=True)
     table.add_column("SI", vertical="middle")
     table.add_column("File Name", overflow="fold")
@@ -222,19 +223,33 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
     table.add_column("Outcome", vertical="middle", justify="center")
 
     for index, file_entry in enumerate(filesDict.items()):
+        index += 1
         initial = file_entry[1]['initial_size']
         final =  file_entry[1]['final_size']
         filename = file_entry[1]['saving_path']
+
         if not file_entry[1]['valid'] or final == 0:
-            # user removed the file during the program runtime
-            table.add_row(str(index), f"[strike]{return_basename(filename)}[/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
+            failed_count += 1
+            if file_entry[1]['state'] == 'Unchanged':
+                result_reverted = True
+                table.add_row(str(index), f"[yellow]{return_basename(filename)}[/yellow]", f"{filename}", "[yellow]Skipped[/yellow]", "[yellow]Skipped[/yellow]", f"[yellow]{file_entry[1]['state']}[/yellow]")
+            else: 
+                table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
-            compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
+            compression_calculate = str(abs(round((initial - final)/initial*100, 4)))
             table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
-            
+
+    messenge = (
+        text_dedent(f"""
+        [yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected
+        Total Processed: {len(filesDict)-failed_count}/{len(filesDict)}
+        """)
+    ) 
     outcome_print_group = Group(
             table,
-            f"\nTotal time taken: {round(time_elasped, 2)} seconds")
+            f"{messenge}" if result_reverted else '',
+            f"\nTotal time taken: {round(time_elasped, 2)} seconds",
+    )
     print(Panel(outcome_print_group, subtitle="Compression Completed", border_style="bright_green", expand=False))
     
 
@@ -265,30 +280,70 @@ def designate_preserve_saveFolder(targetDict: dict):
 
 def fitz_compression(filesDict: dict,  fitz_instance):
     import fitz
-    
-    for file_entry in filesDict.items():
-        target = file_entry[0]
-        target_savingPath = file_entry[1]['saving_path']
-        try:
-            with fitz.open(target) as doc:
-                # temp files created to solve incremental saving issue
-                temp = (target + ".temp") if target == target_savingPath else target_savingPath
-                if (os.path.getsize(target) >= 262144000): log.info(f"File too large (>250mb). May take a while.") # 250mb in bytes
-                doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-                
-                log.info(f"Compressed Filepath: {target}")
-                file_entry[1]['valid'] = True
-                file_entry[1]['final_size'] = os.path.getsize(temp)
-                file_entry[1]['state'] = "Compressed"
-            
-            if target == target_savingPath: 
-                os.replace(temp, target)
+    from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
 
-        except Exception as e: 
-            log.error(f"CAUTION. '{return_basename(target)}' cannot be compressed")
-            file_entry[1]['valid'] = False
-            file_entry[1]['state'] = 'Failed to merge'
-    
+
+    columns = [
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+    ]
+
+    with Progress(
+        *columns,
+        transient=True) as progress:
+        log.info("Started PyMuPDF compression runtime.")
+        runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
+
+
+        for file_entry in filesDict.items():
+            target = file_entry[0]
+            target_savingPath = file_entry[1]['saving_path']
+            temp = (target + ".temp") if target == target_savingPath else target_savingPath
+            try:
+                with fitz.open(target) as doc:
+                    target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
+                    progress.start_task(target_runtime)
+
+                    # temp files created to solve incremental saving issue
+                    if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
+                    
+                    doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+                    file_entry[1]['final_size'] = os.path.getsize(temp)
+                    
+                    if (file_entry[1]['initial_size'] <= file_entry[1]['final_size']):
+                        log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
+                        os.remove(temp)
+                        file_entry[1]['valid'] = False
+                        file_entry[1]['state'] = 'Unchanged'
+                    else:
+                        file_entry[1]['valid'] = True
+                        file_entry[1]['state'] = "Compressed"
+                        log.info(f"Compressed Filepath: {target}")
+                
+                        if target == target_savingPath: 
+                            os.replace(temp, target)
+
+                    progress.remove_task(target_runtime)
+                    progress.update(runtime, advance=1)
+
+            except KeyboardInterrupt:
+                print("[red]Aborting...[/red]")
+                if os.path.exists(temp): os.remove(temp)
+                print("Incomplete output file deleted. " + temp)
+                exit()
+
+            except Exception as e: 
+                log.error(text_dedent(f"""
+                --------------------
+                CAUTION. '{return_basename(target)}' cannot be compressed
+                Error type: {e}
+                --------------------
+                """))
+                file_entry[1]['valid'] = False
+                file_entry[1]['state'] = 'PyMuPDF failure'
+        
     
     return filesDict
 
@@ -320,7 +375,7 @@ def gs_compression(filesDict: dict, gs_instance):
 
         for file_entry in filesDict.items():
             target = file_entry[0]
-            if (os.path.getsize(target) >= 262144000): log.info(f"File too large (>250mb). May take a while.") # 250mb in bytes
+            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
             target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
             target_basename = return_basename(target)
             target_savingpath = file_entry[1]['saving_path']
@@ -356,14 +411,23 @@ def gs_compression(filesDict: dict, gs_instance):
             try:
                 subprocess.run(command, check=True, capture_output=True)
                 file_entry[1]['final_size'] = os.path.getsize(temp)
-                if target == target_savingpath:
-                    os.replace(temp, target)
-                progress.log(f"[green]Compressed[/green] Filepath: {target}")
-                file_entry[1]['valid'] = True
-                file_entry[1]['state'] = "Compressed"
+
+                if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
+                    log.warning(f"File '{target_basename}' not compressed. Resulted file size not smaller.")
+                    file_entry[1]['valid'] = False
+                    file_entry[1]['state'] = 'Unchanged'
+                    os.remove(temp)
+                else:
+                    # only works if --preserve is not enabled.
+                    if target == target_savingpath:
+                        os.replace(temp, target)
+                    progress.log(f"[green]Compressed[/green] Filepath: {target}")
+                    file_entry[1]['valid'] = True
+                    file_entry[1]['state'] = "Compressed"
+                
                 progress.remove_task(target_runtime)
                 progress.update(runtime, advance=1)
-                
+                    
             except subprocess.CalledProcessError as e:
                 # two types of errors can occur here. either the file got removed during operation or ghostscript failed to run.
                 # if file removed during operation, script will still continue
@@ -422,7 +486,7 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
     if return_confirm("\nDo you want to continue with this settings?"):
         import time
         
-        validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items()}
+        validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid'] != False}
 
         # 1st size capture: Initial Runtime
         start_time = time.time()
@@ -441,7 +505,6 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
         
         # 2nd Size Capture: Concluding Runtime
         end_time = time.time()
-
 
         # Display compress outcome.
         display_compress_outcome(validated_pdf_dict, float(end_time-start_time))

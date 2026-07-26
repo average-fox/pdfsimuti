@@ -176,33 +176,36 @@ def scan_items_entry(itemList: list) -> list:
     return_list = []
     for item in itemList:
         file = Path(item).resolve()
-        # item can be either a file or a directory but not both
-        # if item is dir,
-        if file.is_dir():
+        file_type = "directory" if file.is_dir() else "file" if file.is_file() else "unknown"
+        file_suffix = file.suffix.lower()
+
+        # case 1:it's a directory
+        if file_type == "directory":
             # look for pdf in the directory
             for folder_item in file.glob("*.pdf"):
                 folder_item = str(folder_item.resolve())
                 # duplicate guard
-                if folder_item not in return_list: 
+                if folder_item not in return_list:
                     return_list.append(folder_item)
                 else:
                     print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {folder_item}")
-        # if dir but it doesn't exist,
-        else:
-            if not file.is_file:
-                print(f"[red]WARNING![/red] FOLDER not found: [i] [yellow]{str(file)}[/yellow] [/i]")
-        
-        if file.is_file() and not file.is_dir():
-            if file.suffix.lower() == ".pdf":
+
+        # case 2: its a file
+        elif file_type == "file":
+            if file_suffix == ".pdf":
                 if str(file) not in return_list:
                     return_list.append(str(file))
                 else:
-                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {str(file)}")
+                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: [i][yellow]{str(file)}[/yellow] [/i]")
             else:
-                print(f"[red]WARNING![/red] File not PDF: {str(file)}")
+                print(f"[red]WARNING![/red] File not PDF: [i][yellow]{str(file)}[/yellow] [/i]")
+        
+        # case 3: its neither and looks like a directory
+        elif file_suffix == "" and file_type == "unknown":
+            print(f"[red]WARNING![/red] Folder not found: [i][yellow]{str(file)}[/yellow] [/i]")
+        
         else:
-            if not file.is_dir():
-                print(f"[red]WARNING![/red] File not found: [i] [yellow]{str(file)}[/yellow] [/i]")
+            print(f"[red]WARNING![/red] File not found: [i][yellow]{str(file)}[/yellow] [/i]")
 
     return return_list
 
@@ -256,6 +259,9 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
         # 3.5 state file validity. if none; that meant mimecheck is disabled.
         if file_items[1]['valid'] is None and mimecheck:
             file_items[1]['valid'] = True
+        elif file_items[1]['initial_size'] == 0:
+            file_items[1]['valid'] = False
+            file_items[1]['state'] = "[red]File is empty[/red]"
         elif not mimecheck:
             file_items[1]['valid'] = None
 
