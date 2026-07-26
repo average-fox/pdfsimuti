@@ -213,6 +213,8 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         filesDict (dict): Dict that contains the files absolute path and their properties. func() requires filename, initial_size and final_size
         time_elasped (float): The total time (in seconds) taken for the compression process.
     """
+    result_reverted = False
+
     table = Table(show_lines=True, highlight=True, expand=True)
     table.add_column("SI", vertical="middle")
     table.add_column("File Name", overflow="fold")
@@ -226,7 +228,7 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         final =  file_entry[1]['final_size']
         filename = file_entry[1]['saving_path']
         if not file_entry[1]['valid'] or final == 0:
-            # user removed the file during the program runtime
+            if file_entry[1]['state'] == 'Unchanged': result_reverted = True
             table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
             compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
@@ -234,7 +236,9 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
             
     outcome_print_group = Group(
             table,
-            f"\nTotal time taken: {round(time_elasped, 2)} seconds")
+            f"{'[yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected.' if result_reverted else ''}"
+            f"\nTotal time taken: {round(time_elasped, 2)} seconds",
+    )
     print(Panel(outcome_print_group, subtitle="Compression Completed", border_style="bright_green", expand=False))
     
 
