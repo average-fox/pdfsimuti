@@ -212,7 +212,8 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         time_elasped (float): The total time (in seconds) taken for the compression process.
     """
     result_reverted = False
-
+    failed_count = 0
+    
     table = Table(show_lines=True, highlight=True, expand=True)
     table.add_column("SI", vertical="middle")
     table.add_column("File Name", overflow="fold")
@@ -222,19 +223,31 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
     table.add_column("Outcome", vertical="middle", justify="center")
 
     for index, file_entry in enumerate(filesDict.items()):
+        index += 1
         initial = file_entry[1]['initial_size']
         final =  file_entry[1]['final_size']
         filename = file_entry[1]['saving_path']
+
         if not file_entry[1]['valid'] or final == 0:
-            if file_entry[1]['state'] == 'Unchanged': result_reverted = True
-            table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
+            failed_count += 1
+            if file_entry[1]['state'] == 'Unchanged':
+                result_reverted = True
+                table.add_row(str(index), f"[yellow]{return_basename(filename)}[/yellow]", f"{filename}", "[yellow]Skipped[/yellow]", "[yellow]Skipped[/yellow]", f"[yellow]{file_entry[1]['state']}[/yellow]")
+            else: 
+                table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
             compression_calculate = str(abs(round((initial - final)/initial*100, 3)))
             table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
-            
+
+    messenge = (
+        text_dedent(f"""
+        [yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected
+        Total Processed: {len(filesDict)-failed_count}/{len(filesDict)}
+        """)
+    ) 
     outcome_print_group = Group(
             table,
-            f"{'[yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected.' if result_reverted else ''}"
+            f"{messenge}" if result_reverted else '',
             f"\nTotal time taken: {round(time_elasped, 2)} seconds",
     )
     print(Panel(outcome_print_group, subtitle="Compression Completed", border_style="bright_green", expand=False))
@@ -473,7 +486,7 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
     if return_confirm("\nDo you want to continue with this settings?"):
         import time
         
-        validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items()}
+        validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid'] != False}
 
         # 1st size capture: Initial Runtime
         start_time = time.time()
@@ -492,8 +505,7 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
         
         # 2nd Size Capture: Concluding Runtime
         end_time = time.time()
-
-
+        
         # Display compress outcome.
         display_compress_outcome(validated_pdf_dict, float(end_time-start_time))
     else:
