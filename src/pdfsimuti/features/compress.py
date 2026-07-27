@@ -21,6 +21,14 @@ from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
 app = typer.Typer()
 log = logging.getLogger("rich")
+fitz = None
+
+def initialize_fitz():
+    global fitz
+    if fitz is None:
+        import fitz as _fitz
+        fitz = _fitz
+
 
 class Fitz_settings:
     def __init__(self, garbageStrength):
@@ -276,75 +284,105 @@ def designate_preserve_saveFolder(targetDict: dict):
         file_entry[1]['saving_path'] = os.path.join(folder_path, os.path.basename(file_entry[0]))
     
     return targetDict
-    
-
-def fitz_compression(filesDict: dict,  fitz_instance):
-    import fitz
-    from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
 
 
-    columns = [
+
+def worker_task(task_details):
+    file_entry, fitz_settings, tempPath = task_details
+
+    global fitz
+    if fitz is None:
+        import fitz as _fitz
+        fitz = _fitz
+
+    target = file_entry[0]
+    target_properties = file_entry[1]
+    tempPath = target + ".temp" if target == target_properties['saving_path'] else target_properties['saving_path']
+
+    try:
+        with fitz.open(target) as doc:
+            # temp files created to solve incremental saving issue
+            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
+            
+            doc.save(tempPath, garbage=fitz_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+            file_entry[1]['final_size'] = os.path.getsize(tempPath)
+            
+            if (file_entry[1]['initial_size'] <= file_entry[1]['final_size']):
+                log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
+                os.remove(tempPath)
+                file_entry[1]['valid'] = False
+                file_entry[1]['state'] = 'Unchanged'
+            else:
+                file_entry[1]['valid'] = True
+                file_entry[1]['state'] = "Compressed"
+
+                log.info(f"Filepath Compressed: {target}")
+        
+                if target == file_entry[1]['saving_path']: 
+                    os.replace(tempPath, target)
+
+    except Exception as e: 
+        log.error(text_dedent(f"""
+        --------------------
+        CAUTION. '{return_basename(target)}' cannot be compressed
+        Error type: {e}
+        --------------------
+        """))
+        file_entry[1]['valid'] = False
+        file_entry[1]['state'] = 'PyMuPDF failure'
+
+    return file_entry
+
+
+def fitz_compression(filesDict: dict, fitz_settings):
+    from rich.progress import (
+        Progress, BarColumn, TaskProgressColumn, TextColumn,
+        TimeElapsedColumn, MofNCompleteColumn
+    )
+    from multiprocessing import Pool
+
+    main_columns = [
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
+        MofNCompleteColumn(),
         TaskProgressColumn(),
         TimeElapsedColumn(),
     ]
 
-    with Progress(
-        *columns,
-        transient=True) as progress:
-        log.info("Started PyMuPDF compression runtime.")
+
+    worker_tasks_details = []
+    temp_paths = []
+
+    for file_entry in filesDict.items():
+        target = file_entry[0]
+        target_savingPath = file_entry[1]['saving_path']
+        temp = (target + ".temp") if target == target_savingPath else target_savingPath
+        worker_tasks_details.append((file_entry, fitz_settings, temp))
+        temp_paths.append(temp)
+
+    log.info("Started PyMuPDF compression runtime.")
+
+    with Progress(*main_columns, transient=True) as progress:
         runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
 
-
-        for file_entry in filesDict.items():
-            target = file_entry[0]
-            target_savingPath = file_entry[1]['saving_path']
-            temp = (target + ".temp") if target == target_savingPath else target_savingPath
+        with Pool(4, initializer=initialize_fitz) as pool:
             try:
-                with fitz.open(target) as doc:
-                    target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
-                    progress.start_task(target_runtime)
-
-                    # temp files created to solve incremental saving issue
-                    if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
-                    
-                    doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-                    file_entry[1]['final_size'] = os.path.getsize(temp)
-                    
-                    if (file_entry[1]['initial_size'] <= file_entry[1]['final_size']):
-                        log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
-                        os.remove(temp)
-                        file_entry[1]['valid'] = False
-                        file_entry[1]['state'] = 'Unchanged'
-                    else:
-                        file_entry[1]['valid'] = True
-                        file_entry[1]['state'] = "Compressed"
-                        log.info(f"Compressed Filepath: {target}")
-                
-                        if target == target_savingPath: 
-                            os.replace(temp, target)
-
-                    progress.remove_task(target_runtime)
+                for updated_entry in pool.imap_unordered(worker_task, worker_tasks_details, chunksize=1):
+                    target, target_info = updated_entry
+                    filesDict[target].update(target_info)
                     progress.update(runtime, advance=1)
 
             except KeyboardInterrupt:
                 print("[red]Aborting...[/red]")
-                if os.path.exists(temp): os.remove(temp)
-                print("Incomplete output file deleted. " + temp)
+                pool.terminate()
+                pool.join()
+                # if one goes bad, every process goes bad. delete all ongoing process's temp files
+                for temp in temp_paths:
+                    if os.path.exists(temp):
+                        os.remove(temp)
+                        print("Incomplete output file deleted. " + temp)
                 exit()
 
-            except Exception as e: 
-                log.error(text_dedent(f"""
-                --------------------
-                CAUTION. '{return_basename(target)}' cannot be compressed
-                Error type: {e}
-                --------------------
-                """))
-                file_entry[1]['valid'] = False
-                file_entry[1]['state'] = 'PyMuPDF failure'
-        
-    
     return filesDict
 
 
