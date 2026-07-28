@@ -235,11 +235,11 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
 
     for index, file_entry in enumerate(filesDict.items()):
         index += 1
-        initial = file_entry[1]['initial_size']
-        final =  file_entry[1]['final_size']
+        initial_size = file_entry[1]['initial_size']
+        final_size =  file_entry[1]['final_size']
         filename = file_entry[1]['saving_path']
 
-        if not file_entry[1]['valid'] or final == 0:
+        if not file_entry[1]['valid'] or final_size == 0:
             failed_count += 1
             if file_entry[1]['state'] == 'Unchanged':
                 result_reverted = True
@@ -247,8 +247,8 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
             else: 
                 table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
-            compression_calculate = str(abs(round((initial - final)/initial*100, 4)))
-            table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
+            compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 4)))
+            table.add_row(str(index), return_basename(filename), filename, str(initial_size), str(final_size), f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
 
     messenge = (
         text_dedent(f"""
