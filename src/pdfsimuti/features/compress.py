@@ -287,7 +287,7 @@ def designate_preserve_saveFolder(targetDict: dict):
 
 
 
-def worker_task(task_details):
+def fitz_multiprocess_childTask(task_details: tuple):
     file_entry, fitz_settings, tempPath = task_details
 
     global fitz
@@ -331,10 +331,11 @@ def worker_task(task_details):
         file_entry[1]['valid'] = False
         file_entry[1]['state'] = 'PyMuPDF failure'
 
-    return file_entry
+    return file_entry, tempPath
 
 
 def fitz_compression(filesDict: dict, fitz_settings):
+
     from rich.progress import (
         Progress, BarColumn, TaskProgressColumn, TextColumn,
         TimeElapsedColumn, MofNCompleteColumn
@@ -349,8 +350,10 @@ def fitz_compression(filesDict: dict, fitz_settings):
         TimeElapsedColumn(),
     ]
 
-
+    # stores the target file properties, fitz settings for compression and temp file
     worker_tasks_details = []
+    # stores active temp files. After compress, these temp files are removed. If any temp file remained,
+    # program needs to delete them
     temp_paths = []
 
     for file_entry in filesDict.items():
@@ -361,15 +364,17 @@ def fitz_compression(filesDict: dict, fitz_settings):
         temp_paths.append(temp)
 
     log.info("Started PyMuPDF compression runtime.")
+    print(temp_paths)
 
     with Progress(*main_columns, transient=True) as progress:
         runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
 
         with Pool(4, initializer=initialize_fitz) as pool:
             try:
-                for updated_entry in pool.imap_unordered(worker_task, worker_tasks_details, chunksize=1):
-                    target, target_info = updated_entry
-                    filesDict[target].update(target_info)
+                for result in pool.imap_unordered(fitz_multiprocess_childTask, worker_tasks_details, chunksize=1):
+                    (target, target_info), tempFile = result
+                    temp_paths.remove(tempFile)
+                    filesDict[target].update(target_info) # update dict of target status after compress
                     progress.update(runtime, advance=1)
 
             except KeyboardInterrupt:
