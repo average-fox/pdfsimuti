@@ -24,6 +24,9 @@ log = logging.getLogger("rich")
 fitz = None
 
 def initialize_fitz():
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN) # if KeyboardInterrupt comes, workers will ignore it (SIG_IGN)
+
     global fitz
     if fitz is None:
         import fitz as _fitz
@@ -341,7 +344,7 @@ def fitz_compression(filesDict: dict, fitz_settings):
         TimeElapsedColumn, MofNCompleteColumn
     )
     from multiprocessing import Pool
-
+    
     main_columns = [
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
@@ -364,30 +367,31 @@ def fitz_compression(filesDict: dict, fitz_settings):
         temp_paths.append(temp)
 
     log.info("Started PyMuPDF compression runtime.")
-    print(temp_paths)
 
     with Progress(*main_columns, transient=True) as progress:
+        pool = Pool(processes=4, initializer=initialize_fitz)
         runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
 
-        with Pool(4, initializer=initialize_fitz) as pool:
-            try:
-                for result in pool.imap_unordered(fitz_multiprocess_childTask, worker_tasks_details, chunksize=1):
-                    (target, target_info), tempFile = result
-                    temp_paths.remove(tempFile)
-                    filesDict[target].update(target_info) # update dict of target status after compress
-                    progress.update(runtime, advance=1)
+        try:
+            for result in pool.imap_unordered(fitz_multiprocess_childTask, worker_tasks_details, chunksize=1):
+                (target, target_info), tempFile = result
+                temp_paths.remove(tempFile)
+                filesDict[target].update(target_info) # update dict of target status after compress
+                progress.update(runtime, advance=1)
+            pool.close()
 
-            except KeyboardInterrupt:
-                print("[red]Aborting...[/red]")
-                pool.terminate()
-                pool.join()
-                # if one goes bad, every process goes bad. delete all ongoing process's temp files
-                for temp in temp_paths:
-                    if os.path.exists(temp):
-                        os.remove(temp)
-                        print("Incomplete output file deleted. " + temp)
-                exit()
-
+        except KeyboardInterrupt:
+            print("[red]Aborting...[/red]")
+            pool.terminate()
+            # if one goes bad, every process goes bad. delete all ongoing process's temp files
+        finally:
+            progress.stop()
+            pool.join()
+            for temp in temp_paths:
+                if os.path.exists(temp):
+                    os.remove(temp)
+                    print("Incomplete output file deleted. " + temp)
+        
     return filesDict
 
 
