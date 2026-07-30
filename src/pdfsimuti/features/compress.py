@@ -21,6 +21,32 @@ from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
 app = typer.Typer()
 log = logging.getLogger("rich")
+fitz = None
+rtn_gs_name = None
+subprocess = None
+
+def initialize_fitz():
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN) # if KeyboardInterrupt comes, workers will ignore it (SIG_IGN)
+
+    global fitz
+    if fitz is None:
+        import fitz as _fitz
+        fitz = _fitz
+
+
+def initialize_gs():
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN) # if KeyboardInterrupt comes, workers will ignore it (SIG_IGN)
+
+    from pdfsimuti.utils import rtn_gs_name as _rtn_gs_name
+    import subprocess as sp
+
+    global rtn_gs_name, subprocess
+
+    if rtn_gs_name is None: rtn_gs_name = _rtn_gs_name
+    if subprocess is None: subprocess = sp
+
 
 class Fitz_settings:
     def __init__(self, garbageStrength):
@@ -224,11 +250,11 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
 
     for index, file_entry in enumerate(filesDict.items()):
         index += 1
-        initial = file_entry[1]['initial_size']
-        final =  file_entry[1]['final_size']
+        initial_size = file_entry[1]['initial_size']
+        final_size =  file_entry[1]['final_size']
         filename = file_entry[1]['saving_path']
 
-        if not file_entry[1]['valid'] or final == 0:
+        if not file_entry[1]['valid'] or final_size == 0:
             failed_count += 1
             if file_entry[1]['state'] == 'Unchanged':
                 result_reverted = True
@@ -236,8 +262,8 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
             else: 
                 table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
-            compression_calculate = str(abs(round((initial - final)/initial*100, 4)))
-            table.add_row(str(index), return_basename(filename), filename, str(initial), str(final), f'[green]{"-"+compression_calculate}%[/green]' if initial > final else f'[red]{"+"+compression_calculate}%[/red]')
+            compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 4)))
+            table.add_row(str(index), return_basename(filename), filename, str(initial_size), str(final_size), f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
 
     messenge = (
         text_dedent(f"""
@@ -276,82 +302,189 @@ def designate_preserve_saveFolder(targetDict: dict):
         file_entry[1]['saving_path'] = os.path.join(folder_path, os.path.basename(file_entry[0]))
     
     return targetDict
+
+
+
+def fitz_multiprocess_childTask(task_details: tuple):
+    file_entry, fitz_settings, tempPath = task_details
+
+    global fitz
+    if fitz is None:
+        import fitz as _fitz
+        fitz = _fitz
+
+    target = file_entry[0]
+    target_properties = file_entry[1]
+
+    try:
+        with fitz.open(target) as doc:
+            # temp files created to solve incremental saving issue
+            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
+            
+            doc.save(tempPath, garbage=fitz_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+            target_properties['final_size'] = os.path.getsize(tempPath)
+            
+            if (target_properties['initial_size'] <= target_properties['final_size']):
+                log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
+                os.remove(tempPath)
+                target_properties['valid'] = False
+                target_properties['state'] = 'Unchanged'
+            else:
+                target_properties['valid'] = True
+                target_properties['state'] = "Compressed"
+
+                log.info(f"File Compressed: {target}")
+        
+                if target == target_properties['saving_path']: 
+                    os.replace(tempPath, target)
+
+    except Exception as e: 
+        log.error(text_dedent(f"""
+        --------------------
+        CAUTION. '{return_basename(target)}' cannot be compressed
+        Error type: {e}
+        --------------------
+        """))
+        target_properties['valid'] = False
+        target_properties['state'] = 'PyMuPDF failure'
+
+    return file_entry, tempPath
+
+
+def fitz_compression(filesDict: dict, fitz_settings):
+
+    from rich.progress import (
+        Progress, BarColumn, TaskProgressColumn, TextColumn,
+        TimeElapsedColumn, MofNCompleteColumn
+    )
+    from multiprocessing import Pool
     
-
-def fitz_compression(filesDict: dict,  fitz_instance):
-    import fitz
-    from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
-
-
-    columns = [
+    main_columns = [
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
+        MofNCompleteColumn(),
         TaskProgressColumn(),
         TimeElapsedColumn(),
     ]
 
-    with Progress(
-        *columns,
-        transient=True) as progress:
-        log.info("Started PyMuPDF compression runtime.")
+    # stores the target file properties, fitz settings for compression and temp file
+    worker_tasks_details = []
+    # stores active temp files. After compress, these temp files are removed. If any temp file remained,
+    # program needs to delete them
+    temp_paths = []
+
+    for file_entry in filesDict.items():
+        target = file_entry[0]
+        target_savingPath = file_entry[1]['saving_path']
+        temp = (target + ".temp") if target == target_savingPath else target_savingPath
+        worker_tasks_details.append((file_entry, fitz_settings, temp))
+        temp_paths.append(temp)
+
+    log.info("Started PyMuPDF compression runtime.")
+
+    with Progress(*main_columns, transient=True) as progress:
+        pool = Pool(processes=4, initializer=initialize_fitz)
         runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
 
+        try:
+            for result in pool.imap_unordered(fitz_multiprocess_childTask, worker_tasks_details, chunksize=1):
+                (target, target_info), tempFile = result
+                temp_paths.remove(tempFile)
+                filesDict[target].update(target_info) # update dict of target status after compress
+                progress.update(runtime, advance=1)
+            pool.close()
 
-        for file_entry in filesDict.items():
-            target = file_entry[0]
-            target_savingPath = file_entry[1]['saving_path']
-            temp = (target + ".temp") if target == target_savingPath else target_savingPath
-            try:
-                with fitz.open(target) as doc:
-                    target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
-                    progress.start_task(target_runtime)
-
-                    # temp files created to solve incremental saving issue
-                    if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
-                    
-                    doc.save(temp, garbage=fitz_instance["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-                    file_entry[1]['final_size'] = os.path.getsize(temp)
-                    
-                    if (file_entry[1]['initial_size'] <= file_entry[1]['final_size']):
-                        log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
-                        os.remove(temp)
-                        file_entry[1]['valid'] = False
-                        file_entry[1]['state'] = 'Unchanged'
-                    else:
-                        file_entry[1]['valid'] = True
-                        file_entry[1]['state'] = "Compressed"
-                        log.info(f"Compressed Filepath: {target}")
-                
-                        if target == target_savingPath: 
-                            os.replace(temp, target)
-
-                    progress.remove_task(target_runtime)
-                    progress.update(runtime, advance=1)
-
-            except KeyboardInterrupt:
-                print("[red]Aborting...[/red]")
-                if os.path.exists(temp): os.remove(temp)
-                print("Incomplete output file deleted. " + temp)
-                exit()
-
-            except Exception as e: 
-                log.error(text_dedent(f"""
-                --------------------
-                CAUTION. '{return_basename(target)}' cannot be compressed
-                Error type: {e}
-                --------------------
-                """))
-                file_entry[1]['valid'] = False
-                file_entry[1]['state'] = 'PyMuPDF failure'
+        except KeyboardInterrupt:
+            print("[red]Aborting...[/red]")
+            pool.terminate()
+            # if one goes bad, every process goes bad. delete all ongoing process's temp files
+        finally:
+            progress.stop()
+            pool.join()
+            for temp in temp_paths:
+                if os.path.exists(temp):
+                    os.remove(temp)
+                    print("Incomplete output file deleted. " + temp)
         
-    
     return filesDict
 
 
-def gs_compression(filesDict: dict, gs_instance):
-    import subprocess
+def worker_gs_compression(task_details: tuple):
+    file_entry, gs_settings, tempPath = task_details
+
+    global rtn_gs_name, subprocess
+    assert rtn_gs_name is not None
+    assert subprocess is not None
+
+
+    target = file_entry[0]
+    target_properties = file_entry[1]
+    
+    if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
+    target_basename = return_basename(target)
+    command = [
+            rtn_gs_name(),
+            '-sDEVICE=pdfwrite',
+            f'-dCompatibilityLevel={gs_settings['compatibility']}',
+            f'-dEmbedAllFonts={gs_settings['embedAllFonts']}',
+            f'-dColorConversionStrategy=/{gs_settings['colorConversion']}',
+            f'-dDownsampleColorImages={gs_settings['enableColorSampling']}',
+            f'-dColorImageResolution={gs_settings['colorResValue']}',
+            f'-dColorImageDownsampleType=/{gs_settings['colorSample']}',
+            f'-dDownsampleGrayImages={gs_settings['enableGreySampling']}',
+            f'-dGrayImageResolution={gs_settings['greyResValue']}',
+            f'-dGrayImageDownsampleType=/{gs_settings['greySample']}',
+            f'-dPDFSettings=/{gs_settings['presets']}',
+            '-dNOPAUSE',
+            '-dQuiet',
+            '-dBATCH',
+            '-dSAFER',
+            f'-sOutputFile={tempPath}',
+            target
+        ]
+
+    if gs_settings['custom']: command[2:2] = gs_settings['custom'].split()
+
+    try:
+        subprocess.run(command, check=True, capture_output=True)
+        file_entry[1]['final_size'] = os.path.getsize(tempPath)
+
+        if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
+            log.warning(f"File '{target_basename}' not compressed. Resulted file size not smaller.")
+            file_entry[1]['valid'] = False
+            file_entry[1]['state'] = 'Unchanged'
+            os.remove(tempPath)
+        else:
+            # only works if --preserve is not enabled.
+            if target == target_properties['saving_path']:
+                os.replace(tempPath, target)
+            log.info(f"File Compressed: {target}")
+            file_entry[1]['valid'] = True
+            file_entry[1]['state'] = "Compressed"
+
+            
+    except subprocess.CalledProcessError as e:
+        # two types of errors can occur here. either the file got removed during operation or ghostscript failed to run.
+        # if file removed during operation, script will still continue
+        file_entry[1]['valid'] = False
+        os.remove(tempPath)
+        log.error(f"Unable to compress file: {target_basename}")
+
+        # what is this??
+        if not os.path.exists(target):
+            log.error(f"Filepath: {return_basename(target)}. File not found.")
+            file_entry[1]['state'] = 'File not found.'
+        else:
+            file_entry[1]['state'] = '-gs failure'
+
+    return file_entry, tempPath
+
+
+def gs_compression(filesDict: dict, gs_settings):
     from pdfsimuti.utils import return_joined_filePath, rtn_gs_name
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
+
+    from multiprocessing import Pool
 
     columns = [
         TextColumn("[progress.description]{task.description}"),
@@ -360,11 +493,22 @@ def gs_compression(filesDict: dict, gs_instance):
         TimeElapsedColumn(),
     ]
 
+    worker_tasks_details = []
+    temp_paths = []
+
     # special warning in case colorConversion is changed
-    if gs_instance["colorConversion"] != "LeaveColorUnchanged":
+    if gs_settings["colorConversion"] != "LeaveColorUnchanged":
         from rich.prompt import Confirm
         if not Confirm.ask(f"[bold white on red]WARNING![/bold white on red] Color Conversion not default. Colors will be affected. Proceed?"):
-            raise PrettyErrorDisplay("Program terminated for safety.")   
+            raise PrettyErrorDisplay("Program terminated for safety.")
+
+    for file_entry in filesDict.items():
+        target = file_entry[0] 
+        target_basename = return_basename(target)
+        target_savingpath = file_entry[1]['saving_path']
+        tempFile = return_joined_filePath(return_dirname(target), "temp"+target_basename) if target == target_savingpath else target_savingpath
+        worker_tasks_details.append((file_entry, gs_settings, tempFile))
+        temp_paths.append(tempFile)
 
     with Progress(
         *columns, 
@@ -372,90 +516,31 @@ def gs_compression(filesDict: dict, gs_instance):
         
         runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
         log.info("Started GhostScript calling.")
+        pool = Pool(processes=4, initializer=initialize_gs)
+        
 
-        for file_entry in filesDict.items():
-            target = file_entry[0]
-            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
-            target_runtime = progress.add_task(description=f"Compressing: [yellow]{target}[/yellow]", total=None)
-            target_basename = return_basename(target)
-            target_savingpath = file_entry[1]['saving_path']
+        try:
+            for result in pool.imap_unordered(worker_gs_compression, worker_tasks_details, chunksize=1):
+                (target, target_info), tempFile = result
+                temp_paths.remove(tempFile)
+                filesDict[target].update(target_info)
+                progress.update(runtime, advance=1)      
 
-            # a temp file ensures the output won't be a blank file
-            temp = return_joined_filePath(return_dirname(target), "temp"+target_basename) if target == target_savingpath else target_savingpath
-            progress.start_task(target_runtime)
-            command = [
-                    rtn_gs_name(),
-                    '-sDEVICE=pdfwrite',
-                    f'-dCompatibilityLevel={gs_instance['compatibility']}',
-                    f'-dEmbedAllFonts={gs_instance['embedAllFonts']}',
-                    f'-dColorConversionStrategy=/{gs_instance['colorConversion']}',
-                    f'-dDownsampleColorImages={gs_instance['enableColorSampling']}',
-                    f'-dColorImageResolution={gs_instance['colorResValue']}',
-                    f'-dColorImageDownsampleType=/{gs_instance['colorSample']}',
-                    f'-dDownsampleGrayImages={gs_instance['enableGreySampling']}',
-                    f'-dGrayImageResolution={gs_instance['greyResValue']}',
-                    f'-dGrayImageDownsampleType=/{gs_instance['greySample']}',
-                    f'-dPDFSettings=/{gs_instance['presets']}',
-                    '-dNOPAUSE',
-                    '-dQuiet',
-                    '-dBATCH',
-                    '-dSAFER',
-                    f'-sOutputFile={temp}',
-                    target
-                ]
+        except KeyboardInterrupt:
+            print("[red]Aborting...[/red]")
+            raise
             
-            # adding custom commands
-            if gs_instance['custom']:
-                command[2:2] = gs_instance['custom'].split()
+        except Exception as e:
+            raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
 
-            try:
-                subprocess.run(command, check=True, capture_output=True)
-                file_entry[1]['final_size'] = os.path.getsize(temp)
-
-                if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
-                    log.warning(f"File '{target_basename}' not compressed. Resulted file size not smaller.")
-                    file_entry[1]['valid'] = False
-                    file_entry[1]['state'] = 'Unchanged'
-                    os.remove(temp)
-                else:
-                    # only works if --preserve is not enabled.
-                    if target == target_savingpath:
-                        os.replace(temp, target)
-                    progress.log(f"[green]Compressed[/green] Filepath: {target}")
-                    file_entry[1]['valid'] = True
-                    file_entry[1]['state'] = "Compressed"
-                
-                progress.remove_task(target_runtime)
-                progress.update(runtime, advance=1)
-                    
-            except subprocess.CalledProcessError as e:
-                # two types of errors can occur here. either the file got removed during operation or ghostscript failed to run.
-                # if file removed during operation, script will still continue
-                file_entry[1]['valid'] = False
-                os.remove(temp)
-                log.error(f"Unable to compress file: {target_basename}")
-                if not os.path.exists(target):
-                    log.error(f"Filepath: {return_basename(target)}. File not found.")
-                    file_entry[1]['state'] = 'File not found.'
-                else:
-                    file_entry[1]['state'] = '-gs failure'
-
-            # is this really needed?
-            except FileNotFoundError as e:
-                raise PrettyErrorDisplay(f"""
-            Compression via GhostScript failed.
-            Please check your GhostScript installation via [code]pdfsimuti checkhealth[/code]
-            If the problem persists, please create an [link=https://github.com/average-fox/pdfsimuti/issues/new]issue[/link].
-            """)
-                
-            except KeyboardInterrupt:
-                print("[red]Aborting...[/red]")
-                if os.path.exists(temp): os.remove(temp)
-                print("Incomplete output file deleted. " + temp)
-                exit()
-                
-            except Exception as e:
-                raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
+        finally:
+            progress.stop()
+            pool.terminate()
+            pool.join()
+            for tempFile in temp_paths:
+                if os.path.exists(tempFile):
+                    os.remove(tempFile)
+                    print("Incomplete output file deleted. " + tempFile)
     
     return filesDict
             
