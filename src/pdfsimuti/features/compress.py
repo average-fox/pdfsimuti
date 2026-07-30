@@ -319,7 +319,7 @@ def fitz_multiprocess_childTask(task_details: tuple):
     try:
         with fitz.open(target) as doc:
             # temp files created to solve incremental saving issue
-            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
+            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
             
             doc.save(tempPath, garbage=fitz_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
             target_properties['final_size'] = os.path.getsize(tempPath)
@@ -333,7 +333,7 @@ def fitz_multiprocess_childTask(task_details: tuple):
                 target_properties['valid'] = True
                 target_properties['state'] = "Compressed"
 
-                log.info(f"Filepath Compressed: {target}")
+                log.info(f"File Compressed: {target}")
         
                 if target == target_properties['saving_path']: 
                     os.replace(tempPath, target)
@@ -420,7 +420,7 @@ def worker_gs_compression(task_details: tuple):
     target = file_entry[0]
     target_properties = file_entry[1]
     
-    if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
+    if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
     target_basename = return_basename(target)
     command = [
             rtn_gs_name(),
@@ -458,7 +458,7 @@ def worker_gs_compression(task_details: tuple):
             # only works if --preserve is not enabled.
             if target == target_properties['saving_path']:
                 os.replace(tempPath, target)
-            log.info(f"[green]Compressed[/green] Filepath: {target}")
+            log.info(f"File Compressed: {target}")
             file_entry[1]['valid'] = True
             file_entry[1]['state'] = "Compressed"
 
@@ -503,9 +503,7 @@ def gs_compression(filesDict: dict, gs_settings):
             raise PrettyErrorDisplay("Program terminated for safety.")
 
     for file_entry in filesDict.items():
-        target = file_entry[0]
-        if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while.") # 150mb in bytes
-        
+        target = file_entry[0] 
         target_basename = return_basename(target)
         target_savingpath = file_entry[1]['saving_path']
         tempFile = return_joined_filePath(return_dirname(target), "temp"+target_basename) if target == target_savingpath else target_savingpath
