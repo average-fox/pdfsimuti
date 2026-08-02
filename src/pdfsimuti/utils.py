@@ -323,7 +323,7 @@ def return_validated_display(filesDict:dict):
     from rich.table import Table
     index = 0
     validated_list_table = Table(show_lines=True)
-    validated_list_table.add_column("SI", justify="center", vertical="middle")
+    validated_list_table.add_column("#", justify="center", vertical="middle")
     validated_list_table.add_column("Filename", vertical="middle")
     validated_list_table.add_column("Abspath", vertical="middle", overflow="fold")
     validated_list_table.add_column("Status", vertical="middle")

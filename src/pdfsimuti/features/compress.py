@@ -241,7 +241,7 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
     failed_count = 0
     
     table = Table(show_lines=True, highlight=True, expand=True)
-    table.add_column("SI", vertical="middle")
+    table.add_column("#", vertical="middle")
     table.add_column("File Name", overflow="fold")
     table.add_column("File Location (absolute)", overflow="fold")
     table.add_column("Before (KB)", vertical="middle", justify="center")
