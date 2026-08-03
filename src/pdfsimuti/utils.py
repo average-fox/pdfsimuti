@@ -163,11 +163,20 @@ def return_joined_filePath(filePath1:str, filePath2:str) -> str:
 
 def txt_file_reader(victimFile, filePath:str) -> list:
 
-    if get_file_extension(filePath) != "txt": return victimFile
+    if get_file_extension(filePath) != "txt": 
+        print(f"[yellow]Caution[/yellow]--source file:{filePath} is not a .txt file in suffix")
+        return victimFile
 
-    with open(filePath, 'r') as file:
-        victimFile.extend(line.strip() for line in file)
+    print('Reading text file....')
 
+    try:
+        with open(filePath, 'r') as file:
+            victimFile.extend(line.strip() for line in file)
+    except FileNotFoundError:
+        raise PrettyErrorDisplay(f"--source file not found: [purple]{filePath}[/purple]")
+    except Exception as e:
+        raise PrettyErrorDisplay(f"Error with the source file.\nError: {e}")
+    
     return victimFile
 
 
