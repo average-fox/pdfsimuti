@@ -13,7 +13,7 @@ from rich.console import Console, Group
 import logging
 from rich.logging import RichHandler
 logging.basicConfig(
-    level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
+    level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler(markup=True)]
 )
 
 from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
@@ -244,14 +244,14 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
     table.add_column("#", vertical="middle")
     table.add_column("File Name", overflow="fold")
     table.add_column("File Location (absolute)", overflow="fold")
-    table.add_column("Before (KB)", vertical="middle", justify="center")
-    table.add_column("After (KB)", vertical="middle", justify="center")
+    table.add_column("Before", vertical="middle", justify="center")
+    table.add_column("After", vertical="middle", justify="center")
     table.add_column("Outcome", vertical="middle", justify="center")
 
     for index, file_entry in enumerate(filesDict.items()):
         index += 1
-        initial_size = file_entry[1]['initial_size']
-        final_size =  file_entry[1]['final_size']
+        initial_size = file_entry[1]['initial_size']/1048576
+        final_size =  file_entry[1]['final_size']/1048576
         filename = file_entry[1]['saving_path']
 
         if not file_entry[1]['valid'] or final_size == 0:
@@ -262,8 +262,8 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
             else: 
                 table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
-            compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 4)))
-            table.add_row(str(index), return_basename(filename), filename, str(initial_size), str(final_size), f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
+            compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 5)))
+            table.add_row(str(index), return_basename(filename), filename, str(round(initial_size,3))+ " MB", str(round(final_size,3))+ " MB", f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
 
     messenge = (
         text_dedent(f"""
@@ -325,7 +325,7 @@ def fitz_multiprocess_childTask(task_details: tuple):
             target_properties['final_size'] = os.path.getsize(tempPath)
             
             if (target_properties['initial_size'] <= target_properties['final_size']):
-                log.warning(f"File '{return_basename(target)}' not compressed. Resulted file size not smaller.")
+                log.warning(f"File uncompressed. Resulted file not smaller than original. File: [purple]{return_basename(target)}[/purple]")
                 os.remove(tempPath)
                 target_properties['valid'] = False
                 target_properties['state'] = 'Unchanged'
@@ -450,7 +450,7 @@ def worker_gs_compression(task_details: tuple):
         file_entry[1]['final_size'] = os.path.getsize(tempPath)
 
         if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
-            log.warning(f"File '{target_basename}' not compressed. Resulted file size not smaller.")
+            log.warning(f"File uncompressed. Resulted file not smaller than original. File: [purple]{target_basename}[purple]")
             file_entry[1]['valid'] = False
             file_entry[1]['state'] = 'Unchanged'
             os.remove(tempPath)
