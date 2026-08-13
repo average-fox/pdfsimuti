@@ -47,7 +47,24 @@ class SortOrder(str, Enum):
             SortOrder.creation : "Files are arranged based on their creation dates."
         }
         return description.get(self)
+
+
+def sort_natural(files_dict):
+
+    def nat(item):
+        import re
+        return [
+            int(item) if item.isdigit() else item.lower() for item in re.split(r'(\d+)', item) # turns a string into letters and digits
+        ]
     
+    nonwhitespace = [(position, item.replace(" ", "")) for position, item in enumerate(files_dict, start=0)]
+    val_sort = sorted(nonwhitespace, key=lambda item: nat(item[1]))
+    result =  {
+        key: files_dict[key]
+        for _, key in val_sort
+    }
+    return result
+
 
 def sort_dict(sort_type, files_dict):
     """
@@ -64,7 +81,7 @@ def sort_dict(sort_type, files_dict):
         case 'none':
             return files_dict
         case 'normal':
-            return dict(sorted(files_dict.items()))
+            return sort_natural(files_dict)
         case 'reverse':
             return dict(reversed(sorted(files_dict.items())))
         case 'modified':
@@ -286,6 +303,7 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
             for item_entry in itemsDict.keys():
                 doc.insert_file(item_entry)
                 log.info(f'Inserted file: {item_entry}')
+            log.info("Finalizing saving.")
             doc.save(outputFile)
         
         if outputFile in itemsDict:
