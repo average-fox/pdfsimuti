@@ -88,45 +88,6 @@ def sort_dict(sort_type, files_dict):
             return dict(sorted(files_dict.items(), key=lambda item: os.path.getmtime(item[0])))
         case 'creation':
             return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
-    
-
-def advanced_filenaming(filename:str) -> str:
-    """
-    Handle risky or ambiguous filenames by presenting the user with interactive options to modify or replace the name.
-    Options include ignoring, replacing characters, removing extensions, or manually inputting a new name.
-
-    Args:
-        filename (str): The original filename that was flagged as risky.
-    
-    Returns:
-        str: The newly edited or user-provided filename.
-    """
-    from pdfsimuti.utils import text_dedent
-    print(text_dedent(f"""
-    -----------------------------------------------
-    Detected risky filename ({filename}). Select option.
-    
-    [1] : Ignore warning and add extension to the end. [i]{filename}.pdf[/i]
-    [2] : Change all "." to "-" then add extension to the end. [i]{filename.replace(".", "-")}.pdf[/i]
-    [3] : Remove all "." then add extension. [i]{filename.lower().split(".")[0]}.pdf[/i]
-    [0] : Enter a new name
-    -----------------------------------------------
-    """))
-    while True:
-        respond = input("> ")
-        match respond:
-            case "0":
-                return input("Enter filename: ")
-            case "1":
-                return f"{filename}.pdf"
-            case "2":
-                return f"{filename.replace(".", "-")}.pdf"
-            case "3":
-                return f"{filename.lower().split(".")[0]}.pdf"
-            case _:
-                print("[red]Invalid input[/red]. Choose either 0,1,2 or 3.")
-                continue
-        break
 
 
 def designate_dirname(filePath) -> str:
@@ -181,13 +142,7 @@ def designate_filename(target:str) -> str:
     
     while True:
         if not get_file_extension(filename) == "pdf" or filename == "pdf":
-            file_extension = filename.lower().split(".")
-
-            if len(file_extension) > 1:
-                filename = advanced_filenaming(filename)
-            else:
-                filename = filename + ".pdf"
-            continue
+            filename = filename + ".pdf"
 
         elif os.path.exists(return_joined_filePath(folderpath, filename)):
             print(f"[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
