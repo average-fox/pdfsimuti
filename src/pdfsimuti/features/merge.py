@@ -49,7 +49,7 @@ class SortOrder(str, Enum):
         return description.get(self)
 
 
-def sort_natural(files_dict):
+def sort_natural(files_dict, reverse=False):
 
     def nat(item):
         import re
@@ -58,7 +58,7 @@ def sort_natural(files_dict):
         ]
     
     nonwhitespace = [(position, item.replace(" ", "")) for position, item in enumerate(files_dict, start=0)]
-    val_sort = sorted(nonwhitespace, key=lambda item: nat(item[1]))
+    val_sort = sorted(nonwhitespace, key=lambda item: nat(item[1]), reverse=reverse)
     result =  {
         key: files_dict[key]
         for _, key in val_sort
@@ -83,7 +83,7 @@ def sort_dict(sort_type, files_dict):
         case 'normal':
             return sort_natural(files_dict)
         case 'reverse':
-            return dict(reversed(sorted(files_dict.items())))
+            return sort_natural(files_dict, reverse=True)
         case 'modified':
             return dict(sorted(files_dict.items(), key=lambda item: os.path.getmtime(item[0])))
         case 'creation':
