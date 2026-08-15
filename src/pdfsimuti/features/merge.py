@@ -90,91 +90,45 @@ def sort_dict(sort_type, files_dict):
             return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
 
 
-def designate_dirname(filePath) -> str:
-    """
-    Validate and confirm the designated saving directory, prompting the user for creation if it doesn't exist.
-    If denied, the saving folder defaults to the working directory; actual folder creation is deferred to ``merge_runtime()``.
-
-    Args:
-        filePath: The desired path for the output folder.
-
-    Returns:
-        str: The absolute path of the validated or defaulted output folder.
-    """    
-    if not os.path.isdir(filePath): 
-        print(f"[yellow]\nCAUTION![/yellow] Save path non-existant: {filePath}")
-        # add flag for root-level directory on linux OS
-        import sys
-        if sys.platform == "linux" and filePath[0:5] != "/home":
-            print("[red]WARNING[/red]. Selected output filepath starts from linux root FHS. \nAbort immediately if you don't know what you're doing.")
-            folder_creation_choice = return_confirm(caution=True)
-            if not folder_creation_choice:
-                exit_program()
-        else:
-            print("You can create a new folder there or choose current working directory")
-            folder_creation_choice = return_confirm(f"Create new folder?")
-        
-        if not folder_creation_choice:
-            print("\n[yellow]Custom folder path creation aborted.[/yellow] Working directory will be the saving directory.")
-            filePath = CURRENT_DIR
-            
-        # if you are wondering where the os.makedirs is happening, its not here but rather on the merge_runtime()
-        # if you are to create it here, either overview had to be scrapped or you cannot notify the user of new folder creation 
-        # or you have to use a global variable
-
-    return return_abspath(filePath)
-
-
-def designate_filename(target:str) -> str:
-    """
-    Validate and manage the designated output filename, ensuring it has a '.pdf' extension and handling existing file conflicts.
-    It prompts the user to resolve non-PDF extensions or choose to overwrite an existing file.
-
-    Args:
-        target (str): The full output path provided by the user, which may include the folder and a custom filename.
-
-    Returns:
-        str: The final, validated basename of the file.
-    """
-    # if user gives something like folder/ then the filename will be default or otherwise it will be '' which is an error.
-    filename = DEFAULT_OUTPUT if return_basename(target) == "" else return_basename(target) 
-    folderpath = return_dirname(target)
-    
-    while True:
-        if not get_file_extension(filename) == "pdf" or filename == "pdf":
-            filename = filename + ".pdf"
-
-        elif os.path.exists(return_joined_filePath(folderpath, filename)):
-            print(f"[yellow]CAUTION![/yellow] Output PDF filename '[i]{filename}[/i]' already exists.")
-            
-            if not return_confirm("Do you wish to overwrite this file? (Default: Y)"):    
-                print("\nFilename cannot be same if overwrite isn't allowed")
-                filename = typer.prompt("Enter saving filename again: ")
-                continue
-        break
-    
-    return return_basename(filename)  # This function will return basename only. Path dir is not accepted.
-
-
 def designate_saving_filePath(target: str) -> str:
-    """
-    Validate and normalize the final output file path by separately processing and correcting the filename and the folder path.
-    The process ensures a valid filename and confirms the existence (or creation) of the destination directory.
+    import sys 
 
-    Args:
-        target (str): The user-provided output file path or directory address.
+    savePath = Path(DEFAULT_OUTPUT) if target == "" else Path(target)
+    folder_creation = False
+    # warned = False
 
-    Returns:
-        str: The absolute, fully validated, and corrected file path for saving the output. Note that this path isn't validated as `os.path.exists()`
-    """    
-    # if user passes . then the working directory will be folder path for scanning
-    target_file_basename = return_basename(target)
-    target_file_dirname = return_dirname(target)
-    
-    working_dir = designate_dirname(return_abspath(target_file_dirname))
-    outputFileName = designate_filename(return_joined_filePath(working_dir, target_file_basename))
+    while Path(savePath):
+        match Path(savePath):
 
-    return return_joined_filePath(working_dir, outputFileName)
+            case subject if subject.is_dir():
+                print("\n[yellow]INVALID[/yellow] Given value is a path. Include filename as well.")
+                savePath = Path(typer.prompt("Enter output file again: "))
+
+            case subject if subject.suffix != ".pdf" or str(savePath) == "pdf":
+                savePath = Path(str(savePath) + ".pdf")
+                continue
+
+            case subject if subject.exists():
+                print("\n[yellow]CAUTION![/yellow] Specified output filepath already exists.")
+                if not return_confirm("Do you wish to overwrite this file? (Default: Y)"):    
+                    print("\nFilename cannot be same if overwrite isn't allowed")
+                    savePath = Path(typer.prompt("Enter new output path or filename again: "))
+
+            #### need testing before this commened code is used for warning file creation on linux FHS #### 
+
+            # case subject if (not subject.is_relative_to("/home")) and sys.platform == "linux" and not warned:
+            #     print("[red]WARNING[/red]. Selected output filepath not from /home. \nAbort immediately if you don't know what you're doing.")
+            #     warned = return_confirm("Proceed?", caution=True)
+
+            case subject if not (parent := subject.parent).exists() and not folder_creation:
+                print(f"\n[yellow]CAUTION[/yellow] File directory [purple]{parent}[/purple] doesn't exist.")
+                folder_creation = return_confirm("Create new directory?")
+                if not folder_creation:
+                    savePath = Path(typer.prompt("Enter new output path or filename again: "))
+            case _:
+                break
+
+    return str(savePath)
 
 
 def display_successful_merge_outcome(outputPath:str):
@@ -214,8 +168,8 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
     # Calculate estimated size of the merge
     for item in filesDict: fileSize += os.path.getsize(item) / (1024 * 1024)
     merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f'{"[yellow italic](Overwriting)[/yellow italic] " if os.path.exists(outputPath) else ""}' + f"{return_basename(outputPath)}")
-    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f'{"[yellow italic](Overwriting)[/yellow italic] " if os.path.exists(outputPath) else ""}' + f"{return_dirname(outputPath)}")
-    merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"[i]{sort}[/i]. {SortOrder(sort).description()}")
+    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f'{"[yellow italic](Overwriting)[/yellow italic] " if os.path.exists(outputPath) else ""}' + f"{CURRENT_DIR if return_dirname(outputPath) == "" else return_abspath(return_dirname(outputPath))}")
+    merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"[i]({str(sort)})[/i] {SortOrder(sort).description()}")
     merge_table_details.add_row("[underline bold]Preserve Mode[/underline bold]:", f"{"[italic green bold]Preserve ON![/italic green bold] Files will not be deleted after merging." if preserveFiles else "[italic red bold]Preserve OFF! [/italic red bold]PDF files will be deleted after merging."}")
     merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
     
@@ -225,7 +179,6 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
         Rule("Merge Settings"),
         merge_table_details
     )
-    print("\nPlease confirm the job.")
     Console().print(Panel(panel_group, border_style="blue", expand=False))
     if fileSize > 100: print(f"\nEstimated file size is big. Merge operations will take a while.")
 
