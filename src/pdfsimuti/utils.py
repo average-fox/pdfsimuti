@@ -153,17 +153,13 @@ def check_file_readability(item: str) -> bool:
     return os.path.isfile(item) and os.access(item, os.R_OK)
 
 
-def get_file_extension(filename: str) -> str:
-    return filename.lower().split(".")[-1].lower()
-
-
 def return_joined_filePath(filePath1:str, filePath2:str) -> str:
     return os.path.join(filePath1, filePath2)
 
 
 def txt_file_reader(victimFile, filePath:str) -> list:
 
-    if get_file_extension(filePath) != "txt": 
+    if not filePath.endswith(".txt"): 
         print(f"[yellow]Caution[/yellow]--source file:{filePath} is not a .txt file in suffix")
         return victimFile
 

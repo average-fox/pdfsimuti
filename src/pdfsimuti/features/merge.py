@@ -11,8 +11,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import return_joined_filePath, return_basename, return_dirname, return_abspath, return_confirm
-from pdfsimuti.utils import get_file_extension, validate_pdf_dict, exit_program
+from pdfsimuti.utils import return_basename, return_dirname, return_abspath, return_confirm
+from pdfsimuti.utils import validate_pdf_dict, exit_program
 from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
 app = typer.Typer()

@@ -22,7 +22,6 @@ from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 app = typer.Typer()
 log = logging.getLogger("rich")
 fitz = None
-rtn_gs_name = None
 subprocess = None
 
 def initialize_fitz():
@@ -42,9 +41,8 @@ def initialize_gs():
     from pdfsimuti.utils import rtn_gs_name as _rtn_gs_name
     import subprocess as sp
 
-    global rtn_gs_name, subprocess
+    global subprocess
 
-    if rtn_gs_name is None: rtn_gs_name = _rtn_gs_name
     if subprocess is None: subprocess = sp
 
 
@@ -69,7 +67,8 @@ class Fitz_settings:
 
 
 class GS_settings:
-    def __init__(self, compatibility, presets ,enableEmbedFonts, enableColorSampling ,colorResValue, colorSample, enableGreySampling, greyResValue, greySample, colorConversion, custom):
+    def __init__(self, gs_name, compatibility, presets ,enableEmbedFonts, enableColorSampling ,colorResValue, colorSample, enableGreySampling, greyResValue, greySample, colorConversion, custom):
+        self.gs_name = gs_name
         self.compatibility = compatibility
         self.presets = presets
         self.embedAllFonts = str(enableEmbedFonts).lower()
@@ -203,14 +202,14 @@ class gsDownSampleControl(str, Enum):
     bicubic = "bicubic"
     
 
-def display_overview_confirm(filesDict, compressInstance, preserve_choice):
+def display_overview_confirm(filesDict, compressSettings, preserve_choice):
     """
     Display a summary table of files to be compressed and the current compression settings, 
     then prompt the user for final confirmation to proceed.
 
     Args:
         filesDict (dict): A dictionary of validated file paths ready for compression.
-        compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
+        compressSettings (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
     """    
     from rich.rule import Rule
     from pdfsimuti.utils import return_validated_display
@@ -218,7 +217,7 @@ def display_overview_confirm(filesDict, compressInstance, preserve_choice):
     console = Console()
     panel_group = Group(
         Rule("Compress Settings"),
-        console.render_str(f"{compressInstance.display_properties(preserve_choice)}"),
+        console.render_str(f"{compressSettings.display_properties(preserve_choice)}"),
         Rule("Selected files for Compression"),
         return_validated_display(filesDict)
     )
@@ -412,10 +411,8 @@ def fitz_compression(filesDict: dict, fitz_settings):
 def worker_gs_compression(task_details: tuple):
     file_entry, gs_settings, tempPath = task_details
 
-    global rtn_gs_name, subprocess
-    assert rtn_gs_name is not None
+    global subprocess
     assert subprocess is not None
-
 
     target = file_entry[0]
     target_properties = file_entry[1]
@@ -423,7 +420,7 @@ def worker_gs_compression(task_details: tuple):
     if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
     target_basename = return_basename(target)
     command = [
-            rtn_gs_name(),
+            gs_settings['gs_name'],
             '-sDEVICE=pdfwrite',
             f'-dCompatibilityLevel={gs_settings['compatibility']}',
             f'-dEmbedAllFonts={gs_settings['embedAllFonts']}',
@@ -481,7 +478,7 @@ def worker_gs_compression(task_details: tuple):
 
 
 def gs_compression(filesDict: dict, gs_settings):
-    from pdfsimuti.utils import return_joined_filePath, rtn_gs_name
+    from pdfsimuti.utils import return_joined_filePath
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
 
     from multiprocessing import Pool
@@ -517,8 +514,7 @@ def gs_compression(filesDict: dict, gs_settings):
         runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
         log.info("Started GhostScript calling.")
         pool = Pool(processes=4, initializer=initialize_gs)
-        
-
+    
         try:
             for result in pool.imap_unordered(worker_gs_compression, worker_tasks_details, chunksize=1):
                 (target, target_info), tempFile = result
@@ -545,7 +541,7 @@ def gs_compression(filesDict: dict, gs_settings):
     return filesDict
             
 
-def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclude: list, excludeSource,  compressInstance, preserve_choice):
+def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclude: list, excludeSource,  compressSettings, preserve_choice):
     """
     Control the entire PDF compression process, including validation, user confirmation, runtime execution, and displaying results.
     The function measures and compares file sizes before and after compression to report the outcome and time elapsed.
@@ -554,7 +550,7 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
         fileList (list): A list of file or directory paths to be processed.
         mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
         exclude (list): A list of file paths to exclude from compression.
-        compressInstance (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
+        compressSettings (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
     
     """
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
@@ -565,7 +561,7 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
     log.info("Validation complete")
     
     # Display overview before confirm
-    display_overview_confirm(filesDict, compressInstance, preserve_choice)
+    display_overview_confirm(filesDict, compressSettings, preserve_choice)
 
 
     if return_confirm("\nDo you want to continue with this settings?"):
@@ -582,9 +578,9 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
             filesDict = designate_preserve_saveFolder(validated_pdf_dict)
 
         #########################################
-        match compressInstance.__class__.__name__:
-            case 'GS_settings': filesDict = gs_compression(validated_pdf_dict, compressInstance)
-            case 'Fitz_settings': filesDict = fitz_compression(validated_pdf_dict, compressInstance)
+        match compressSettings.__class__.__name__:
+            case 'GS_settings': filesDict = gs_compression(validated_pdf_dict, compressSettings)
+            case 'Fitz_settings': filesDict = fitz_compression(validated_pdf_dict, compressSettings)
         #########################################
         log.info("Compression runtime over.")
         
@@ -627,20 +623,21 @@ def compress(
     log.info("performing command line validation")
     
     import sys # detect for ghostscript commands.
+    from pdfsimuti.utils import rtn_gs_name
     commandline_gs_exception = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--color-down", "--grey-res", "--grey_down", "--grey_sample_type"]
-    compressInstance = None
+    compressSettings = None
 
     if any(value in commandline_gs_exception for value in sys.argv) and compressMethod == "pymupdf":
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
     elif compressMethod == ("gs" or "ghostscript"):
-        compressInstance = GS_settings(compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
+        compressSettings = GS_settings(rtn_gs_name(), compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
     
     elif compressMethod == "pymupdf":
-        compressInstance = Fitz_settings(garbageStrength=garbage)
+        compressSettings = Fitz_settings(garbageStrength=garbage)
     
     if items == None and not source:
         raise PrettyErrorDisplay("No filepaths were added to compress.py or with --source")
 
     # compress runtime handles the main load
-    compress_runtime(items, source, mimecheck, exclude, excludeSource, compressInstance, preserve_choice=preserve)
+    compress_runtime(items, source, mimecheck, exclude, excludeSource, compressSettings, preserve_choice=preserve)
