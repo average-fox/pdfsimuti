@@ -1,6 +1,7 @@
 import typer
 import fitz
 import os
+import re
 
 from typing import List  # Needed for getting more than 1 argument in command-line
 from typing_extensions import Annotated, Optional
@@ -52,7 +53,6 @@ class SortOrder(str, Enum):
 def sort_natural(files_dict, reverse=False):
 
     def nat(item):
-        import re
         return [
             int(item) if item.isdigit() else item.lower() for item in re.split(r'(\d+)', item) # turns a string into letters and digits
         ]
@@ -90,6 +90,12 @@ def sort_dict(sort_type, files_dict):
             return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
 
 
+def reserved_filenaming_charCheck(filename:str) -> bool:
+    if re.search(r'[\"#$|<>:?*/(\)\\\"]', filename):
+        return True
+    return False
+
+
 def designate_saving_filePath(target: str) -> str:
     import sys 
 
@@ -99,22 +105,27 @@ def designate_saving_filePath(target: str) -> str:
 
     while Path(savePath):
         match Path(savePath):
-            
+
+            # if the user gives a filename like filename<>.pdf then it is an automatic False according to return_confirm()
             case subject if (not subject.is_relative_to("/home")) and sys.platform == "linux" and not warned:
                 print("\n[red]WARNING[/red]. Selected output filepath not from /home (Possibly a Linux Root FHS). \nAbort immediately if you don't know what you're doing.")
-
                 warned = return_confirm(caution=True, default=True)
                 if not warned: 
-                    exit_program()
-                    break
+                    savePath = Path(typer.prompt("Enter output filepath again: "))
 
             case subject if subject.is_dir():
                 print("\n[yellow]INVALID[/yellow] Given value is a path. Include filename as well.")
-                savePath = Path(typer.prompt("Enter output file again: "))
+                savePath = Path(typer.prompt("Enter output filepath again: "))
 
             case subject if subject.suffix != ".pdf" or str(savePath) == "pdf":
                 savePath = Path(str(savePath) + ".pdf")
                 continue
+
+            case subject if reserved_filenaming_charCheck(str(subject.name)):
+                print("\n[yellow]INVALID[/yellow] Specfied output file has forbidden Windows NTFS characters.")
+                print("[yellow]ADVICE[/yellow] Change your filename to make it cross platform compatible.")
+                if return_confirm("Change your filename?", caution=True):
+                    subject = subject.with_name(typer.prompt("Enter new filename only: "))
 
             case subject if subject.exists():
                 print("\n[yellow]CAUTION![/yellow] Specified output filepath already exists.")
