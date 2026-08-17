@@ -107,7 +107,7 @@ def designate_saving_filePath(target: str) -> str:
         match Path(savePath):
 
             # if the user gives a filename like filename<>.pdf then it is an automatic False according to return_confirm()
-            case subject if (not subject.is_relative_to("/home")) and sys.platform == "linux" and not warned:
+            case subject if (not subject.resolve().is_relative_to("/home")) and sys.platform == "linux" and not warned:
                 print("\n[red]WARNING[/red]. Selected output filepath not from /home (Possibly a Linux Root FHS). \nAbort immediately if you don't know what you're doing.")
                 warned = return_confirm(caution=True, default=True)
                 if not warned: 
