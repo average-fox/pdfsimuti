@@ -58,9 +58,9 @@ def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
         bool: True if confirmed (Y or Enter), False otherwise (n).
     """
     if caution:
-        confirm_once = typer.confirm("Proceed to abort?", default=True)
-        if not confirm_once:
-            return typer.confirm("(final) Are you absolutely sure not to abort?", default=False)
+        confirm_once = typer.confirm("Proceed", default=False)
+        if confirm_once:
+            return typer.confirm("Are you sure to proceed?", default=False)
         return False
     return typer.confirm(msg, default=default)
 

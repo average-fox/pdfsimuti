@@ -95,10 +95,18 @@ def designate_saving_filePath(target: str) -> str:
 
     savePath = Path(DEFAULT_OUTPUT) if target == "" else Path(target)
     folder_creation = False
-    # warned = False
+    warned = False
 
     while Path(savePath):
         match Path(savePath):
+            
+            case subject if (not subject.is_relative_to("/home")) and sys.platform == "linux" and not warned:
+                print("\n[red]WARNING[/red]. Selected output filepath not from /home (Possibly a Linux Root FHS). \nAbort immediately if you don't know what you're doing.")
+
+                warned = return_confirm(caution=True, default=True)
+                if not warned: 
+                    exit_program()
+                    break
 
             case subject if subject.is_dir():
                 print("\n[yellow]INVALID[/yellow] Given value is a path. Include filename as well.")
@@ -113,12 +121,6 @@ def designate_saving_filePath(target: str) -> str:
                 if not return_confirm("Do you wish to overwrite this file? (Default: Y)"):    
                     print("\nFilename cannot be same if overwrite isn't allowed")
                     savePath = Path(typer.prompt("Enter new output path or filename again: "))
-
-            #### need testing before this commened code is used for warning file creation on linux FHS #### 
-
-            # case subject if (not subject.is_relative_to("/home")) and sys.platform == "linux" and not warned:
-            #     print("[red]WARNING[/red]. Selected output filepath not from /home. \nAbort immediately if you don't know what you're doing.")
-            #     warned = return_confirm("Proceed?", caution=True)
 
             case subject if not (parent := subject.parent).exists() and not folder_creation:
                 print(f"\n[yellow]CAUTION[/yellow] File directory [purple]{parent}[/purple] doesn't exist.")
