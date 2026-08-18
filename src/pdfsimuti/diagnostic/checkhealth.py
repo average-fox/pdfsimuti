@@ -17,7 +17,17 @@ from pdfsimuti.utils import rtn_gs_name
 
 console = Console()
 
-packages_dict = {
+from typing import TypedDict
+
+class packageInfo(TypedDict):
+    version: str | None
+    origin: str | None
+    searchLoc: str | None
+    installed: bool
+    description: str
+
+
+packages_dict:dict[str, packageInfo] = {
     'pymupdf' : {
         "version": None, 
         "origin": None, 
@@ -84,7 +94,6 @@ def get_gs_detail():
     if result.stdout:
         bin_loc = shutil.which(gs_name) # get location of the package
         packages_dict["ghostscript"]["version"] = result.stdout.rstrip() # rstrip gets rid of the /n that comes from the capture_output
-        packages_dict["ghostscript"]["origin"] = os.path.dirname(bin_loc) 
         packages_dict["ghostscript"]["searchLoc"] = bin_loc
         packages_dict["ghostscript"]["installed"] = True
     
@@ -108,9 +117,9 @@ def update_packages_dict(*args):
         
         if spec:
             if not item["version"]: item["version"] = version(package)
-            item["origin"] = spec.origin
-            item["searchLoc"] = "".join(spec.submodule_search_locations)
+            item["searchLoc"] = (spec.submodule_search_locations or [""])[0]
             item["installed"] = True
+
 
 
 def verbose_level_1():
@@ -147,7 +156,6 @@ def verbose_level_3():
         console.print(Panel(textwrap.dedent(f"""
         [u]Package name[/u]: [#00ffef]{package}[/#00ffef]
         [u]Package version[/u]: {f"[bold green]{item["version"]}[/bold green]" if item["version"] else "[red]Not found[/red]"}
-        [u]Package Origin[/u]: {f"[#a2a2d0]{item["origin"]}[/#a2a2d0]" if item["origin"] else "[red]Not found[/red]"}
         [u]Package Search[/u]: {f"[#ff9f00]{item["searchLoc"]}[/#ff9f00]" if item["searchLoc"] else "[red]Not found[/red]"}
         {item["description"]}
         """).strip()))
