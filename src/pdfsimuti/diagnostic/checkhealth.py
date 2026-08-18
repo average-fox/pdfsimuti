@@ -69,26 +69,35 @@ def update_packages_dict(*args):
 
 
 def checkhealth_output():
-    from rich import prompt, tree, console, padding, panel
+    from rich import prompt, tree, padding, box
+    from rich.panel import Panel
+    from rich.console import Console, Group
 
-    console = console.Console()
-    package_tree = tree.Tree("Package Status")
+    console = Console()
+    package_tree = tree.Tree(Panel("Package Status", expand=False), guide_style="bold bright_blue")
 
     # update package status
     update_packages_dict('pymupdf', 'magic', 'ghostscript')
 
     for package in packages_dict.items():
-        pac = package_tree.add(package[0])
+        pac = package_tree.add(Panel(package[0], expand=False))
         pac.add("[u][b]Status:[/b][/u] " + package[1]["installed"])
         pac.add("[u][b]Version:[/b][/u] " + (package[1]["version"] or ""))
         pac.add("[u][b]Source:[/b][/u] " + f"[i]{package[1]["searchLoc"] or ""}[/i]") 
 
-    another_tree = tree.Tree(panel.Panel("pdfSimuti", expand=False))
+    from pdfsimuti.main import __version__
+
+    another_tree = tree.Tree(Panel(f"pdfSimuti v{__version__} checkhealth\n[i]a python typer + rich simple pdf utility tool.[/i]", expand=False, box=box.DOUBLE), guide_style="underline2")
     another_tree.add(package_tree)
 
+    renderable_group = Group(
+        another_tree,
+        console.render_str("\n\n[green]Made by average-fox[/green]\n[i]Send suggestions, bugs etc. on GitHub[/i]")
+    )
+
     with console.screen():
-        console.print(padding.Padding(another_tree, (1,1)))
-        prompt.Prompt.ask("\nContinue?")
+        console.print(padding.Padding(renderable_group, (1,1)))
+        prompt.Prompt.ask("\nEnter any key to continue..")
 
 
 def checkhealth():
