@@ -7,6 +7,8 @@ from importlib.metadata import version # for checking packages versions
 
 from typing import TypedDict
 
+pdfsimuti_package_stat = None
+
 class packageInfo(TypedDict):
     version: str | None
     searchLoc: str | None
@@ -68,13 +70,21 @@ def update_packages_dict(*args):
                     packages_dict["ghostscript"]["installed"] = "[green]Installed[/green]"
 
 
-def checkhealth_output():
+def checkhealth():
     from rich import prompt, tree, padding, box
     from rich.panel import Panel
     from rich.console import Console, Group
+    from pdfsimuti.main import __version__
 
     console = Console()
     package_tree = tree.Tree(Panel("Package Status", expand=False), guide_style="bold bright_blue")
+
+    spec = importlib.util.find_spec("pdfsimuti")
+    pdfsimuti_package_stat: str | None = (
+        spec.submodule_search_locations[0]
+        if spec and spec.submodule_search_locations
+        else ""
+    )
 
     # update package status
     update_packages_dict('pymupdf', 'magic', 'ghostscript')
@@ -85,22 +95,18 @@ def checkhealth_output():
         pac.add("[u][b]Version:[/b][/u] " + (package[1]["version"] or ""))
         pac.add("[u][b]Source:[/b][/u] " + f"[i]{package[1]["searchLoc"] or ""}[/i]") 
 
-    from pdfsimuti.main import __version__
 
-    another_tree = tree.Tree(Panel(f"pdfSimuti v{__version__} checkhealth\n[i]a python typer + rich simple pdf utility tool.[/i]", expand=False, box=box.DOUBLE), guide_style="underline2")
-    another_tree.add(package_tree)
+    main_tree = tree.Tree(Panel(f"pdfSimuti v{__version__} checkhealth\n[i]a python typer + rich simple pdf utility tool.[/i]", expand=False, box=box.DOUBLE), guide_style="underline2")
+    main_tree.add(console.render_str("[u]Installed source[/u]: " + f"{pdfsimuti_package_stat}"))
+    main_tree.add(package_tree)
 
     renderable_group = Group(
-        another_tree,
-        console.render_str("\n\n[green]Made by average-fox[/green]\n[i]Send suggestions, bugs etc. on GitHub[/i]")
+        main_tree,
+        console.render_str("\n\n[green]Made by average-fox[/green]\n[i]Send suggestions, bugs or issues etc. on GitHub[/i]")
     )
 
     with console.screen():
         console.print(padding.Padding(renderable_group, (1,1)))
-        prompt.Prompt.ask("\nEnter any key to continue..")
+        prompt.Prompt.ask("\nEnter any key to continue")
 
 
-def checkhealth():
-
-
-    checkhealth_output()
