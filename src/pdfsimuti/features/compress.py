@@ -1,8 +1,7 @@
 import typer
 import os
 
-from typing_extensions import Annotated, Optional
-from typing import List
+from typing import List, Annotated, Optional
 from enum import Enum
 
 from rich import print
@@ -21,32 +20,30 @@ from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
 app = typer.Typer()
 log = logging.getLogger("rich")
-fitz = None
+pymupdf = None
 subprocess = None
 
-def initialize_fitz():
+def initialize_pymupdf():
     import signal
-    signal.signal(signal.SIGINT, signal.SIG_IGN) # if KeyboardInterrupt comes, workers will ignore it (SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
 
-    global fitz
-    if fitz is None:
-        import fitz as _fitz
-        fitz = _fitz
+    global pymupdf
+    if pymupdf is None:
+        import pymupdf as _pymupdf
+        pymupdf = _pymupdf
 
 
 def initialize_gs():
     import signal
-    signal.signal(signal.SIGINT, signal.SIG_IGN) # if KeyboardInterrupt comes, workers will ignore it (SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
 
-    from pdfsimuti.utils import rtn_gs_name as _rtn_gs_name
     import subprocess as sp
-
     global subprocess
 
     if subprocess is None: subprocess = sp
 
 
-class Fitz_settings:
+class pymupdf_settings:
     def __init__(self, garbageStrength):
         self.garbageStrength = garbageStrength
              
@@ -66,7 +63,7 @@ class Fitz_settings:
         """)
 
 
-class GS_settings:
+class gs_settings:
     def __init__(self, gs_name, compatibility, presets ,enableEmbedFonts, enableColorSampling ,colorResValue, colorSample, enableGreySampling, greyResValue, greySample, colorConversion, custom):
         self.gs_name = gs_name
         self.compatibility = compatibility
@@ -209,7 +206,7 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
 
     Args:
         filesDict (dict): A dictionary of validated file paths ready for compression.
-        compressSettings (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
+        compressSettings (instance): An instance of either ``gs_settings`` or ``pymupdf_settings``.
     """    
     from rich.rule import Rule
     from pdfsimuti.utils import return_validated_display
@@ -304,23 +301,18 @@ def designate_preserve_saveFolder(targetDict: dict):
 
 
 
-def fitz_multiprocess_childTask(task_details: tuple):
-    file_entry, fitz_settings, tempPath = task_details
-
-    global fitz
-    if fitz is None:
-        import fitz as _fitz
-        fitz = _fitz
+def pymupdf_multiprocess_childTask(task_details: tuple):
+    file_entry, pymupdf_settings, tempPath = task_details
 
     target = file_entry[0]
     target_properties = file_entry[1]
 
     try:
-        with fitz.open(target) as doc:
+        with pymupdf.open(target) as doc:
             # temp files created to solve incremental saving issue
             if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
             
-            doc.save(tempPath, garbage=fitz_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
+            doc.save(tempPath, garbage=pymupdf_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
             target_properties['final_size'] = os.path.getsize(tempPath)
             
             if (target_properties['initial_size'] <= target_properties['final_size']):
@@ -350,7 +342,7 @@ def fitz_multiprocess_childTask(task_details: tuple):
     return file_entry, tempPath
 
 
-def fitz_compression(filesDict: dict, fitz_settings):
+def pymupdf_compression(filesDict: dict, pymupdf_settings):
 
     from rich.progress import (
         Progress, BarColumn, TaskProgressColumn, TextColumn,
@@ -366,7 +358,7 @@ def fitz_compression(filesDict: dict, fitz_settings):
         TimeElapsedColumn(),
     ]
 
-    # stores the target file properties, fitz settings for compression and temp file
+    # stores the target file properties, pymupdf settings for compression and temp file
     worker_tasks_details = []
     # stores active temp files. After compress, these temp files are removed. If any temp file remained,
     # program needs to delete them
@@ -376,17 +368,17 @@ def fitz_compression(filesDict: dict, fitz_settings):
         target = file_entry[0]
         target_savingPath = file_entry[1]['saving_path']
         temp = (target + ".temp") if target == target_savingPath else target_savingPath
-        worker_tasks_details.append((file_entry, fitz_settings, temp))
+        worker_tasks_details.append((file_entry, pymupdf_settings, temp))
         temp_paths.append(temp)
 
     log.info("Started PyMuPDF compression runtime.")
 
     with Progress(*main_columns, transient=True) as progress:
-        pool = Pool(processes=4, initializer=initialize_fitz)
+        pool = Pool(processes=4, initializer=initialize_pymupdf)
         runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
 
         try:
-            for result in pool.imap_unordered(fitz_multiprocess_childTask, worker_tasks_details, chunksize=1):
+            for result in pool.imap_unordered(pymupdf_multiprocess_childTask, worker_tasks_details, chunksize=1):
                 (target, target_info), tempFile = result
                 temp_paths.remove(tempFile)
                 filesDict[target].update(target_info) # update dict of target status after compress
@@ -550,7 +542,7 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
         fileList (list): A list of file or directory paths to be processed.
         mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
         exclude (list): A list of file paths to exclude from compression.
-        compressSettings (instance): An instance of either ``GS_settings`` or ``Fitz_settings``.
+        compressSettings (instance): An instance of either ``gs_settings`` or ``pymupdf_settings``.
     
     """
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
@@ -579,8 +571,8 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
 
         #########################################
         match compressSettings.__class__.__name__:
-            case 'GS_settings': filesDict = gs_compression(validated_pdf_dict, compressSettings)
-            case 'Fitz_settings': filesDict = fitz_compression(validated_pdf_dict, compressSettings)
+            case 'gs_settings': filesDict = gs_compression(validated_pdf_dict, compressSettings)
+            case 'pymupdf_settings': filesDict = pymupdf_compression(validated_pdf_dict, compressSettings)
         #########################################
         log.info("Compression runtime over.")
         
@@ -631,10 +623,10 @@ def compress(
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
     elif compressMethod == ("gs" or "ghostscript"):
-        compressSettings = GS_settings(rtn_gs_name(), compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
+        compressSettings = gs_settings(rtn_gs_name(), compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
     
     elif compressMethod == "pymupdf":
-        compressSettings = Fitz_settings(garbageStrength=garbage)
+        compressSettings = pymupdf_settings(garbageStrength=garbage)
     
     if items == None and not source:
         raise PrettyErrorDisplay("No filepaths were added to compress.py or with --source")

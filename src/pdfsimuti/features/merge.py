@@ -1,10 +1,9 @@
 import typer
-import fitz
+import pymupdf
 import os
 import re
 
-from typing import List  # Needed for getting more than 1 argument in command-line
-from typing_extensions import Annotated, Optional
+from typing import List, Optional, Annotated
 from enum import Enum
 from pathlib import Path
 
@@ -198,7 +197,7 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
     """
-    Execute the PDF merging operation using the PyMuPDF (fitz) library.
+    Execute the PDF merging operation using the PyMuPDF library.
 
     It iterates through the dict of files and appends them sequentially into a single output document.
 
@@ -220,7 +219,7 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
         log.info("Started merge operations.")
         # in case the user approves overwrite.
         # if not done, this will remove the merged file if --no-preserve is active
-        with fitz.open() as doc:
+        with pymupdf.open() as doc:
             for item_entry in itemsDict.keys():
                 doc.insert_file(item_entry)
                 log.info(f'Inserted file: {item_entry}')

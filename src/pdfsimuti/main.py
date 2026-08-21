@@ -1,23 +1,19 @@
 import typer
 import importlib.metadata
 
-from typing import Optional
-from typing_extensions import Annotated
+from typing import Optional, Annotated
 
 from pdfsimuti.features import merge, compress
 from pdfsimuti.diagnostic import checkhealth
 
 app = typer.Typer(
-    no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False,
+    no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False, suggest_commands = True,
     context_settings={"help_option_names" : ["-h", "--help"]},
 )
-
-# See https://docs.python.org/3/library/importlib.metadata.html#distribution-versions
 __version__ = importlib.metadata.version('pdfsimuti')
 
 
 def version_callback(value:bool):
-    # You have to use an argument 'bool' otherwise you will get a "Missing Command" error.
     if value:
         print(f"pdfSimUti v{__version__}")
         raise typer.Exit()
@@ -36,18 +32,17 @@ def main(version: Annotated[
 
 # See: https://github.com/fastapi/typer/issues/178 
 app.command(
-    # short_help="",
     help="""
     Merges several PDFs into a super PDF.
     
 
- ___   __ _______ ______   _______ _______ 
-|  |_|  |       |    _ | |       |       |
-|       |    ___|   | || |    ___|    ___|
-|       |   |___|   |_||_|   | __|   |___ 
-|       |    ___|    __  |   ||  |    ___|
-| ||_|| |   |___|   |  | |   |_| |   |___ 
-|_|   |_|_______|___|  |_|_______|_______|
+    ___   __ _______ ______   _______ _______ 
+    |  |_|  |       |    _ | |       |       |
+    |       |    ___|   | || |    ___|    ___|
+    |       |   |___|   |_||_|   | __|   |___ 
+    |       |    ___|    __  |   ||  |    ___|
+    | ||_|| |   |___|   |  | |   |_| |   |___ 
+    |_|   |_|_______|___|  |_|_______|_______|
 
 - Output file is 'merged.pdf' by default but you can change it using --ouput TEXT
 - Tip: Pass '.' to include current directory.
