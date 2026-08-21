@@ -19,11 +19,11 @@ __version__ = importlib.metadata.version('pdfsimuti')
 def version_callback(value:bool):
     # You have to use an argument 'bool' otherwise you will get a "Missing Command" error.
     if value:
-        print(f"PDFSimuti {__version__}")
+        print(f"pdfSimUti v{__version__}")
         raise typer.Exit()
 
 
-@app.callback(epilog="Author: @foxes_nteq_dogs")
+@app.callback(epilog="Author: average-fox (@foxes_nteq_dogs)")
 def main(version: Annotated[
     Optional[bool],
     typer.Option("--version", "-v", callback=version_callback, is_eager=True, help="Show version & exit")] = None,
