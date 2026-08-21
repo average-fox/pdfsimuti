@@ -108,5 +108,3 @@ def checkhealth():
     with console.screen():
         console.print(padding.Padding(renderable_group, (1,1)))
         prompt.Prompt.ask("\nEnter any key to continue")
-
-
