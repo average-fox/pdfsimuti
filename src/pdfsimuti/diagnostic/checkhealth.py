@@ -10,26 +10,26 @@ from typing import TypedDict
 pdfsimuti_package_stat = None
 
 class packageInfo(TypedDict):
-    version: str | None
-    searchLoc: str | None
+    version: str
+    searchLoc: str
     installed: str
 
 packages_dict:dict[str, packageInfo] = {
     'pymupdf' : {
-        "version": None, 
-        "searchLoc": None, 
+        "version": "[red]Not found[/red]", 
+        "searchLoc": "[red]Not found[/red]", 
         "installed": "[red]Not installed[/red]"
         },
     
     'magic' : {
-        "version": None, 
-        "searchLoc": None, 
+        "version": "[red]Not found[/red]", 
+        "searchLoc": "[red]Not found[/red]", 
         "installed": "[red]Not installed[/red]"
         },
     
     "ghostscript" : {
-        "version": None,
-        "searchLoc": None,
+        "version": "[red]Not found[/red]",
+        "searchLoc": "[red]Not found[/red]",
         "installed": "[red]Not installed[/red]"
         }    
 }
@@ -92,8 +92,8 @@ def checkhealth():
     for package in packages_dict.items():
         pac = package_tree.add(Panel(package[0], expand=False))
         pac.add("[u][b]Status:[/b][/u] " + package[1]["installed"])
-        pac.add("[u][b]Version:[/b][/u] " + (package[1]["version"] or ""))
-        pac.add("[u][b]Source:[/b][/u] " + f"[i]{package[1]["searchLoc"] or ""}[/i]") 
+        pac.add("[u][b]Version:[/b][/u] " + package[1]["version"])
+        pac.add("[u][b]Source:[/b][/u] " + f"[i]{package[1]["searchLoc"]}[/i]") 
 
 
     main_tree = tree.Tree(Panel(f"pdfSimuti v{__version__} checkhealth\n[i]a python typer + rich simple pdf utility tool.[/i]", expand=False, box=box.DOUBLE), guide_style="underline2")
