@@ -78,7 +78,7 @@ def get_calling_function():
     return return_basename(getouterframes(sys._getframe(1))[1].filename)
 
 
-def rtn_gs_name() -> str:
+def get_gs_name() -> str:
     """
     Determine the correct Ghostscript executable name for cross-platform compatibility. 
     It checks the OS and architecture (gs, gswin64c, or gswin32c).

@@ -1,5 +1,4 @@
 import sys
-import shutil # used for getting ghostscriptapplication PATH variables
 import subprocess # capture output
 
 import importlib.util # getting package ModuleSpec
@@ -44,26 +43,26 @@ def update_packages_dict(*args):
     ## therefore, it's name is processed as either 'python-magic' or 'python-magic-bin' after find_spec
 
     for package in args:
-        # spec = importlib.util.find_spec(package)
         match package:
-            case ('magic' as pkg) if (spec := importlib.util.find_spec('magic')):
+            case pkg if pkg == "magic" and (spec := importlib.util.find_spec(pkg)):
                 packages_dict[pkg]["version"] = version('python-magic-bin' if sys.platform == "win32" else 'python-magic')
                 packages_dict[pkg]["searchLoc"] = (spec.submodule_search_locations or [""])[0]
                 packages_dict[pkg]["installed"] = "[green]Installed[/green]"
 
-            case ('pymupdf' as pkg) if (spec := importlib.util.find_spec('pymupdf')):
+            case pkg if pkg == "pymupdf" and (spec := importlib.util.find_spec(pkg)):
                 packages_dict[pkg]["version"] = version(pkg)
                 packages_dict[pkg]["searchLoc"] = (spec.submodule_search_locations or [""])[0]
                 packages_dict[pkg]["installed"] = "[green]Installed[/green]"
 
             case 'ghostscript':
-                from pdfsimuti.utils import rtn_gs_name
-                gs_name = rtn_gs_name()
+                from pdfsimuti.utils import get_gs_name
+                gs_name = get_gs_name()
                 try: 
                     result = subprocess.run([gs_name, '--version'], capture_output=True, text=True)
-                except FileNotFoundError: return 0
+                except FileNotFoundError: pass
                 
                 if result.stdout:
+                    import shutil
                     bin_loc = shutil.which(gs_name) # get location of the package
                     packages_dict["ghostscript"]["version"] = result.stdout.rstrip() # rstrip gets rid of the /n that comes from the capture_output
                     packages_dict["ghostscript"]["searchLoc"] = bin_loc
