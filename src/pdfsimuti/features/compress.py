@@ -222,17 +222,6 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
 
 
 def display_compress_outcome(filesDict : dict, time_elasped: float):
-    """
-    Display the results of the compression process in a formatted table, showing file size changes and total time elapsed.
-    Compression percentage is color-coded to indicate reduction (Green) or increase (Red) in size.
-
-    Display format:
-        filename (absolute), filename (basename), initial size, final size, outcome
-
-    Args:
-        filesDict (dict): Dict that contains the files absolute path and their properties. func() requires filename, initial_size and final_size
-        time_elasped (float): The total time (in seconds) taken for the compression process.
-    """
     result_reverted = False
     failed_count = 0
     
@@ -534,17 +523,6 @@ def gs_compression(filesDict: dict, gs_settings):
             
 
 def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclude: list, excludeSource,  compressSettings, preserve_choice):
-    """
-    Control the entire PDF compression process, including validation, user confirmation, runtime execution, and displaying results.
-    The function measures and compares file sizes before and after compression to report the outcome and time elapsed.
-
-    Args:
-        fileList (list): A list of file or directory paths to be processed.
-        mimecheck (bool): Boolean flag to enable/disable external MIME type validation.
-        exclude (list): A list of file paths to exclude from compression.
-        compressSettings (instance): An instance of either ``gs_settings`` or ``pymupdf_settings``.
-    
-    """
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
 
     log.info("Validating files...")

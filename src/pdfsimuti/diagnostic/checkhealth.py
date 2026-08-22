@@ -38,7 +38,7 @@ def update_packages_dict(*args):
     """
     Update 'packages_dict' of their moduleSpec, installed location and other info.
     """
-
+    
     # Note: magic in importlib.util.find_spec is not a valid name for importlib.metadata.version
     ## therefore, it's name is processed as either 'python-magic' or 'python-magic-bin' after find_spec
 

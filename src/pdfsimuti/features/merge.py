@@ -18,16 +18,6 @@ from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 app = typer.Typer()
 
 class SortOrder(str, Enum):
-    """
-    Contains function that handles the ordering for the merge by sorting them.
-
-    Args:
-        str : sort type
-        Enum (list): sort type options. Specific to Typer.
-
-    Returns:
-        str: sort type and its description
-    """
     none = "none"
     normal = "normal"
     reverse = "reverse"
@@ -66,16 +56,6 @@ def sort_natural(files_dict, reverse=False):
 
 
 def sort_dict(sort_type, files_dict):
-    """
-    Sort a dictionary of file paths based on the specified criteria.
-
-    Args: 
-        sort_type (str): The sorting criterion ('name', 'reverse', 'modified' or 'creation).
-        files_dict (dict): The dictionary of files to be sorted (keys are file paths).
-
-    Returns:
-        list: A sorted list of (key, value) tuples from the dictionary.
-    """
     match sort_type:
         case 'none':
             return files_dict
@@ -144,12 +124,6 @@ def designate_saving_filePath(target: str) -> str:
 
 
 def display_successful_merge_outcome(outputPath:str):
-    """
-    Display an outcome panel showing the successful merge operation and the final output file details.
-
-    Args:
-        outputPath (str): The absolute file path where the merged PDF was saved.
-    """
     outcome_table = Table(show_header=False, expand=False, show_lines=True)
     outcome_table.add_row("[u][b]Filename[/b][/u]", return_basename(outputPath))
     outcome_table.add_row("[u][b]Folder[/b][/u]", CURRENT_DIR if return_dirname(outputPath) == "" else return_dirname(outputPath))
@@ -159,16 +133,6 @@ def display_successful_merge_outcome(outputPath:str):
 
 
 def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, sort:str):
-    """
-    Display a comprehensive panel showing all details of the upcoming PDF merge job for user confirmation.
-    This includes the merge order, output path, estimated size, sorting method, and file preservation status.
-
-    Args:
-        filesDict (dict): A validated list of file entries (e.g., tuples or list items containing the file path at index 0).
-        outputPath (str): The final, validated absolute path for the merged output file.
-        preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after merging.
-        sort (str): The sorting method applied to the file list (or 'None' if sorting based on initial arrangement).
-    """
     from rich.console import Group
     from rich.console import Console
     from rich.rule import Rule
@@ -196,18 +160,6 @@ def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, 
 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
-    """
-    Execute the PDF merging operation using the PyMuPDF library.
-
-    It iterates through the dict of files and appends them sequentially into a single output document.
-
-    Args:
-        itemsDict (dict): A validated dict of file entries (e.g., tuples where index 0 is the file path) to be merged.
-        outputFile (str): The final, absolute file path for the merged PDF output.
-
-    Raises:
-        PrettyErrorDisplay: If the merging process fails for any reason other than a KeyboardInterrupt.
-    """ 
     import logging
     from rich.logging import RichHandler
     logging.basicConfig(
@@ -245,18 +197,6 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
 
 
 def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
-    """
-    Control the entire PDF merging process, orchestrating path validation, user overview confirmation, execution, and cleanup.
-
-    It handles saving directory creation, calls the main merging engine, manages file deletion, and displays the final outcome.
-
-    Args:
-        filesDict (dict): A validated dict of PDF file entries to be merged.
-        output (str): The user-defined output file path for the merged PDF.
-        preserveFiles (bool): Boolean flag indicating whether original files should be preserved or deleted after a successful merge.
-        sort (str): The sorting method applied to the dict of items before merging.
-    """
-
     output = designate_saving_filePath(output)
     output_dir = Path(output).parent
     display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user

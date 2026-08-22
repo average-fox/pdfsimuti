@@ -13,15 +13,6 @@ CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
 
 def text_dedent(msg) -> str:
-    """
-    Remove common leading whitespace and strip surrounding space/newlines.
-
-    Args:
-        msg (str): The multi-line string content to dedent.
-
-    Returns:
-        (str): The dedented string with no leading or trailing whitespace.
-    """
     import textwrap
     return textwrap.dedent(msg).strip()
 
@@ -30,7 +21,6 @@ class PrettyErrorDisplay(ClickException):
     """
     Imports from Click.exceptions.ClickException to create a pretty error display.
     """
-    
     def __init__(self, message):
         from rich.console import Console
         from io import StringIO
@@ -46,17 +36,6 @@ def exit_program():
     
 
 def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
-    """
-    Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
-
-    Args:
-        msg (str): The confirmation message displayed to the user.
-        caution (bool): Ask twice with extreme caution
-        default (bool) : Default control behavior
-
-    Returns:
-        bool: True if confirmed (Y or Enter), False otherwise (n).
-    """
     if caution:
         confirm_once = typer.confirm("Proceed", default=False)
         if confirm_once:
@@ -66,31 +45,16 @@ def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
 
 
 def get_calling_function():
-    """
-    Get the file basename of the function two stack frames up. This is required 
-    by ``validate_pdf_list`` to specify return statement origins.
-
-    Returns:
-        str: The basename of the caller's Python file.
-    """
-    # thanks to https://stackoverflow.com/questions/3711184/how-to-use-inspect-to-get-the-callers-info-from-callee-in-python
+    # Referance: https://stackoverflow.com/questions/3711184/how-to-use-inspect-to-get-the-callers-info-from-callee-in-python
     from inspect import getouterframes
     return return_basename(getouterframes(sys._getframe(1))[1].filename)
 
 
 def get_gs_name() -> str:
-    """
-    Determine the correct Ghostscript executable name for cross-platform compatibility. 
-    It checks the OS and architecture (gs, gswin64c, or gswin32c).
-
-    Returns:
-        str: The correct Ghostscript callname on the installed machine.
-    """
     gs_name = "gs"
     
     # only linux and windows environments are supported. if there are others, well open an issue then :)
     # string appending is used here. its much less complicated.
-    # intellsence will keep warning about this but its okay.
     if sys.platform == "win32":
         gs_name+="win"
         if 8*struct.calcsize("P"): gs_name+="64c"  
@@ -101,55 +65,18 @@ def get_gs_name() -> str:
 
         
 def return_basename(item: str) -> str:
-    
-    """
-    Return the basename of a given filepath, regardless of the active directory.
-
-    Args:
-        item (str): The full or relative filepath.
-
-    Returns:
-        str: The final component of the path (the filename/basename).
-    """
     return os.path.basename(item)
 
 
 def return_dirname(item:str) -> str:
-    """
-    Return the directory path of a file, excluding the filename.
-
-    Args:
-        item (str): The full or relative filepath.
-
-    Returns:
-        str: The directory component of the path (the folder).
-    """
     return os.path.dirname(item)
 
 
 def return_abspath(item:str) -> str:
-    """
-    Return the normalized absolute path of a file or directory.
-
-    Args:
-        item (str): The relative or absolute path of the file.
-
-    Returns:
-        str: The absolute path of the file.
-    """
     return os.path.abspath(item)
 
 
 def check_file_readability(item: str) -> bool:
-    """
-    Check if a file can be opened and read by attempting to open it.
-
-    Args:
-        item (str): The path to the file to check.
-
-    Returns:
-        bool: True if the file is readable (no exception), False otherwise.
-    """
     return os.path.isfile(item) and os.access(item, os.R_OK)
 
 
@@ -217,12 +144,12 @@ def scan_items_entry(itemList: list) -> list:
 
 def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
     
-    # 1. verify fitz 
+    # 1. verify pymupdf 
     try:
-        fitz = importlib.import_module('fitz')
+        pymupdf = importlib.import_module('pymupdf')
     except ModuleNotFoundError:
-        fitz = None
-        print("[yellow]CAUTION![/yellow] PyMuPDF (fitz) not found. Skipping password protection check.")
+        pymupdf = None
+        print("[yellow]CAUTION![/yellow] PyMuPDF (pymupdf) not found. Skipping password protection check.")
 
     # 2. confirm magic exists. 
     # if it doesnt and user still approves it; raise error
@@ -252,13 +179,13 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
             file_items[1]['valid'] = False
             file_items[1]['state'] = f"Mimecheck pass failed.\nReceived:[yellow]\n{file_mime}[/yellow]"
 
-        # 3.4. check password protection (uses fitz)
-        elif fitz:
+        # 3.4. check password protection (uses pymupdf)
+        elif pymupdf:
             try:
-                if fitz.open(file_items[0]).needs_pass:
+                if pymupdf.open(file_items[0]).needs_pass:
                     file_items[1]['valid'] = False
                     file_items[1]['state'] = 'Password Protected'
-            except fitz.FileDataError:
+            except pymupdf.FileDataError:
                 file_items[1]['state'] = "Can't Open file."
         
         # 3.5 state file validity. if none; that meant mimecheck is disabled.
@@ -313,18 +240,6 @@ def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
 
 
 def return_validated_display(filesDict:dict):
-    """
-    Returns a Rich table as output for terminal print.
-    Table only show the state of the files before operation
-    Takes a dict which it expects to have absolute filename, validity, state of the file and size.
-    If valid is not True, they will be displayed as X and red strikethroughs.
-    
-    Args:
-        filesDict (dict): dict containing information of the files and their properties.
-
-    Returns:
-        str: Rich-based table output as string
-    """
     from rich.table import Table
     index = 0
     validated_list_table = Table(show_lines=True)
