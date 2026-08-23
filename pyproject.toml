@@ -4,23 +4,26 @@ version = "0.3.0"
 description = ""
 requires-python = ">=3.10"
 
-[project.keywords]
-"PDF",
-"Compression",
-"Merging",
-"CLI",
-"Utility",
+keywords = [
+    "PDF",
+    "Compression",
+    "Merging",
+    "CLI",
+    "Utility",
+]
 
-[project.classifiers]
-"Programming Language :: Python :: 3",
-"Programming Language :: Python :: 3.13",
-"Programming Language :: Python :: 3.14",
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 
-[project.dependencies]
-"python-magic>=0.4.27,<0.5 ; sys_platform == 'linux'",
-"python-magic-bin>=0.4.14,<0.5 ; sys_platform == 'win32'",
-"pymupdf>=1.24.12,<2",
-"typer==0.21.2",
+dependencies = [
+    "python-magic>=0.4.27,<0.5; sys_platform == 'linux'",
+    "python-magic-bin>=0.4.14,<0.5; sys_platform == 'win32'",
+    "pymupdf>=1.24.12,<2",
+    "typer==0.21.2",
+]
 
 [project.urls]
 repository = "https://github.com/average-fox/pdfsimuti"
