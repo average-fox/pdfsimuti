@@ -1,4 +1,3 @@
-import typer
 import pymupdf
 import os
 import re
@@ -15,7 +14,9 @@ from pdfsimuti.utils import return_basename, return_dirname, return_abspath, ret
 from pdfsimuti.utils import validate_pdf_dict, exit_program
 from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
+import typer
 app = typer.Typer()
+
 
 class SortOrder(str, Enum):
     none = "none"
@@ -27,7 +28,6 @@ class SortOrder(str, Enum):
     def __str__(self):  
         return self.name.replace("_", " ").capitalize() # Get the name of the class value for overview
     
-
     def description(self):
         description = {
             SortOrder.none : "Files are arranged as user added.",
@@ -221,6 +221,22 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
     else:
         exit_program()
 
+@app.command(help="""
+Merges several PDFs into a super PDF.
+
+___   __ _______ ______   _______ _______ 
+|  |_|  |       |    _ | |       |       |
+|       |    ___|   | || |    ___|    ___|
+|       |   |___|   |_||_|   | __|   |___ 
+|       |    ___|    __  |   ||  |    ___|
+| ||_|| |   |___|   |  | |   |_| |   |___ 
+|_|   |_|_______|___|  |_|_______|_______|
+
+- Output file is 'merged.pdf' by default but you can change it using --ouput TEXT
+- Tip: Pass '.' to include current directory.
+- Tip: You can pass folder paths as well just like adding PDF filenames.
+"""
+)
 
 def merge(
     items: Annotated[Optional[List[str]], typer.Argument(help="PDF files to merge. You can also use --source instead.")]=None,
@@ -245,6 +261,5 @@ def merge(
     
     if items == None and not source:
         raise PrettyErrorDisplay("No filepaths were added to merge.py or with --source")
-
         
     merge_runtime(validated_dict, output, preserve, sort)

@@ -1,3 +1,4 @@
+import typer
 import sys
 import subprocess # capture output
 
@@ -7,6 +8,7 @@ from importlib.metadata import version # for checking packages versions
 from typing import TypedDict
 
 pdfsimuti_package_stat = None
+app = typer.Typer()
 
 class packageInfo(TypedDict):
     version: str
@@ -32,7 +34,6 @@ packages_dict:dict[str, packageInfo] = {
         "installed": "[red]Not installed[/red]"
         }    
 }
-
 
 def update_packages_dict(*args):
     """
@@ -69,6 +70,17 @@ def update_packages_dict(*args):
                     packages_dict["ghostscript"]["installed"] = "[green]Installed[/green]"
 
 
+@app.command(
+    help="""
+    Shows you the status of the packages required for the program.
+    
+    You don't have to install all of them. However, that would limit the program's capability.
+    
+    - Verbose level 1: Returns package presence or not.
+    - Verbose level 2: Verbose 1 + package related details.
+    - Verbose level 3: Verbose 1 + 2 + effect on the program.
+    """
+    )
 def checkhealth():
     from rich import prompt, tree, padding, box
     from rich.panel import Panel

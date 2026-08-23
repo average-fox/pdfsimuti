@@ -1,16 +1,46 @@
 import typer
+import importlib
 import importlib.metadata
 
 from typing import Optional, Annotated
+from click import Context
+from click.core import Command
 
-from pdfsimuti.features import merge, compress
-from pdfsimuti.diagnostic import checkhealth
+__version__ = importlib.metadata.version('pdfsimuti')
 
 app = typer.Typer(
     no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False, suggest_commands = True,
-    context_settings={"help_option_names" : ["-h", "--help"]},
-)
-__version__ = importlib.metadata.version('pdfsimuti')
+    context_settings={"help_option_names" : ["-h", "--help"]},)
+
+class customTyperGroup(typer.core.TyperGroup):
+    def __init__(self, commands: None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.commands = {
+            "merge": "pdfsimuti.features.merge",
+            "compress": "pdfsimuti.features.compress"
+        }
+
+
+    def list_commands(self, ctx: Context) -> list[str]:
+        return super().list_commands(ctx) + self.commands.keys()
+
+
+    def get_command(self, ctx: Context, command_name: str) -> Command | None:
+        if command_name in self.commands:
+            command = self._lazy_load(command_name)
+            command.info.name = command_name
+            return typer.main.get_command(command)
+
+        return super().get_command(ctx, command_name)
+
+
+    def _lazy_load(self, command_name: str) -> typer.Typer:
+        module_name = self.commands[command_name]
+        module = importlib.import_module(module_name)
+        app_object = getattr(module, "app", None)
+        if not app_object: raise ValueError(f"Lazy loading {module_name} failed.")
+
+        return app_object
 
 
 def version_callback(value:bool):
@@ -19,7 +49,7 @@ def version_callback(value:bool):
         raise typer.Exit()
 
 
-@app.callback(epilog="Author: average-fox (@foxes_nteq_dogs)")
+@app.callback(epilog="Author: average-fox (@foxes_nteq_dogs)", cls=customTyperGroup)
 def main(version: Annotated[
     Optional[bool],
     typer.Option("--version", "-v", callback=version_callback, is_eager=True, help="Show version & exit")] = None,
@@ -28,56 +58,6 @@ def main(version: Annotated[
     Utility collection tool for PDF written in Python with Typer.
     """
     pass
-
-
-# See: https://github.com/fastapi/typer/issues/178 
-app.command(
-    help="""
-    Merges several PDFs into a super PDF.
-    
-
-    ___   __ _______ ______   _______ _______ 
-    |  |_|  |       |    _ | |       |       |
-    |       |    ___|   | || |    ___|    ___|
-    |       |   |___|   |_||_|   | __|   |___ 
-    |       |    ___|    __  |   ||  |    ___|
-    | ||_|| |   |___|   |  | |   |_| |   |___ 
-    |_|   |_|_______|___|  |_|_______|_______|
-
-- Output file is 'merged.pdf' by default but you can change it using --ouput TEXT
-- Tip: Pass '.' to include current directory.
-- Tip: You can pass folder paths as well just like adding PDF filenames.
-"""
-    )(merge.merge)
-
-
-app.command(
-    help="""
-    Compress PDF(s) into smaller sizes.
-
-
-    _______ _______ __   __ _______ ______   _______ _______ _______ 
-    |       |       |  |_|  |       |    _ | |       |       |       |
-    |   ----|   _   |       |    _  |   | || |    ___|  _____|  _____|
-    |  |    |  | |  |       |   |_| |   |_||_|   |___| |_____| |_____ 
-    |  |    |  |_|  |       |    ___|    __  |    ___|_____  |_____  |
-    |  |____|       | ||_|| |   |   |   |  | |   |___ _____| |_____| |
-    |_______|_______|_|   |_|___|   |___|  |_|_______|_______|_______|
-    
-    """)(compress.compress)
-
-
-app.command(
-    help="""
-    Shows you the status of the packages required for the program.
-    
-    You don't have to install all of them. However, that would limit the program's capability.
-    
-    - Verbose level 1: Returns package presence or not.
-    - Verbose level 2: Verbose 1 + package related details.
-    - Verbose level 3: Verbose 1 + 2 + effect on the program.
-    """
-    )(checkhealth.checkhealth)
 
 
 if __name__ == "__main__": app()

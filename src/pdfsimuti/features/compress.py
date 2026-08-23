@@ -562,7 +562,19 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
     else:
         print("[red]Aborted[/red]")
 
+@app.command(
+    help="""
+    Compress PDF(s) into smaller sizes.
 
+    _______ _______ __   __ _______ ______   _______ _______ _______ 
+    |       |       |  |_|  |       |    _ | |       |       |       |
+    |   ----|   _   |       |    _  |   | || |    ___|  _____|  _____|
+    |  |    |  | |  |       |   |_| |   |_||_|   |___| |_____| |_____ 
+    |  |    |  |_|  |       |    ___|    __  |    ___|_____  |_____  |
+    |  |____|       | ||_|| |   |   |   |  | |   |___ _____| |_____| |
+    |_______|_______|_|   |_|___|   |___|  |_|_______|_______|_______|
+    
+    """)
 def compress(
     items: Annotated[Optional[List[str]], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple.", metavar="pdf_item")] = None,
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
@@ -593,7 +605,7 @@ def compress(
     log.info("performing command line validation")
     
     import sys # detect for ghostscript commands.
-    from pdfsimuti.utils import rtn_gs_name
+    from pdfsimuti.utils import get_gs_name
     commandline_gs_exception = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--color-down", "--grey-res", "--grey_down", "--grey_sample_type"]
     compressSettings = None
 
@@ -601,7 +613,7 @@ def compress(
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
     elif compressMethod == ("gs" or "ghostscript"):
-        compressSettings = gs_settings(rtn_gs_name(), compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
+        compressSettings = gs_settings(get_gs_name(), compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
     
     elif compressMethod == "pymupdf":
         compressSettings = pymupdf_settings(garbageStrength=garbage)
