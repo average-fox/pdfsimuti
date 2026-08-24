@@ -18,7 +18,8 @@ logging.basicConfig(
 from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
 from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
-app = typer.Typer()
+console = Console()
+app = typer.Typer(add_completion=False, suggest_commands = True, rich_markup_mode = "rich", pretty_exceptions_show_locals=False)
 log = logging.getLogger("rich")
 pymupdf = None
 subprocess = None
@@ -62,6 +63,16 @@ class pymupdf_settings:
         -----------------------      
         """)
 
+    def initialize_worker(self):
+        import signal
+        signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
+
+        global pymupdf
+        if pymupdf is None:
+            import pymupdf as _pymupdf
+            pymupdf = _pymupdf
+
+
 
 class gs_settings:
     def __init__(self, gs_name, compatibility, presets ,enableEmbedFonts, enableColorSampling ,colorResValue, colorSample, enableGreySampling, greyResValue, greySample, colorConversion, custom):
@@ -79,28 +90,31 @@ class gs_settings:
 
         # process custom commands
         self.custom = custom
-        self.validate_gs_custom_commands(custom)
+        self.validate_gs_commands()
     
     def __getitem__(self, key):
         return getattr(self, key)
     
-    def validate_gs_custom_commands(self, custom_commands):
-        if custom_commands != '':
-            log.info("Validating custom commands")
-            import re
-            # external_files regex will locate all occurance of "pdf files"
-            external_files = re.search(r'\b\w+\.pdf\b',custom_commands)
-            if external_files:
-                # GhostScript is complicated. Having external files via ghostscript is hazard. External files can only be added outside gs_custom
-                # if this feature is needed, open up an issue to fix the problem.
-                log.error("Invalid command found")
-                raise PrettyErrorDisplay(f"""
-                    Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside of --gs-custom.
-                    Command: '{custom_commands}'  
-                """)
-        else:
-            return " "
-        
+    def validate_gs_commands(self):
+        log.info("Validating gs commands..")
+        import re
+        if self.custom and (match := re.search(r"dColorConversionStrategy=([^\s-]+)",self.custom)): self.colorConversion = match.group(1)
+        if self.colorConversion != "LeaveColorUnchanged":
+                from pdfsimuti.utils import return_confirm
+                print("[bold white on red]WARNING![/bold white on red] Color Conversion not default. Colors will be affected.")
+                if not return_confirm("Proceed?", default=False):
+                    raise PrettyErrorDisplay("Program terminated for safety.")
+                
+        # below statement not tested
+        if re.search(r'\b\w+\.pdf\b',self.custom): #locate all occurance of "pdf files"
+            # GhostScript is complicated. Having external files via ghostscript is hazard. External files can only be added outside gs_custom
+            # if this feature is needed, open up an issue to fix the problem.
+            log.error("Invalid command found")
+            raise PrettyErrorDisplay(f"""
+                Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside of --gs-custom.
+                Command: '{self.custom}'  
+            """)
+    
 
     def display_properties(self, preserve_choice):
         return text_dedent(f"""
@@ -129,7 +143,15 @@ class gs_settings:
         -----------------------
         """)
 
-        
+    def initialize_worker(self):
+        import signal
+        signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
+
+        import subprocess as sp
+        global subprocess
+
+        if subprocess is None: subprocess = sp
+
 class compressMethodChoice(str, Enum):
     """
     Compress method choices. Required for typer Enum options
@@ -211,7 +233,6 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
     from rich.rule import Rule
     from pdfsimuti.utils import return_validated_display
 
-    console = Console()
     panel_group = Group(
         Rule("Compress Settings"),
         console.render_str(f"{compressSettings.display_properties(preserve_choice)}"),
@@ -290,7 +311,7 @@ def designate_preserve_saveFolder(targetDict: dict):
 
 
 
-def pymupdf_multiprocess_childTask(task_details: tuple):
+def worker_pymupdf_compression(task_details: tuple):
     file_entry, pymupdf_settings, tempPath = task_details
 
     target = file_entry[0]
@@ -331,62 +352,64 @@ def pymupdf_multiprocess_childTask(task_details: tuple):
     return file_entry, tempPath
 
 
-def pymupdf_compression(filesDict: dict, pymupdf_settings):
+# def pymupdf_compression(filesDict: dict, pymupdf_settings):
 
-    from rich.progress import (
-        Progress, BarColumn, TaskProgressColumn, TextColumn,
-        TimeElapsedColumn, MofNCompleteColumn
-    )
-    from multiprocessing import Pool
+#     from rich.progress import (
+#         Progress, BarColumn, TaskProgressColumn, TextColumn,
+#         TimeElapsedColumn, MofNCompleteColumn
+#     )
+#     from multiprocessing import Pool
     
-    main_columns = [
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-    ]
+#     main_columns = [
+#         TextColumn("[progress.description]{task.description}"),
+#         BarColumn(),
+#         MofNCompleteColumn(),
+#         TaskProgressColumn(),
+#         TimeElapsedColumn(),
+#     ]
 
-    # stores the target file properties, pymupdf settings for compression and temp file
-    worker_tasks_details = []
-    # stores active temp files. After compress, these temp files are removed. If any temp file remained,
-    # program needs to delete them
-    temp_paths = []
+#     worker_tasks_details = []
+#     # stores active temp files. After compress, these temp files are removed. If any temp file remained,
+#     # program needs to delete them
+#     temp_paths = []
 
-    for file_entry in filesDict.items():
-        target = file_entry[0]
-        target_savingPath = file_entry[1]['saving_path']
-        temp = (target + ".temp") if target == target_savingPath else target_savingPath
-        worker_tasks_details.append((file_entry, pymupdf_settings, temp))
-        temp_paths.append(temp)
+#     for file_entry in filesDict.items():
+#         target = file_entry[0]
+#         targetSavePath = file_entry[1]['saving_path']
+#         temp = (target + ".temp") if target == targetSavePath else targetSavePath
+#         worker_tasks_details.append((file_entry, pymupdf_settings, temp))
+#         temp_paths.append(temp)
 
-    log.info("Started PyMuPDF compression runtime.")
+#     log.info("Started PyMuPDF compression runtime.")
 
-    with Progress(*main_columns, transient=True) as progress:
-        pool = Pool(processes=4, initializer=initialize_pymupdf)
-        runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
+#     with Progress(*main_columns, transient=True) as progress:
+#         pool = Pool(processes=4, initializer=initialize_pymupdf)
+#         runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
 
-        try:
-            for result in pool.imap_unordered(pymupdf_multiprocess_childTask, worker_tasks_details, chunksize=1):
-                (target, target_info), tempFile = result
-                temp_paths.remove(tempFile)
-                filesDict[target].update(target_info) # update dict of target status after compress
-                progress.update(runtime, advance=1)
-            pool.close()
+#         try:
+#             for result in pool.imap_unordered(pymupdf_multiprocess_childTask, worker_tasks_details, chunksize=1):
+#                 (target, target_info), tempFile = result
+#                 temp_paths.remove(tempFile)
+#                 filesDict[target].update(target_info) # update dict of target status after compress
+#                 progress.update(runtime, advance=1)
+#             pool.close()
 
-        except KeyboardInterrupt:
-            print("[red]Aborting...[/red]")
-            pool.terminate()
-            # if one goes bad, every process goes bad. delete all ongoing process's temp files
-        finally:
-            progress.stop()
-            pool.join()
-            for temp in temp_paths:
-                if os.path.exists(temp):
-                    os.remove(temp)
-                    print("Incomplete output file deleted. " + temp)
+#         except KeyboardInterrupt:
+#             print("[red]Aborting...[/red]")
+#             pool.terminate()
+
+#         except Exception as e:
+#             raise PrettyErrorDisplay(f"PyMuPDF compression has failed\n{e}")
+
+#         finally:
+#             progress.stop()
+#             pool.join()
+#             for temp in temp_paths:
+#                 if os.path.exists(temp):
+#                     os.remove(temp)
+#                     print("Incomplete output file deleted. " + temp)
         
-    return filesDict
+#     return filesDict
 
 
 def worker_gs_compression(task_details: tuple):
@@ -458,69 +481,117 @@ def worker_gs_compression(task_details: tuple):
     return file_entry, tempPath
 
 
-def gs_compression(filesDict: dict, gs_settings):
-    from pdfsimuti.utils import return_joined_filePath
-    from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn
+# def gs_compression(filesDict: dict, gs_settings):
+#     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn, MofNCompleteColumn
 
+#     from multiprocessing import Pool
+
+#     columns = [
+#         TextColumn("[progress.description]{task.description}"),
+#         BarColumn(),
+#         MofNCompleteColumn(),
+#         TaskProgressColumn(),
+#         TimeElapsedColumn(),
+#     ]
+
+#     worker_tasks_details = []
+#     temp_paths = []
+
+#     for file_entry in filesDict.items():
+#         target = file_entry[0] 
+#         targetSavePath = file_entry[1]['saving_path']
+#         temp = (target + ".temp") if target == targetSavePath else targetSavePath
+#         worker_tasks_details.append((file_entry, gs_settings, temp))
+#         temp_paths.append(temp)
+
+#     with Progress(*columns, transient=True) as progress:
+        
+#         runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
+#         log.info("Started GhostScript calling.")
+#         pool = Pool(processes=4, initializer=initialize_gs)
+    
+#         try:
+#             for result in pool.imap_unordered(worker_gs_compression, worker_tasks_details, chunksize=1):
+#                 (target, target_info), temp = result
+#                 temp_paths.remove(temp)
+#                 filesDict[target].update(target_info)
+#                 progress.update(runtime, advance=1)      
+#             pool.close()
+            
+
+#         except KeyboardInterrupt:
+#             print("[red]Aborting...[/red]")
+#             pool.terminate()
+            
+#         except Exception as e:
+#             raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
+
+#         finally:
+#             progress.stop()
+#             pool.join()
+#             for temp in temp_paths:
+#                 if os.path.exists(temp):
+#                     os.remove(temp)
+#                     print("Incomplete output file deleted. " + temp)
+    
+#     return filesDict
+
+
+
+def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
     from multiprocessing import Pool
+    from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn, MofNCompleteColumn
 
-    columns = [
+    progress_column = [
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
+        MofNCompleteColumn(),
         TaskProgressColumn(),
         TimeElapsedColumn(),
     ]
 
-    worker_tasks_details = []
+    worker_task_details = []
     temp_paths = []
 
-    # special warning in case colorConversion is changed
-    if gs_settings["colorConversion"] != "LeaveColorUnchanged":
-        from rich.prompt import Confirm
-        if not Confirm.ask(f"[bold white on red]WARNING![/bold white on red] Color Conversion not default. Colors will be affected. Proceed?"):
-            raise PrettyErrorDisplay("Program terminated for safety.")
-
     for file_entry in filesDict.items():
-        target = file_entry[0] 
-        target_basename = return_basename(target)
-        target_savingpath = file_entry[1]['saving_path']
-        tempFile = return_joined_filePath(return_dirname(target), "temp"+target_basename) if target == target_savingpath else target_savingpath
-        worker_tasks_details.append((file_entry, gs_settings, tempFile))
+        target = file_entry[0]
+        targetSavePath  = file_entry[1]['saving_path']
+        tempFile = (target + ".temp") if target == targetSavePath else targetSavePath
+        worker_task_details.append((file_entry, compressSettings, tempFile))
         temp_paths.append(tempFile)
 
-    with Progress(
-        *columns, 
-        transient=True) as progress:
-        
-        runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
-        log.info("Started GhostScript calling.")
-        pool = Pool(processes=4, initializer=initialize_gs)
-    
+    log.info(f"Started {compressMode} compression runtime.")
+
+    with Progress(*progress_column, transient=True) as progress:
+        runtime = progress.add_task(description=f"{compressMode} is running...", total=len(filesDict))
+        pool = Pool(processes=4, initializer=compressSettings.initialize_worker)
+
         try:
-            for result in pool.imap_unordered(worker_gs_compression, worker_tasks_details, chunksize=1):
+            for result in pool.imap_unordered(compressWorker, worker_task_details, chunksize=1):
                 (target, target_info), tempFile = result
                 temp_paths.remove(tempFile)
-                filesDict[target].update(target_info)
-                progress.update(runtime, advance=1)      
+                filesDict[target].update(target_info) # update dict of target status after compress
+                progress.update(runtime, advance=1)
+            pool.close()
+
+        except Exception as e:
+            raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
 
         except KeyboardInterrupt:
             print("[red]Aborting...[/red]")
             raise
-            
-        except Exception as e:
-            raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
 
         finally:
-            progress.stop()
             pool.terminate()
+            progress.stop()
             pool.join()
-            for tempFile in temp_paths:
-                if os.path.exists(tempFile):
-                    os.remove(tempFile)
-                    print("Incomplete output file deleted. " + tempFile)
-    
+            for temp in temp_paths:
+                if os.path.exists(temp):
+                    os.remove(temp)
+                    print("Incomplete output file deleted. " + temp)
+        
     return filesDict
-            
+
 
 def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclude: list, excludeSource,  compressSettings, preserve_choice):
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
@@ -549,8 +620,8 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
 
         #########################################
         match compressSettings.__class__.__name__:
-            case 'gs_settings': filesDict = gs_compression(validated_pdf_dict, compressSettings)
-            case 'pymupdf_settings': filesDict = pymupdf_compression(validated_pdf_dict, compressSettings)
+            case 'pymupdf_settings': filesDict = compress_engine("PyMuPDF", compressSettings, worker_pymupdf_compression, validated_pdf_dict)
+            case 'gs_settings': filesDict = compress_engine("GhostScript", compressSettings, worker_gs_compression, validated_pdf_dict)
         #########################################
         log.info("Compression runtime over.")
         

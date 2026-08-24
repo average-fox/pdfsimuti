@@ -15,8 +15,7 @@ from pdfsimuti.utils import validate_pdf_dict, exit_program
 from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
 
 import typer
-app = typer.Typer()
-
+app = typer.Typer(add_completion=False, suggest_commands = True, rich_markup_mode = "rich", pretty_exceptions_show_locals=False)
 
 class SortOrder(str, Enum):
     none = "none"
