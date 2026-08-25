@@ -9,39 +9,21 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.console import Console, Group
 
-import logging
-from rich.logging import RichHandler
-logging.basicConfig(
-    level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler(markup=True)]
-)
-
 from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
 from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
+import logging
+from rich.logging import RichHandler
+
 console = Console()
+logging.basicConfig(
+    level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler(markup=True, console=console)]
+)
 app = typer.Typer(add_completion=False, suggest_commands = True, rich_markup_mode = "rich", pretty_exceptions_show_locals=False)
-log = logging.getLogger("rich")
+log = logging.getLogger(__name__)
 pymupdf = None
 subprocess = None
 
-def initialize_pymupdf():
-    import signal
-    signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
-
-    global pymupdf
-    if pymupdf is None:
-        import pymupdf as _pymupdf
-        pymupdf = _pymupdf
-
-
-def initialize_gs():
-    import signal
-    signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
-
-    import subprocess as sp
-    global subprocess
-
-    if subprocess is None: subprocess = sp
 
 
 class pymupdf_settings:
@@ -316,17 +298,17 @@ def worker_pymupdf_compression(task_details: tuple):
 
     target = file_entry[0]
     target_properties = file_entry[1]
+    response_type:tuple[str, str] = ("", "")
 
     try:
         with pymupdf.open(target) as doc:
             # temp files created to solve incremental saving issue
-            if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
             
             doc.save(tempPath, garbage=pymupdf_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
             target_properties['final_size'] = os.path.getsize(tempPath)
             
             if (target_properties['initial_size'] <= target_properties['final_size']):
-                log.warning(f"File uncompressed. Resulted file not smaller than original. File: [purple]{return_basename(target)}[/purple]")
+                response_type = ("warning", f"File uncompressed. Resulted file not smaller than original. File: [purple]{target}[purple]")
                 os.remove(tempPath)
                 target_properties['valid'] = False
                 target_properties['state'] = 'Unchanged'
@@ -334,82 +316,22 @@ def worker_pymupdf_compression(task_details: tuple):
                 target_properties['valid'] = True
                 target_properties['state'] = "Compressed"
 
-                log.info(f"File Compressed: {target}")
+                response_type = ("info", f"File Compressed: [green]{target}[/green]")
         
                 if target == target_properties['saving_path']: 
                     os.replace(tempPath, target)
 
     except Exception as e: 
-        log.error(text_dedent(f"""
+        response_type = ("error", text_dedent(f"""
         --------------------
-        CAUTION. '{return_basename(target)}' cannot be compressed
-        Error type: {e}
+        CAUTION. '{return_basename(target)}' cannot be compressed.
+        Error: {e}
         --------------------
         """))
         target_properties['valid'] = False
         target_properties['state'] = 'PyMuPDF failure'
 
-    return file_entry, tempPath
-
-
-# def pymupdf_compression(filesDict: dict, pymupdf_settings):
-
-#     from rich.progress import (
-#         Progress, BarColumn, TaskProgressColumn, TextColumn,
-#         TimeElapsedColumn, MofNCompleteColumn
-#     )
-#     from multiprocessing import Pool
-    
-#     main_columns = [
-#         TextColumn("[progress.description]{task.description}"),
-#         BarColumn(),
-#         MofNCompleteColumn(),
-#         TaskProgressColumn(),
-#         TimeElapsedColumn(),
-#     ]
-
-#     worker_tasks_details = []
-#     # stores active temp files. After compress, these temp files are removed. If any temp file remained,
-#     # program needs to delete them
-#     temp_paths = []
-
-#     for file_entry in filesDict.items():
-#         target = file_entry[0]
-#         targetSavePath = file_entry[1]['saving_path']
-#         temp = (target + ".temp") if target == targetSavePath else targetSavePath
-#         worker_tasks_details.append((file_entry, pymupdf_settings, temp))
-#         temp_paths.append(temp)
-
-#     log.info("Started PyMuPDF compression runtime.")
-
-#     with Progress(*main_columns, transient=True) as progress:
-#         pool = Pool(processes=4, initializer=initialize_pymupdf)
-#         runtime = progress.add_task(description="PyMuPDF is running...", total=len(filesDict))
-
-#         try:
-#             for result in pool.imap_unordered(pymupdf_multiprocess_childTask, worker_tasks_details, chunksize=1):
-#                 (target, target_info), tempFile = result
-#                 temp_paths.remove(tempFile)
-#                 filesDict[target].update(target_info) # update dict of target status after compress
-#                 progress.update(runtime, advance=1)
-#             pool.close()
-
-#         except KeyboardInterrupt:
-#             print("[red]Aborting...[/red]")
-#             pool.terminate()
-
-#         except Exception as e:
-#             raise PrettyErrorDisplay(f"PyMuPDF compression has failed\n{e}")
-
-#         finally:
-#             progress.stop()
-#             pool.join()
-#             for temp in temp_paths:
-#                 if os.path.exists(temp):
-#                     os.remove(temp)
-#                     print("Incomplete output file deleted. " + temp)
-        
-#     return filesDict
+    return file_entry, tempPath, response_type
 
 
 def worker_gs_compression(task_details: tuple):
@@ -420,9 +342,8 @@ def worker_gs_compression(task_details: tuple):
 
     target = file_entry[0]
     target_properties = file_entry[1]
-    
-    if (os.path.getsize(target) >= 157286400): log.info(f"Active compressing file too large (>150mb). May take a while. File: {target}") # 150mb in bytes
-    target_basename = return_basename(target)
+    response_type:tuple[str, str] = ("", "")
+
     command = [
             gs_settings['gs_name'],
             '-sDEVICE=pdfwrite',
@@ -451,7 +372,7 @@ def worker_gs_compression(task_details: tuple):
         file_entry[1]['final_size'] = os.path.getsize(tempPath)
 
         if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
-            log.warning(f"File uncompressed. Resulted file not smaller than original. File: [purple]{target_basename}[purple]")
+            response_type = ("warning", f"File uncompressed. Resulted file not smaller than original. File: [purple]{target}[purple]")
             file_entry[1]['valid'] = False
             file_entry[1]['state'] = 'Unchanged'
             os.remove(tempPath)
@@ -459,7 +380,8 @@ def worker_gs_compression(task_details: tuple):
             # only works if --preserve is not enabled.
             if target == target_properties['saving_path']:
                 os.replace(tempPath, target)
-            log.info(f"File Compressed: {target}")
+
+            response_type = ("info", f"File Compressed: [green]{target}[/green]")
             file_entry[1]['valid'] = True
             file_entry[1]['state'] = "Compressed"
 
@@ -469,73 +391,16 @@ def worker_gs_compression(task_details: tuple):
         # if file removed during operation, script will still continue
         file_entry[1]['valid'] = False
         os.remove(tempPath)
-        log.error(f"Unable to compress file: {target_basename}")
+        response_type = ("error", f"Unable to compress file: [red]{target}[/red]")
 
         # what is this??
         if not os.path.exists(target):
-            log.error(f"Filepath: {return_basename(target)}. File not found.")
+            response_type = ("error", f"Filepath: [red]{return_basename(target)}[/red]. File not found.")
             file_entry[1]['state'] = 'File not found.'
         else:
             file_entry[1]['state'] = '-gs failure'
 
-    return file_entry, tempPath
-
-
-# def gs_compression(filesDict: dict, gs_settings):
-#     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn ,TimeElapsedColumn, MofNCompleteColumn
-
-#     from multiprocessing import Pool
-
-#     columns = [
-#         TextColumn("[progress.description]{task.description}"),
-#         BarColumn(),
-#         MofNCompleteColumn(),
-#         TaskProgressColumn(),
-#         TimeElapsedColumn(),
-#     ]
-
-#     worker_tasks_details = []
-#     temp_paths = []
-
-#     for file_entry in filesDict.items():
-#         target = file_entry[0] 
-#         targetSavePath = file_entry[1]['saving_path']
-#         temp = (target + ".temp") if target == targetSavePath else targetSavePath
-#         worker_tasks_details.append((file_entry, gs_settings, temp))
-#         temp_paths.append(temp)
-
-#     with Progress(*columns, transient=True) as progress:
-        
-#         runtime = progress.add_task(description="GhostScript is running...", total=len(filesDict))
-#         log.info("Started GhostScript calling.")
-#         pool = Pool(processes=4, initializer=initialize_gs)
-    
-#         try:
-#             for result in pool.imap_unordered(worker_gs_compression, worker_tasks_details, chunksize=1):
-#                 (target, target_info), temp = result
-#                 temp_paths.remove(temp)
-#                 filesDict[target].update(target_info)
-#                 progress.update(runtime, advance=1)      
-#             pool.close()
-            
-
-#         except KeyboardInterrupt:
-#             print("[red]Aborting...[/red]")
-#             pool.terminate()
-            
-#         except Exception as e:
-#             raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
-
-#         finally:
-#             progress.stop()
-#             pool.join()
-#             for temp in temp_paths:
-#                 if os.path.exists(temp):
-#                     os.remove(temp)
-#                     print("Incomplete output file deleted. " + temp)
-    
-#     return filesDict
-
+    return file_entry, tempPath, response_type
 
 
 def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
@@ -562,27 +427,32 @@ def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
 
     log.info(f"Started {compressMode} compression runtime.")
 
-    with Progress(*progress_column, transient=True) as progress:
+    with Progress(*progress_column, transient=True, console=console) as progress:
         runtime = progress.add_task(description=f"{compressMode} is running...", total=len(filesDict))
         pool = Pool(processes=4, initializer=compressSettings.initialize_worker)
 
         try:
             for result in pool.imap_unordered(compressWorker, worker_task_details, chunksize=1):
-                (target, target_info), tempFile = result
+                (target, target_info), tempFile, outcome= result
                 temp_paths.remove(tempFile)
                 filesDict[target].update(target_info) # update dict of target status after compress
+                level, message = outcome
+                getattr(log, level)(message)
+    
                 progress.update(runtime, advance=1)
             pool.close()
 
-        except Exception as e:
-            raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
-
         except KeyboardInterrupt:
             print("[red]Aborting...[/red]")
+            pool.terminate()
             raise
 
-        finally:
+        except Exception as e:
             pool.terminate()
+            raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
+
+
+        finally:
             progress.stop()
             pool.join()
             for temp in temp_paths:

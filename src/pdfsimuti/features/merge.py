@@ -80,6 +80,7 @@ def designate_saving_filePath(target: str) -> str:
     savePath = Path(DEFAULT_OUTPUT) if target == "" else Path(target)
     folder_creation = False
     warned = False
+    overwrite = False
 
     while Path(savePath):
         match Path(savePath):
@@ -105,11 +106,12 @@ def designate_saving_filePath(target: str) -> str:
                 if return_confirm("Change your filename?", caution=True):
                     subject = subject.with_name(typer.prompt("Enter new filename only: "))
 
-            case subject if subject.exists():
+            case subject if subject.exists() and not overwrite:
                 print("\n[yellow]CAUTION![/yellow] Specified output filepath already exists.")
                 if not return_confirm("Do you wish to overwrite this file? (Default: Y)"):    
                     print("\nFilename cannot be same if overwrite isn't allowed")
                     savePath = Path(typer.prompt("Enter new output path or filename again: "))
+                else: overwrite = True
 
             case subject if not (parent := subject.parent).exists() and not folder_creation:
                 print(f"\n[yellow]CAUTION[/yellow] File directory [purple]{parent}[/purple] doesn't exist.")
