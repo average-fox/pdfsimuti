@@ -6,36 +6,39 @@ from typing import Optional, Annotated
 from click import Context
 from click.core import Command
 
+from typer.core import TyperGroup
+
 __version__ = importlib.metadata.version('pdfsimuti')
 
 app = typer.Typer(
     no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False, suggest_commands = True,
     context_settings={"help_option_names" : ["-h", "--help"]},)
 
-class customTyperGroup(typer.core.TyperGroup):
-    def __init__(self, commands: None, *args, **kwargs):
+
+class customTyperGroup(TyperGroup):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.commands = {
-            "merge": "pdfsimuti.features.merge",
-            "compress": "pdfsimuti.features.compress"
+        self.lazyCommands = {
+        "merge": "pdfsimuti.features.merge",
+        "compress": "pdfsimuti.features.compress",
+        "checkhealth": "pdfsimuti.diagnostic.checkhealth"
         }
 
 
     def list_commands(self, ctx: Context) -> list[str]:
-        return super().list_commands(ctx) + self.commands.keys()
+        return super().list_commands(ctx) + list(self.lazyCommands.keys())
 
 
-    def get_command(self, ctx: Context, command_name: str) -> Command | None:
-        if command_name in self.commands:
-            command = self._lazy_load(command_name)
-            command.info.name = command_name
-            return typer.main.get_command(command)
-
-        return super().get_command(ctx, command_name)
+    def get_command(self, ctx: Context, cmd_name: str) -> Command | None:
+        if cmd_name in self.lazyCommands:
+            cmd = self._lazy_load(cmd_name)
+            cmd.info.name = cmd_name
+            return typer.main.get_command(cmd)
+        return super().get_command(ctx, cmd_name)
 
 
     def _lazy_load(self, command_name: str) -> typer.Typer:
-        module_name = self.commands[command_name]
+        module_name = self.lazyCommands[command_name]
         module = importlib.import_module(module_name)
         app_object = getattr(module, "app", None)
         if not app_object: raise ValueError(f"Lazy loading {module_name} failed.")

@@ -9,7 +9,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.console import Console, Group
 
-from pdfsimuti.utils import return_basename, return_dirname, CURRENT_DIR
+from pdfsimuti.utils import return_basename, CURRENT_DIR
 from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
 
 import logging
@@ -296,6 +296,9 @@ def designate_preserve_saveFolder(targetDict: dict):
 def worker_pymupdf_compression(task_details: tuple):
     file_entry, pymupdf_settings, tempPath = task_details
 
+    global pymupdf
+    assert pymupdf is not None
+
     target = file_entry[0]
     target_properties = file_entry[1]
     response_type:tuple[str, str] = ("", "")
@@ -308,7 +311,11 @@ def worker_pymupdf_compression(task_details: tuple):
             target_properties['final_size'] = os.path.getsize(tempPath)
             
             if (target_properties['initial_size'] <= target_properties['final_size']):
-                response_type = ("warning", f"File uncompressed. Resulted file not smaller than original. File: [purple]{target}[purple]")
+                response_type = ("warning", text_dedent(
+                    f"""
+                    [red]File not compressed[/red]. Resulted file not smaller than original. 
+                    File: {target}
+                    """))
                 os.remove(tempPath)
                 target_properties['valid'] = False
                 target_properties['state'] = 'Unchanged'
@@ -316,7 +323,7 @@ def worker_pymupdf_compression(task_details: tuple):
                 target_properties['valid'] = True
                 target_properties['state'] = "Compressed"
 
-                response_type = ("info", f"File Compressed: [green]{target}[/green]")
+                response_type = ("info", f"File Compressed: {target}")
         
                 if target == target_properties['saving_path']: 
                     os.replace(tempPath, target)
@@ -372,7 +379,11 @@ def worker_gs_compression(task_details: tuple):
         file_entry[1]['final_size'] = os.path.getsize(tempPath)
 
         if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
-            response_type = ("warning", f"File uncompressed. Resulted file not smaller than original. File: [purple]{target}[purple]")
+            response_type = ("warning", text_dedent(
+                f"""
+                [red]File not compressed[/red]. Resulted file not smaller than original. 
+                File: {target}
+                """))
             file_entry[1]['valid'] = False
             file_entry[1]['state'] = 'Unchanged'
             os.remove(tempPath)

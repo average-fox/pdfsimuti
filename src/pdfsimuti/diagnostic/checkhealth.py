@@ -12,7 +12,7 @@ app = typer.Typer()
 
 class packageInfo(TypedDict):
     version: str
-    searchLoc: str
+    searchLoc: str | None
     installed: str
 
 packages_dict:dict[str, packageInfo] = {
@@ -59,15 +59,14 @@ def update_packages_dict(*args):
                 from pdfsimuti.utils import get_gs_name
                 gs_name = get_gs_name()
                 try: 
-                    result = subprocess.run([gs_name, '--version'], capture_output=True, text=True)
+                    if (result := subprocess.run([gs_name, '--version'], capture_output=True, text=True)).stdout:
+                        import shutil
+                        bin_loc = shutil.which(gs_name) # get location of the package
+                        packages_dict["ghostscript"]["version"] = result.stdout.rstrip() # rstrip gets rid of the /n that comes from the capture_output
+                        packages_dict["ghostscript"]["searchLoc"] = bin_loc
+                        packages_dict["ghostscript"]["installed"] = "[green]Installed[/green]"
                 except FileNotFoundError: pass
                 
-                if result.stdout:
-                    import shutil
-                    bin_loc = shutil.which(gs_name) # get location of the package
-                    packages_dict["ghostscript"]["version"] = result.stdout.rstrip() # rstrip gets rid of the /n that comes from the capture_output
-                    packages_dict["ghostscript"]["searchLoc"] = bin_loc
-                    packages_dict["ghostscript"]["installed"] = "[green]Installed[/green]"
 
 
 @app.command(
