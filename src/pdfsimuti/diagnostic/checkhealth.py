@@ -7,114 +7,113 @@ from importlib.metadata import version # for checking packages versions
 
 from typing import TypedDict
 
+from rich import prompt, tree, padding, box
+from rich.panel import Panel
+from rich.console import Console, Group, RenderableType
+from pdfsimuti.main import __version__
+
+from pdfsimuti.utils import get_gs_name
+gs_name = get_gs_name()
+
 pdfsimuti_package_stat = None
 app = typer.Typer()
+console = Console()
 
-class packageInfo(TypedDict):
+class packagesInfoTyped(TypedDict):
+    packageName: str
     version: str
     searchLoc: str | None
-    installed: str
+    installed: bool
 
-packages_dict:dict[str, packageInfo] = {
+
+packages_dict:dict[str, packagesInfoTyped] = {
     'pymupdf' : {
+        "packageName": "pymupdf",
         "version": "[red]Not found[/red]", 
         "searchLoc": "[red]Not found[/red]", 
-        "installed": "[red]Not installed[/red]"
+        "installed": False
         },
     
     'magic' : {
+        "packageName": f"{"python-magic-bin" if sys.platform == "wind32" else "python-magic"}",
         "version": "[red]Not found[/red]", 
         "searchLoc": "[red]Not found[/red]", 
-        "installed": "[red]Not installed[/red]"
+        "installed": False
         },
     
     "ghostscript" : {
+        "packageName": get_gs_name(),
         "version": "[red]Not found[/red]",
         "searchLoc": "[red]Not found[/red]",
-        "installed": "[red]Not installed[/red]"
+        "installed": False
         }    
 }
 
-def update_packages_dict(*args):
+def get_packages_status(*args:str):
     """
-    Update 'packages_dict' of their moduleSpec, installed location and other info.
+    Get package's moduleSpec, installed locations and other details.
     """
-    
-    # Note: magic in importlib.util.find_spec is not a valid name for importlib.metadata.version
-    ## therefore, it's name is processed as either 'python-magic' or 'python-magic-bin' after find_spec
 
     for package in args:
         match package:
-            case pkg if pkg == "magic" and (spec := importlib.util.find_spec(pkg)):
-                packages_dict[pkg]["version"] = version('python-magic-bin' if sys.platform == "win32" else 'python-magic')
-                packages_dict[pkg]["searchLoc"] = (spec.submodule_search_locations or [""])[0]
-                packages_dict[pkg]["installed"] = "[green]Installed[/green]"
-
-            case pkg if pkg == "pymupdf" and (spec := importlib.util.find_spec(pkg)):
-                packages_dict[pkg]["version"] = version(pkg)
-                packages_dict[pkg]["searchLoc"] = (spec.submodule_search_locations or [""])[0]
-                packages_dict[pkg]["installed"] = "[green]Installed[/green]"
-
             case 'ghostscript':
-                from pdfsimuti.utils import get_gs_name
-                gs_name = get_gs_name()
                 try: 
                     if (result := subprocess.run([gs_name, '--version'], capture_output=True, text=True)).stdout:
                         import shutil
                         bin_loc = shutil.which(gs_name) # get location of the package
                         packages_dict["ghostscript"]["version"] = result.stdout.rstrip() # rstrip gets rid of the /n that comes from the capture_output
                         packages_dict["ghostscript"]["searchLoc"] = bin_loc
-                        packages_dict["ghostscript"]["installed"] = "[green]Installed[/green]"
+                        packages_dict["ghostscript"]["installed"] = True
                 except FileNotFoundError: pass
-                
+
+            case _:
+                if (spec := importlib.util.find_spec(package)):
+                    packages_dict[package]["version"] = version(packages_dict[package]["packageName"])
+                    packages_dict[package]["searchLoc"] = (spec.submodule_search_locations or [""])[0]
+                    packages_dict[package]["installed"] = True
 
 
-@app.command(
-    help="""
-    Shows you the status of the packages required for the program.
-    
-    You don't have to install all of them. However, that would limit the program's capability.
-    
-    - Verbose level 1: Returns package presence or not.
-    - Verbose level 2: Verbose 1 + package related details.
-    - Verbose level 3: Verbose 1 + 2 + effect on the program.
+def return_checkhealth_renderable() -> RenderableType:
     """
-    )
-def checkhealth():
-    from rich import prompt, tree, padding, box
-    from rich.panel import Panel
-    from rich.console import Console, Group
-    from pdfsimuti.main import __version__
-
-    console = Console()
-    package_tree = tree.Tree(Panel("Package Status", expand=False), guide_style="bold bright_blue")
-
+    Return renderable group as display output for checkhealth.
+    """
     spec = importlib.util.find_spec("pdfsimuti")
     pdfsimuti_package_stat: str | None = (
         spec.submodule_search_locations[0]
         if spec and spec.submodule_search_locations
-        else ""
-    )
-
-    # update package status
-    update_packages_dict('pymupdf', 'magic', 'ghostscript')
+        else "")
+    
+    package_tree = tree.Tree(Panel("Package Status", expand=False), guide_style="bold bright_blue")
 
     for package in packages_dict.items():
         pac = package_tree.add(Panel(package[0], expand=False))
-        pac.add("[u][b]Status:[/b][/u] " + package[1]["installed"])
+        pac.add(f"[u][b]Status:[/b][/u] " + "[green]Installed[/green]" if package[1]["installed"] else "[red]Not Installed[/red]")
         pac.add("[u][b]Version:[/b][/u] " + package[1]["version"])
         pac.add("[u][b]Source:[/b][/u] " + f"[i]{package[1]["searchLoc"]}[/i]") 
-
 
     main_tree = tree.Tree(Panel(f"pdfSimuti v{__version__} checkhealth\n[i]a python typer + rich simple pdf utility tool.[/i]", expand=False, box=box.DOUBLE), guide_style="underline2")
     main_tree.add(console.render_str("[u]Installed source[/u]: " + f"{pdfsimuti_package_stat}"))
     main_tree.add(package_tree)
 
-    renderable_group = Group(
+    return Group(
         main_tree,
         console.render_str("\n\n[green]Made by average-fox[/green]\n[i]Send suggestions, bugs or issues etc. on GitHub[/i]")
     )
 
+
+@app.command(
+    help="""
+    Show health of the pdfSimUti packages.
+    """
+    )
+def checkhealth():
+    """
+    Diagonstic App Command for pdfsimuti checkhealth
+    """
+
+    # update package status
+    get_packages_status('pymupdf', 'magic', 'ghostscript')
+
     with console.screen():
-        console.print(padding.Padding(renderable_group, (1,1)))
+        console.print(padding.Padding(return_checkhealth_renderable(), (1,1)))
         prompt.Prompt.ask("\nEnter any key to continue")
