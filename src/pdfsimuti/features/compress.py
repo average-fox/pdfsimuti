@@ -3,6 +3,7 @@ import os
 
 from typing import List, Annotated, Optional
 from enum import Enum
+from pathlib import Path
 
 from rich import print
 from rich.table import Table
@@ -10,7 +11,7 @@ from rich.panel import Panel
 from rich.console import Console, Group
 
 from pdfsimuti.utils import return_basename, CURRENT_DIR
-from pdfsimuti.utils import PrettyErrorDisplay, text_dedent
+from pdfsimuti.utils import PrettyErrorDisplay, text_dedent, fileDictTyped
 
 import logging
 from rich.logging import RichHandler
@@ -27,7 +28,7 @@ subprocess = None
 
 
 class pymupdf_settings:
-    def __init__(self, garbageStrength):
+    def __init__(self, garbageStrength:int):
         self.garbageStrength = garbageStrength
              
     def __getitem__(self, key):
@@ -57,18 +58,21 @@ class pymupdf_settings:
 
 
 class gs_settings:
-    def __init__(self, gs_name, compatibility, presets ,enableEmbedFonts, enableColorSampling ,colorResValue, colorSample, enableGreySampling, greyResValue, greySample, colorConversion, custom):
+    def __init__(self, gs_name:str, compatibility:float, presets:str, embedAllFonts:bool, colorConversion:str,  enableColorSampling:bool ,colorResValue:int, colorSample:str, enableGreySampling, greyResValue, greySample, custom):
         self.gs_name = gs_name
+
         self.compatibility = compatibility
         self.presets = presets
-        self.embedAllFonts = str(enableEmbedFonts).lower()
-        self.enableColorSampling = str(enableColorSampling).lower()
-        self.colorResValue = colorResValue
-        self.colorSample = colorSample.capitalize()
-        self.enableGreySampling = str(enableGreySampling).lower()
-        self.greyResValue = greyResValue
-        self.greySample = greySample.capitalize()
+        self.embedAllFonts = str(embedAllFonts).lower()
         self.colorConversion = colorConversion
+
+        self.enableColorSampling = str(enableColorSampling).lower() # color_down
+        self.colorResValue = colorResValue # color_res
+        self.colorSample = colorSample.capitalize() # color_sample_type
+
+        self.enableGreySampling = str(enableGreySampling).lower() # gray_down
+        self.greyResValue = greyResValue # gray_res
+        self.greySample = greySample.capitalize()  # grey_sample_type
 
         # process custom commands
         self.custom = custom
@@ -98,7 +102,7 @@ class gs_settings:
             """)
     
 
-    def display_properties(self, preserve_choice):
+    def display_properties(self, preserve_choice:bool):
         return text_dedent(f"""
         Compression mode: GhostScript
         -----------------------
@@ -134,13 +138,10 @@ class gs_settings:
 
         if subprocess is None: subprocess = sp
 
+
 class compressMethodChoice(str, Enum):
     """
-    Compress method choices. Required for typer Enum options
-
-    Args:
-        str (str): typer string to match
-        Enum (enum): strings to point
+    Compress method choices.
     """
     gs = "gs"
     pymupdf = "pymupdf"
@@ -149,11 +150,7 @@ class compressMethodChoice(str, Enum):
 
 class gsColorConversionStrategy(str, Enum):
     """
-    GhostScript conversion Strategy choices. Required for typer Enum options
-
-    Args:
-        str (str): typer string to match
-        Enum (enum): strings to point
+    GhostScript conversion Strategy choices.
     """
     leaveColorUnchanged="LeaveColorUnchanged"
     Gray="Gray"
@@ -163,11 +160,7 @@ class gsColorConversionStrategy(str, Enum):
 
 class gsCompatibilityChoice(str, Enum):
     """
-    GhostScript compatibility settings. Required for typer Enum options
-
-    Args:
-        str (str): typer string to match
-        Enum (enum): strings to point
+    GhostScript compatibility settings.
     """
     one_three = "1.3"
     one_four = "1.4"
@@ -177,11 +170,7 @@ class gsCompatibilityChoice(str, Enum):
 
 class gsPDFshrinkPresets(str, Enum):
     """
-    GhostScript shrinking presets. Required for typer Enum options
-
-    Args:
-        str (str): typer string to match
-        Enum (enum): strings to point
+    GhostScript shrinking presets.
     """
     ebook = "ebook"
     screen = "screen"
@@ -191,13 +180,8 @@ class gsPDFshrinkPresets(str, Enum):
 
 class gsDownSampleControl(str, Enum):
     """
-    GhostScript color/grey downgrading sample control. Required for typer Enum options
-
-    Args:
-        str (str): typer string to match
-        Enum (enum): strings to point
+    GhostScript color/grey downgrading sample control.
     """    
-
     subsample = "subsample"
     average = "average"
     bicubic = "bicubic"
@@ -213,13 +197,13 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
         compressSettings (instance): An instance of either ``gs_settings`` or ``pymupdf_settings``.
     """    
     from rich.rule import Rule
-    from pdfsimuti.utils import return_validated_display
+    from pdfsimuti.utils import returnValidDisplayRenderable
 
     panel_group = Group(
         Rule("Compress Settings"),
         console.render_str(f"{compressSettings.display_properties(preserve_choice)}"),
         Rule("Selected files for Compression"),
-        return_validated_display(filesDict)
+        returnValidDisplayRenderable(filesDict)
     )
     console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
 
@@ -240,18 +224,18 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         index += 1
         initial_size = file_entry[1]['initial_size']/1048576
         final_size =  file_entry[1]['final_size']/1048576
-        filename = file_entry[1]['saving_path']
+        target = file_entry[1]['saving_path']
 
         if not file_entry[1]['valid'] or final_size == 0:
             failed_count += 1
             if file_entry[1]['state'] == 'Unchanged':
                 result_reverted = True
-                table.add_row(str(index), f"[yellow]{return_basename(filename)}[/yellow]", f"{filename}", "[yellow]Skipped[/yellow]", "[yellow]Skipped[/yellow]", f"[yellow]{file_entry[1]['state']}[/yellow]")
+                table.add_row(str(index), f"[yellow]{return_basename(target)}[/yellow]", f"{target}", "[yellow]Skipped[/yellow]", "[yellow]Skipped[/yellow]", f"[yellow]{file_entry[1]['state']}[/yellow]")
             else: 
-                table.add_row(str(index), f"[strike][red]{return_basename(filename)}[/red][/strike]", f"[strike]{filename}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
+                table.add_row(str(index), f"[strike][red]{return_basename(target)}[/red][/strike]", f"[strike]{target}[/strike]", "[red]FAILED[/red]", "[red]FAILED[/red]", f"[red]{file_entry[1]['state']}[/red]")
         else:
             compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 5)))
-            table.add_row(str(index), return_basename(filename), filename, str(round(initial_size,3))+ " MB", str(round(final_size,3))+ " MB", f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
+            table.add_row(str(index), return_basename(target), target, str(round(initial_size,3))+ " MB", str(round(final_size,3))+ " MB", f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
 
     messenge = (
         text_dedent(f"""
@@ -294,6 +278,8 @@ def designate_preserve_saveFolder(targetDict: dict):
 
 
 def worker_pymupdf_compression(task_details: tuple):
+    # TODO: Fix the annot. here
+
     file_entry, pymupdf_settings, tempPath = task_details
 
     global pymupdf
@@ -311,11 +297,7 @@ def worker_pymupdf_compression(task_details: tuple):
             target_properties['final_size'] = os.path.getsize(tempPath)
             
             if (target_properties['initial_size'] <= target_properties['final_size']):
-                response_type = ("warning", text_dedent(
-                    f"""
-                    [red]File not compressed[/red]. Resulted file not smaller than original. 
-                    File: {target}
-                    """))
+                response_type = ("warning", f"File unchanged. File: {target}")
                 os.remove(tempPath)
                 target_properties['valid'] = False
                 target_properties['state'] = 'Unchanged'
@@ -342,6 +324,8 @@ def worker_pymupdf_compression(task_details: tuple):
 
 
 def worker_gs_compression(task_details: tuple):
+    # TODO: fix the annot. here
+
     file_entry, gs_settings, tempPath = task_details
 
     global subprocess
@@ -354,6 +338,7 @@ def worker_gs_compression(task_details: tuple):
     command = [
             gs_settings['gs_name'],
             '-sDEVICE=pdfwrite',
+            f'-dPDFSettings=/{gs_settings['presets']}',
             f'-dCompatibilityLevel={gs_settings['compatibility']}',
             f'-dEmbedAllFonts={gs_settings['embedAllFonts']}',
             f'-dColorConversionStrategy=/{gs_settings['colorConversion']}',
@@ -363,7 +348,6 @@ def worker_gs_compression(task_details: tuple):
             f'-dDownsampleGrayImages={gs_settings['enableGreySampling']}',
             f'-dGrayImageResolution={gs_settings['greyResValue']}',
             f'-dGrayImageDownsampleType=/{gs_settings['greySample']}',
-            f'-dPDFSettings=/{gs_settings['presets']}',
             '-dNOPAUSE',
             '-dQuiet',
             '-dBATCH',
@@ -379,11 +363,7 @@ def worker_gs_compression(task_details: tuple):
         file_entry[1]['final_size'] = os.path.getsize(tempPath)
 
         if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
-            response_type = ("warning", text_dedent(
-                f"""
-                [red]File not compressed[/red]. Resulted file not smaller than original. 
-                File: {target}
-                """))
+            response_type = ("warning", f"File unchanged. File: {target}")
             file_entry[1]['valid'] = False
             file_entry[1]['state'] = 'Unchanged'
             os.remove(tempPath)
@@ -392,7 +372,7 @@ def worker_gs_compression(task_details: tuple):
             if target == target_properties['saving_path']:
                 os.replace(tempPath, target)
 
-            response_type = ("info", f"File Compressed: [green]{target}[/green]")
+            response_type = ("info", f"File Compressed: {target}")
             file_entry[1]['valid'] = True
             file_entry[1]['state'] = "Compressed"
 
@@ -415,6 +395,8 @@ def worker_gs_compression(task_details: tuple):
 
 
 def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
+    # TODO: Fix the annot. here
+
     from multiprocessing import Pool
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn, MofNCompleteColumn
 
@@ -474,7 +456,7 @@ def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
     return filesDict
 
 
-def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclude: list, excludeSource,  compressSettings, preserve_choice):
+def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimecheck: bool, exclude: list[Path]|None, excludeSource: list[Path]|None,  compressSettings, preserve_choice:bool):
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
 
     log.info("Validating files...")
@@ -527,21 +509,21 @@ def compress_runtime(fileList: list[str] | None, source, mimecheck: bool, exclud
     |_______|_______|_|   |_|___|   |___|  |_|_______|_______|_______|
     
     """)
+
+    # note. Optional from typing for Optional[List[type]] is the same as List[type] | None
 def compress(
-    items: Annotated[Optional[List[str]], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple.", metavar="pdf_item")] = None,
+    items: Annotated[Optional[List[Path]], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple.", metavar="pdf_item")] = None,
     mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
-    exclude: Annotated[List[str], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=[],
-    source: Annotated[str, typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = '',
-    excludeSource: Annotated[str, typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = '',
-    
+    exclude: Annotated[Optional[List[Path]], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=None,
+    source: Annotated[Optional[List[Path]], typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
+    excludeSource: Annotated[Optional[List[Path]], typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional options", metavar="[gs/ghostscript|pymupdf]")] = compressMethodChoice.pymupdf,
     preserve: Annotated[bool, typer.Option(help="Preserve file on compress. Will be saved in a folder on the working directory.", rich_help_panel='Additional options')]=False,
     garbage: Annotated[int, typer.Option(max=4, min=0, help="PyMuPDF garbage strength control", rich_help_panel="PyMuPDF Settings")] = 4,
 
     compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify ghostscript compatibility mode", rich_help_panel="GhostScript options")] = gsCompatibilityChoice.one_seven,
     presets: Annotated[gsPDFshrinkPresets, typer.Option("-p", "--presets", help="Specify ghostscript pdf compression presets", rich_help_panel="GhostScript options")] = gsPDFshrinkPresets.ebook,
-    gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Commands must be case-sensitive. Can override everything.", rich_help_panel="GhostScript options")] = '',
-    embedFonts: Annotated[bool, typer.Option(help="Embed fonts in PDF for cross-platform font support", rich_help_panel="GhostScript options")] = True,
+    embedAllFonts: Annotated[bool, typer.Option(help="Embed fonts in PDF for cross-platform font support", rich_help_panel="GhostScript options")] = True,
     colorConversion: Annotated[gsColorConversionStrategy, typer.Option("-cc", "--colorConversion", help="[red](Caution!)[/red] Change color space of the document.", case_sensitive=False, rich_help_panel="GhostScript options")] = gsColorConversionStrategy.leaveColorUnchanged,
     
     color_down:Annotated[bool, typer.Option(help="Enable reduction of color images", rich_help_panel="GhostScript options (Color Down Sampling)")] = True,
@@ -549,9 +531,10 @@ def compress(
     color_sample_type: Annotated[gsDownSampleControl, typer.Option("--color_sample_type", "-cs", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Color Down Sampling)")] = gsDownSampleControl.bicubic,
     
     gray_down: Annotated[bool, typer.Option(help="Enable reduction of Black/White", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = True,
-    grey_Res: Annotated[int, typer.Option(min=0, help="Target DPI for grey image resolution. Low DPI = More pixalated", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = 150,
-    grey_sample_type: Annotated[gsDownSampleControl, typer.Option("--grey_sample_type", "-gs", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = gsDownSampleControl.bicubic
+    grey_res: Annotated[int, typer.Option(min=0, help="Target DPI for grey image resolution. Low DPI = More pixalated", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = 150,
+    grey_sample_type: Annotated[gsDownSampleControl, typer.Option("--grey_sample_type", "-gs", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = gsDownSampleControl.bicubic,
     
+    gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Commands must be case-sensitive. Can override everything.", rich_help_panel="GhostScript options (Advanced)")] = ''
     ):
 
     log.info("performing command line validation")
@@ -559,13 +542,13 @@ def compress(
     import sys # detect for ghostscript commands.
     from pdfsimuti.utils import get_gs_name
     commandline_gs_exception = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--color-down", "--grey-res", "--grey_down", "--grey_sample_type"]
-    compressSettings = None
+    compressSettings:gs_settings | pymupdf_settings = pymupdf_settings(garbageStrength=garbage)
 
     if any(value in commandline_gs_exception for value in sys.argv) and compressMethod == "pymupdf":
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
-    elif compressMethod == ("gs" or "ghostscript"):
-        compressSettings = gs_settings(get_gs_name(), compatibility.value, presets.value,  embedFonts, color_down, color_res, color_sample_type, gray_down, grey_Res, grey_sample_type, colorConversion.value ,gs_custom)
+    elif compressMethod == ("gs", "ghostscript"):
+        compressSettings = gs_settings(get_gs_name(), float(compatibility.value), presets.value, embedAllFonts, colorConversion.value, color_down, color_res, color_sample_type.value, gray_down, grey_res, grey_sample_type.value, gs_custom)
     
     elif compressMethod == "pymupdf":
         compressSettings = pymupdf_settings(garbageStrength=garbage)

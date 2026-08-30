@@ -10,12 +10,14 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import print
 
-from pdfsimuti.utils import return_basename, return_dirname, return_abspath, return_confirm
-from pdfsimuti.utils import validate_pdf_dict, exit_program
-from pdfsimuti.utils import PrettyErrorDisplay, CURRENT_DIR, DEFAULT_OUTPUT
+from pdfsimuti.utils import validate_pdf_dict, exit_program, return_confirm
+from pdfsimuti.utils import PrettyErrorDisplay, DEFAULT_OUTPUT, fileDictTyped, OPER_SYS
+from rich.console import Group, Console, RenderableType
 
+console = Console()
 import typer
 app = typer.Typer(add_completion=False, suggest_commands = True, rich_markup_mode = "rich", pretty_exceptions_show_locals=False)
+
 
 class SortOrder(str, Enum):
     none = "none"
@@ -28,7 +30,7 @@ class SortOrder(str, Enum):
         return self.name.replace("_", " ").capitalize() # Get the name of the class value for overview
     
     def description(self):
-        description = {
+        description = { 
             SortOrder.none : "Files are arranged as user added.",
             SortOrder.normal : "Files are arranged alphabetically.",
             SortOrder.reverse : "Files are arranged alphabetically reversed.",
@@ -54,7 +56,7 @@ def sort_natural(files_dict, reverse=False):
     return result
 
 
-def sort_dict(sort_type, files_dict):
+def sort_dict(sort_type:str, files_dict):
     match sort_type:
         case 'none':
             return files_dict
@@ -74,8 +76,7 @@ def reserved_filenaming_charCheck(filename:str) -> bool:
     return False
 
 
-def designate_saving_filePath(target: str) -> str:
-    import sys 
+def designate_saving_filePath(target: str) -> str: 
 
     savePath = Path(DEFAULT_OUTPUT) if target == "" else Path(target)
     folder_creation = False
@@ -86,7 +87,7 @@ def designate_saving_filePath(target: str) -> str:
         match Path(savePath):
 
             # if the user gives a filename like filename<>.pdf then it is an automatic False according to return_confirm()
-            case subject if (not subject.resolve().is_relative_to("/home")) and sys.platform == "linux" and not warned:
+            case subject if (not subject.resolve().is_relative_to("/home")) and OPER_SYS == "linux" and not warned:
                 print("\n[red]WARNING[/red]. Selected output filepath not from /home (Possibly a Linux Root FHS). \nAbort immediately if you don't know what you're doing.")
                 warned = return_confirm(caution=True, default=True)
                 if not warned: 
@@ -124,40 +125,39 @@ def designate_saving_filePath(target: str) -> str:
     return str(savePath)
 
 
-def display_successful_merge_outcome(outputPath:str):
+def return_merge_success_display(outputPath:Path) -> RenderableType:
     outcome_table = Table(show_header=False, expand=False, show_lines=True)
-    outcome_table.add_row("[u][b]Filename[/b][/u]", return_basename(outputPath))
-    outcome_table.add_row("[u][b]Folder[/b][/u]", CURRENT_DIR if return_dirname(outputPath) == "" else return_dirname(outputPath))
-    outcome_table.add_row("[u][b]Absolute Path[/b][/u]", outputPath)
+    outcome_table.add_row("[u][b]Filename[/b][/u]", outputPath.name)
+    outcome_table.add_row("[u][b]Folder[/b][/u]", str(Path.cwd()) if outputPath.parent.absolute() == Path.cwd() else str(outputPath.parent.absolute()))
+    outcome_table.add_row("[u][b]Absolute Path[/b][/u]", str(outputPath.absolute()))
 
-    print(Panel(outcome_table, subtitle="MERGE COMPLETED", border_style="green", expand=False))
+    return outcome_table
+    
 
 
-def display_merge_overview(filesDict:dict, outputPath:str, preserveFiles: bool, sort:str):
-    from rich.console import Group
-    from rich.console import Console
+def display_merge_overview(filesDict:dict[Path, fileDictTyped], outputPath:Path, preserveFiles: bool, sort:str) -> RenderableType:
+
     from rich.rule import Rule
-    from pdfsimuti.utils import return_validated_display # display file status despite the result
+    from pdfsimuti.utils import returnValidDisplayRenderable # display file status despite the result
 
     fileSize = 0
     merge_table_details = Table(show_header=False, show_lines=True, highlight=True, expand=True)
 
     # Calculate estimated size of the merge
-    for item in filesDict: fileSize += os.path.getsize(item) / (1024 * 1024)
-    merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f'{"[yellow italic](Overwriting)[/yellow italic] " if os.path.exists(outputPath) else ""}' + f"{return_basename(outputPath)}")
-    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f'{"[yellow italic](Overwriting)[/yellow italic] " if os.path.exists(outputPath) else ""}' + f"{CURRENT_DIR if return_dirname(outputPath) == "" else return_abspath(return_dirname(outputPath))}")
+    for item in filesDict: fileSize += Path(item).stat().st_size / (1024 * 1024)
+    merge_table_details.add_row("[underline bold]Output file[/underline bold]:" , f'{"[yellow italic](Overwriting)[/yellow italic] " if outputPath.exists() else ""}' + f"{outputPath.name}")
+    merge_table_details.add_row("[underline bold]Saving directory[/underline bold]:", f'{"[yellow italic](Overwriting)[/yellow italic] " if outputPath.exists() else ""}' + f"{Path.cwd() if outputPath.parent == "" else outputPath.parent.absolute()}")
     merge_table_details.add_row("[underline bold]Sort Order[/underline bold]:", f"[i]({str(sort)})[/i] {SortOrder(sort).description()}")
     merge_table_details.add_row("[underline bold]Preserve Mode[/underline bold]:", f"{"[italic green bold]Preserve ON![/italic green bold] Files will not be deleted after merging." if preserveFiles else "[italic red bold]Preserve OFF! [/italic red bold]PDF files will be deleted after merging."}")
     merge_table_details.add_row("[underline bold]Estimated Size[/underline bold]:", f">{fileSize: .2f} MB")
-    
-    panel_group = Group(
+  
+    return Group(
         Rule("Merge Order Overview"),
-        return_validated_display(filesDict),
+        returnValidDisplayRenderable(filesDict),
         Rule("Merge Settings"),
-        merge_table_details
+        merge_table_details,
+        console.render_str(f"{"Estimated file size is big. Merge operations will take a while." if fileSize > 100 else ""}")
     )
-    Console().print(Panel(panel_group, border_style="blue", expand=False))
-    if fileSize > 100: print(f"\nEstimated file size is big. Merge operations will take a while.")
 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
@@ -176,7 +176,7 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
             for item_entry in itemsDict.keys():
                 doc.insert_file(item_entry)
                 log.info(f'Inserted file: {item_entry}')
-            log.info("Finalizing saving.")
+            log.info("Finalizing saving...")
             doc.save(outputFile)
         
         if outputFile in itemsDict:
@@ -200,7 +200,9 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
 def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
     output = designate_saving_filePath(output)
     output_dir = Path(output).parent
-    display_merge_overview(filesDict, output, preserveFiles, sort) # display overview to the user
+
+     # display overview to the user
+    console.print(Panel(display_merge_overview(filesDict, Path(output), preserveFiles, sort), border_style="blue", expand=False))
     
     if return_confirm("\nMerge with current settings? (Default: N)", default=False):
         
@@ -217,8 +219,10 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
         validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
 
         generate_merged_pdf(validated_dict, output, preserveFiles)
+
         # at this point, merge is sucessful
-        display_successful_merge_outcome(output)
+        # display successful merge details
+        console.print(Panel(return_merge_success_display(Path(output)), subtitle="MERGE COMPLETED", border_style="green", expand=False))
     else:
         exit_program()
 
@@ -240,11 +244,11 @@ ___   __ _______ ______   _______ _______
 )
 
 def merge(
-    items: Annotated[Optional[List[str]], typer.Argument(help="PDF files to merge. You can also use --source instead.")]=None,
+    items: Annotated[Optional[List[Path]], typer.Argument(help="PDF files to merge. You can also use --source instead.")]=None,
     sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = SortOrder.none,
-    exclude: Annotated[List[str], typer.Option(help="Specify files to exclude from merging.", rich_help_panel="Additional Options", metavar="FILEPATH")]=[],
-    source: Annotated[Optional[str], typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
-    exclude_source: Annotated[Optional[str], typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
+    exclude: Annotated[Optional[List[Path]], typer.Option(help="Specify files to exclude from merging.", rich_help_panel="Additional Options", metavar="FILEPATH")]=None,
+    source: Annotated[Optional[List[Path]], typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
+    exclude_source: Annotated[Optional[List[Path]], typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
     
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,

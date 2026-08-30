@@ -4,15 +4,30 @@ import struct # windows os + ghostScript only. Required to get CPU bit since gsw
 import sys
 from pathlib import Path
 
+from typing import TypedDict
+
 from rich import print
+from rich.console import Console, RenderableType
 
 from click.exceptions import ClickException
 import typer
 
 CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
+OPER_SYS = sys.platform
 
-def text_dedent(msg) -> str:
+# TODO: create a log function. replace all log imports with this one.
+
+
+class fileDictTyped(TypedDict):
+    savingPath: Path
+    valid: None | bool
+    state: None | str
+    initial_size: int
+    final_size: int
+
+
+def text_dedent(msg:str) -> str:
     import textwrap
     return textwrap.dedent(msg).strip()
 
@@ -72,41 +87,43 @@ def return_dirname(item:str) -> str:
     return os.path.dirname(item)
 
 
-def return_abspath(item:str) -> str:
-    return os.path.abspath(item)
-
-
-def check_file_readability(item: str) -> bool:
-    return os.path.isfile(item) and os.access(item, os.R_OK)
+def check_file_readability(item: Path) -> bool:
+    return item.is_file() and os.access(item, os.R_OK)
 
 
 def return_joined_filePath(filePath1:str, filePath2:str) -> str:
     return os.path.join(filePath1, filePath2)
 
 
-def txt_file_reader(victimFile, filePath:str) -> list:
+def txt_file_reader(fileList:list[Path]|None, sourceFile:list[Path]|None) -> list[Path]:
+    changedFileList: list[Path] = []
 
-    if not filePath.endswith(".txt"): 
-        print(f"[yellow]Caution[/yellow]--source file:{filePath} is not a .txt file in suffix")
-        return victimFile
+    for item in fileList or []: changedFileList.append(Path(item))
 
-    print('Reading text file....')
+    for sourceFileItem in sourceFile or []:
+        if not sourceFileItem.suffix.lower() == ".txt": 
+            print(f"[yellow]CAUTION![/yellow] External source file not .txt suffix: [yellow][i]{sourceFileItem.absolute}[/i][/yellow]")
+            continue
 
-    try:
-        with open(filePath, 'r') as file:
-            victimFile.extend(line.strip() for line in file)
-    except FileNotFoundError:
-        raise PrettyErrorDisplay(f"--source file not found: [purple]{filePath}[/purple]")
-    except Exception as e:
-        raise PrettyErrorDisplay(f"Error with the source file.\nError: {e}")
+        print(f'Reading text file: [yellow]{sourceFileItem}...[/yellow]')
+
+        try:
+            with sourceFileItem.open('r') as file:
+                for line in file:
+                    value = line.strip()
+                    if value: changedFileList.append(Path(value))
+        except FileNotFoundError:
+            raise PrettyErrorDisplay(f"External file source not found: [purple]{sourceFileItem}[/purple]")
+        except Exception as e:
+            raise PrettyErrorDisplay(f"Error with the source file.\nError: {e}")
     
-    return victimFile
+    return changedFileList
 
 
-def scan_items_entry(itemList: list) -> list:
+def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
 
     return_list = []
-    for item in itemList:
+    for item in itemList or []:
         file = Path(item).resolve()
         file_type = "directory" if file.is_dir() else "file" if file.is_file() else "unknown"
         file_suffix = file.suffix.lower()
@@ -142,7 +159,7 @@ def scan_items_entry(itemList: list) -> list:
     return return_list
 
 
-def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
+def returnValidatedDict(filesDict: dict[Path, fileDictTyped], mimecheck: bool):
     
     # 1. verify pymupdf 
     try:
@@ -152,7 +169,6 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
         print("[yellow]CAUTION![/yellow] PyMuPDF (pymupdf) not found. Skipping password protection check.")
 
     # 2. confirm magic exists. 
-    # if it doesnt and user still approves it; raise error
     try:
         magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
     except ModuleNotFoundError:
@@ -160,17 +176,17 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
 
     # 3. start validation loop over dict
     for file_items in filesDict.items():
-        file_name = file_items[0]
-        file_mime = magic.from_file(file_items[0]) if magic else None
+        target = file_items[0]
+        file_mime = magic.from_file(target) if magic else None
         # 3.1. get size of the file
         try:
-            file_items[1]['initial_size'] = Path(file_name).stat().st_size
+            file_items[1]["initial_size"] = Path(target).stat().st_size
         except Exception:
             file_items[1]['valid'] = False
             file_items[1]['state'] = 'ERROR'
 
         # 3.2. check file readability
-        if not check_file_readability(file_items[0]):
+        if not check_file_readability(target):
             file_items[1]['valid'] = False
             file_items[1]['state'] = "Unreadable file"
 
@@ -200,20 +216,34 @@ def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
     return filesDict
 
             
-def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
+def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:list[Path]|None, excludeSource:list[Path]|None, mimecheck:bool):
 
-    items = items or [] # without this, item will be treated as NoneType
     items = txt_file_reader(items, source) if source else items
     exclude= txt_file_reader(exclude, excludeSource) if excludeSource else exclude
     
-    unvalidated_files = scan_items_entry(items)
-    excludeList = scan_items_entry(exclude) if exclude else []
+    unvalidated_files:list[Path] = scan_items_entry(items) or []
+    excludeList:list[Path] = scan_items_entry(exclude) if exclude else []
 
     if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled! Corrupted files can disrupt the process.")  
 
-    # template for file dict
-    newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
-    validatedFilesDict = return_validate_pdf_dict(newFilesDict, mimecheck)
+    # TODO: fix this annotation above the callings
+    excludeFreeFilesDict = [
+        Path(file_entry) for file_entry in unvalidated_files
+        if file_entry not in excludeList
+    ]
+
+    newFilesDict: dict[Path, fileDictTyped] = {
+        file_entry: {
+            "savingPath": file_entry,
+            "valid": None,
+            "state": None,
+            "initial_size": 0,
+            "final_size": 0,
+        }
+        for file_entry in excludeFreeFilesDict
+    }
+
+    validatedFilesDict = returnValidatedDict(newFilesDict, mimecheck)
 
     # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and type of the file (mimecheck)
     # this loop checks between true/false and none. if none then it's validation is unknown.
@@ -228,6 +258,7 @@ def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
     
     # different feature require different form of filesDict
     # merge requires fileDict length to be greater than 1. compress doesn't have any requirements.
+
     match get_calling_function():
         case "compress.py": 
             return validatedFilesDict
@@ -239,7 +270,8 @@ def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
             return validatedFilesDict
 
 
-def return_validated_display(filesDict:dict):
+def returnValidDisplayRenderable(filesDict:dict[Path, fileDictTyped]) -> RenderableType:
+
     from rich.table import Table
     index = 0
     validated_list_table = Table(show_lines=True)
@@ -250,10 +282,10 @@ def return_validated_display(filesDict:dict):
     validated_list_table.add_column("Size (MB)", vertical="middle", justify="center")
 
     for file_item in filesDict.items(): 
-        valid = file_item[1]['valid']
-        file_name = file_item[0]
-        basename = os.path.splitext(return_basename(file_item[0]))[0]
-        state = file_item[1]['state']
+        valid = file_item[1]["valid"]
+        file_name = str(file_item[0])
+        basename = Path(file_name).name
+        validity = file_item[1]['state']
         size = f"{file_item[1]['initial_size']/ (1024 * 1024):.3f}"
         if valid:
             validity = "[green]Verified[/green]" 
@@ -263,7 +295,6 @@ def return_validated_display(filesDict:dict):
             index += 1
         else:
             # state is false
-            validity = state
             size = "[red]X[/red]"
             file_name = f"[strike][red]{file_name}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
