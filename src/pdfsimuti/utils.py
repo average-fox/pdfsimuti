@@ -7,19 +7,21 @@ from pathlib import Path
 from typing import TypedDict
 
 from rich import print
-from rich.console import Console, RenderableType
+from rich.console import RenderableType
 
 from click.exceptions import ClickException
 import typer
+
+from pdfsimuti.logClass import Log, console
+
 
 CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
 OPER_SYS = sys.platform
 
-# TODO: create a log function. replace all log imports with this one.
+log = Log(console=console).logger
 
-
-class fileDictTyped(TypedDict):
+class typeFileDict(TypedDict):
     savingPath: Path
     valid: None | bool
     state: None | str
@@ -95,17 +97,17 @@ def return_joined_filePath(filePath1:str, filePath2:str) -> str:
     return os.path.join(filePath1, filePath2)
 
 
-def txt_file_reader(fileList:list[Path]|None, sourceFile:list[Path]|None) -> list[Path]:
+def txt_file_reader(fileList:list[Path]|None, sourceFile:list[Path]|None, typeFile:str) -> list[Path]:
     changedFileList: list[Path] = []
 
     for item in fileList or []: changedFileList.append(Path(item))
 
     for sourceFileItem in sourceFile or []:
         if not sourceFileItem.suffix.lower() == ".txt": 
-            print(f"[yellow]CAUTION![/yellow] External source file not .txt suffix: [yellow][i]{sourceFileItem.absolute}[/i][/yellow]")
+            log.error(f"External source file not .txt suffix: [yellow][i]{sourceFileItem.absolute()}[/i][/yellow]")
             continue
 
-        print(f'Reading text file: [yellow]{sourceFileItem}...[/yellow]')
+        log.debug(f'Reading external [code]{typeFile}[/code] file: {sourceFileItem}...')
 
         try:
             with sourceFileItem.open('r') as file:
@@ -137,7 +139,7 @@ def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
                 if folder_item not in return_list:
                     return_list.append(folder_item)
                 else:
-                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {folder_item}")
+                    log.warning(f"Duplicate file found and ignored: [i]{folder_item}[/i]")
 
         # case 2: its a file
         elif file_type == "file":
@@ -145,28 +147,28 @@ def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
                 if str(file) not in return_list:
                     return_list.append(str(file))
                 else:
-                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: [i][yellow]{str(file)}[/yellow] [/i]")
+                    log.warning(f"Duplicate file found and ignored: [i]{str(file)}[/i]")
             else:
-                print(f"[red]WARNING![/red] File not PDF: [i][yellow]{str(file)}[/yellow] [/i]")
+                log.error(f"File not PDF: [i]{str(file)}[/i]")
         
         # case 3: its neither and looks like a directory
         elif file_suffix == "" and file_type == "unknown":
-            print(f"[red]WARNING![/red] Folder not found: [i][yellow]{str(file)}[/yellow] [/i]")
+            log.error(f"Folder not found: [i]{str(file)}[/i]")
         
         else:
-            print(f"[red]WARNING![/red] File not found: [i][yellow]{str(file)}[/yellow] [/i]")
+            log.error(f"File not found: [i]{str(file)}[/i]")
 
     return return_list
 
 
-def returnValidatedDict(filesDict: dict[Path, fileDictTyped], mimecheck: bool):
+def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
     
     # 1. verify pymupdf 
     try:
         pymupdf = importlib.import_module('pymupdf')
     except ModuleNotFoundError:
         pymupdf = None
-        print("[yellow]CAUTION![/yellow] PyMuPDF (pymupdf) not found. Skipping password protection check.")
+        log.warning("PyMuPDF not found. Skipping password protection check.")
 
     # 2. confirm magic exists. 
     try:
@@ -218,21 +220,20 @@ def returnValidatedDict(filesDict: dict[Path, fileDictTyped], mimecheck: bool):
             
 def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:list[Path]|None, excludeSource:list[Path]|None, mimecheck:bool):
 
-    items = txt_file_reader(items, source) if source else items
-    exclude= txt_file_reader(exclude, excludeSource) if excludeSource else exclude
+    items = txt_file_reader(items, source, "--source") if source else items
+    exclude= txt_file_reader(exclude, excludeSource, "--exclude") if excludeSource else exclude
     
     unvalidated_files:list[Path] = scan_items_entry(items) or []
     excludeList:list[Path] = scan_items_entry(exclude) if exclude else []
 
-    if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled! Corrupted files can disrupt the process.")  
+    if not mimecheck: log.warning("Mimechecking disabled! Corrupted files can disrupt the process.")  
 
-    # TODO: fix this annotation above the callings
     excludeFreeFilesDict = [
         Path(file_entry) for file_entry in unvalidated_files
         if file_entry not in excludeList
     ]
 
-    newFilesDict: dict[Path, fileDictTyped] = {
+    newFilesDict: dict[Path, typeFileDict] = {
         file_entry: {
             "savingPath": file_entry,
             "valid": None,
@@ -270,7 +271,7 @@ def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:lis
             return validatedFilesDict
 
 
-def returnValidDisplayRenderable(filesDict:dict[Path, fileDictTyped]) -> RenderableType:
+def returnValidDisplayRenderable(filesDict:dict[Path, typeFileDict]) -> RenderableType:
 
     from rich.table import Table
     index = 0

@@ -1,64 +1,97 @@
 import typer
 import os
 
-from typing import List, Annotated, Optional
+from typing import List, Annotated, Optional, Literal
 from enum import Enum
 from pathlib import Path
 
 from rich import print
 from rich.table import Table
 from rich.panel import Panel
-from rich.console import Console, Group
+from rich.console import Group
 
 from pdfsimuti.utils import return_basename, CURRENT_DIR
-from pdfsimuti.utils import PrettyErrorDisplay, text_dedent, fileDictTyped
+from pdfsimuti.utils import PrettyErrorDisplay, text_dedent, typeFileDict
 
-import logging
-from rich.logging import RichHandler
+from collections.abc import Callable
+from dataclasses import dataclass
 
-console = Console()
-logging.basicConfig(
-    level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler(markup=True, console=console)]
-)
 app = typer.Typer(add_completion=False, suggest_commands = True, rich_markup_mode = "rich", pretty_exceptions_show_locals=False)
-log = logging.getLogger(__name__)
 pymupdf = None
 subprocess = None
 
+from pdfsimuti.logClass import Log, console
+
+log = Log(console).logger
+
+# for annotations only
+type typeLogRes = tuple[Literal['warning','info','error',''],str]
+type typeWorkerResults = tuple[
+    tuple[Path, typeFileDict],
+    Path,
+    typeLogRes
+]
+type typeGSPresets = Literal['ebook', 'screen', 'printer', 'prepress']
+type typeGSSampleControl = Literal['subsample', 'average', 'bicubic']
+type typeGSColorControl = Literal['LeaveColorUnchanged', 'Gray', 'RGB', 'CMYK']
 
 
-class pymupdf_settings:
-    def __init__(self, garbageStrength:int):
-        self.garbageStrength = garbageStrength
-             
-    def __getitem__(self, key):
-        return getattr(self, key)
-    
-    def display_properties(self, preserve_choice):
-        return text_dedent(f"""
-        Compression mode: PyMuPDF
-        Preserve files: {preserve_choice}
-        {f"Preserve folder creation: " + CURRENT_DIR if preserve_choice else ""}
-        
-        Compression Settings:
-        -----------------------
-        Garbage Mode: {self.garbageStrength}   
-        -----------------------      
-        """)
+@dataclass
+class pymupdfGarbageControl:
+    max:int = 4
+    min:int = 0
 
-    def initialize_worker(self):
-        import signal
-        signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
 
-        global pymupdf
-        if pymupdf is None:
-            import pymupdf as _pymupdf
-            pymupdf = _pymupdf
+class compressMethodChoice(str, Enum):
+    gs = "gs"
+    pymupdf = "pymupdf"
+    ghostscript = "ghostscript"
 
+
+class gsColorConversionStrategy(str, Enum):
+    """
+    GhostScript conversion Strategy choices.
+    """
+    leaveColorUnchanged="LeaveColorUnchanged"
+    Gray="Gray"
+    RGB="RGB"
+    CMYK="CMYK"
+
+
+class gsCompatibilityChoice(str, Enum):
+    """
+    GhostScript compatibility settings.
+    """
+    one_three = "1.3"
+    one_four = "1.4"
+    one_seven = "1.7"
+    two_zero = "2.0"
+
+
+class gsPDFshrinkPresets(str, Enum):
+    """
+    GhostScript shrinking presets.
+    """
+    ebook = "ebook"
+    screen = "screen"
+    printer = "printer"
+    prepress = "prepress"
+
+
+class gsDownSampleControl(str, Enum):
+    """
+    GhostScript color/grey downgrading sample control.
+    """    
+    subsample = "subsample"
+    average = "average"
+    bicubic = "bicubic"
 
 
 class gs_settings:
-    def __init__(self, gs_name:str, compatibility:float, presets:str, embedAllFonts:bool, colorConversion:str,  enableColorSampling:bool ,colorResValue:int, colorSample:str, enableGreySampling, greyResValue, greySample, custom):
+    def __init__(self, 
+                 gs_name:str, compatibility:float, presets:Literal['ebook', 'screen', 'printer', 'prepress'], embedAllFonts:bool, colorConversion:typeGSColorControl,  
+                 enableColorSampling:bool ,colorResValue:int, colorSample:typeGSSampleControl, enableGreySampling:bool, greyResValue:int, 
+                 greySample:typeGSSampleControl, custom:str):
         self.gs_name = gs_name
 
         self.compatibility = compatibility
@@ -87,7 +120,7 @@ class gs_settings:
         if self.custom and (match := re.search(r"dColorConversionStrategy=([^\s-]+)",self.custom)): self.colorConversion = match.group(1)
         if self.colorConversion != "LeaveColorUnchanged":
                 from pdfsimuti.utils import return_confirm
-                print("[bold white on red]WARNING![/bold white on red] Color Conversion not default. Colors will be affected.")
+                log.warning("Color Conversion not default. Colors will be affected.")
                 if not return_confirm("Proceed?", default=False):
                     raise PrettyErrorDisplay("Program terminated for safety.")
                 
@@ -139,53 +172,34 @@ class gs_settings:
         if subprocess is None: subprocess = sp
 
 
-class compressMethodChoice(str, Enum):
-    """
-    Compress method choices.
-    """
-    gs = "gs"
-    pymupdf = "pymupdf"
-    ghostscript = "ghostscript"
-
-
-class gsColorConversionStrategy(str, Enum):
-    """
-    GhostScript conversion Strategy choices.
-    """
-    leaveColorUnchanged="LeaveColorUnchanged"
-    Gray="Gray"
-    RGB="RGB"
-    CMYK="CMYK"
-
-
-class gsCompatibilityChoice(str, Enum):
-    """
-    GhostScript compatibility settings.
-    """
-    one_three = "1.3"
-    one_four = "1.4"
-    one_seven = "1.7"
-    two_zero = "2.0"
-
-
-class gsPDFshrinkPresets(str, Enum):
-    """
-    GhostScript shrinking presets.
-    """
-    ebook = "ebook"
-    screen = "screen"
-    printer = "printer"
-    prepress = "prepress"
-
-
-class gsDownSampleControl(str, Enum):
-    """
-    GhostScript color/grey downgrading sample control.
-    """    
-    subsample = "subsample"
-    average = "average"
-    bicubic = "bicubic"
+class pymupdf_settings:
+    def __init__(self, garbageStrength:Annotated[int, pymupdfGarbageControl]):
+        self.garbageStrength = garbageStrength
+             
+    def __getitem__(self, key):
+        return getattr(self, key)
     
+    def display_properties(self, preserve_choice):
+        return text_dedent(f"""
+        Compression mode: PyMuPDF
+        Preserve files: {preserve_choice}
+        {f"Preserve folder creation: " + CURRENT_DIR if preserve_choice else ""}
+        
+        Compression Settings:
+        -----------------------
+        Garbage Mode: {self.garbageStrength}   
+        -----------------------      
+        """)
+
+    def initialize_worker(self):
+        import signal
+        signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore worker's warnings
+
+        global pymupdf
+        if pymupdf is None:
+            import pymupdf as _pymupdf
+            pymupdf = _pymupdf
+
 
 def display_overview_confirm(filesDict, compressSettings, preserve_choice):
     """
@@ -277,8 +291,7 @@ def designate_preserve_saveFolder(targetDict: dict):
 
 
 
-def worker_pymupdf_compression(task_details: tuple):
-    # TODO: Fix the annot. here
+def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf_settings | gs_settings, Path]) -> typeWorkerResults:
 
     file_entry, pymupdf_settings, tempPath = task_details
 
@@ -287,17 +300,15 @@ def worker_pymupdf_compression(task_details: tuple):
 
     target = file_entry[0]
     target_properties = file_entry[1]
-    response_type:tuple[str, str] = ("", "")
+    log_response:tuple[str, str] = ("", "")
 
     try:
         with pymupdf.open(target) as doc:
-            # temp files created to solve incremental saving issue
-            
             doc.save(tempPath, garbage=pymupdf_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
             target_properties['final_size'] = os.path.getsize(tempPath)
             
             if (target_properties['initial_size'] <= target_properties['final_size']):
-                response_type = ("warning", f"File unchanged. File: {target}")
+                log_response = ("warning", f"File unchanged. File: {target}")
                 os.remove(tempPath)
                 target_properties['valid'] = False
                 target_properties['state'] = 'Unchanged'
@@ -305,25 +316,25 @@ def worker_pymupdf_compression(task_details: tuple):
                 target_properties['valid'] = True
                 target_properties['state'] = "Compressed"
 
-                response_type = ("info", f"File Compressed: {target}")
+                log_response = ("info", f"File compressed: {target}")
         
-                if target == target_properties['saving_path']: 
+                if target == target_properties['savingPath']: 
                     os.replace(tempPath, target)
 
     except Exception as e: 
-        response_type = ("error", text_dedent(f"""
+        log_response = ("error", text_dedent(f"""
         --------------------
-        CAUTION. '{return_basename(target)}' cannot be compressed.
+        CAUTION. '{return_basename(str(target))}' cannot be compressed.
         Error: {e}
         --------------------
         """))
         target_properties['valid'] = False
         target_properties['state'] = 'PyMuPDF failure'
 
-    return file_entry, tempPath, response_type
+    return file_entry, tempPath, log_response
 
 
-def worker_gs_compression(task_details: tuple):
+def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf_settings | gs_settings, Path]) -> typeWorkerResults:
     # TODO: fix the annot. here
 
     file_entry, gs_settings, tempPath = task_details
@@ -333,7 +344,7 @@ def worker_gs_compression(task_details: tuple):
 
     target = file_entry[0]
     target_properties = file_entry[1]
-    response_type:tuple[str, str] = ("", "")
+    log_response:typeLogRes = ('','')
 
     command = [
             gs_settings['gs_name'],
@@ -363,16 +374,16 @@ def worker_gs_compression(task_details: tuple):
         file_entry[1]['final_size'] = os.path.getsize(tempPath)
 
         if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
-            response_type = ("warning", f"File unchanged. File: {target}")
+            log_response = ("warning", f"File [yellow]unchanged[/yellow]. File: {target}")
             file_entry[1]['valid'] = False
             file_entry[1]['state'] = 'Unchanged'
             os.remove(tempPath)
         else:
             # only works if --preserve is not enabled.
-            if target == target_properties['saving_path']:
+            if target == target_properties['savingPath']:
                 os.replace(tempPath, target)
 
-            response_type = ("info", f"File Compressed: {target}")
+            log_response = ("info", f"File [green]compressed[/green]: {target}")
             file_entry[1]['valid'] = True
             file_entry[1]['state'] = "Compressed"
 
@@ -382,20 +393,28 @@ def worker_gs_compression(task_details: tuple):
         # if file removed during operation, script will still continue
         file_entry[1]['valid'] = False
         os.remove(tempPath)
-        response_type = ("error", f"Unable to compress file: [red]{target}[/red]")
+        log_response = ("error", f"Unable to compress file: [red]{target}[/red]")
 
         # what is this??
         if not os.path.exists(target):
-            response_type = ("error", f"Filepath: [red]{return_basename(target)}[/red]. File not found.")
+            log_response = ("error", f"Filepath: [red]{return_basename(str(target))}[/red]. File not found.")
             file_entry[1]['state'] = 'File not found.'
         else:
             file_entry[1]['state'] = '-gs failure'
 
-    return file_entry, tempPath, response_type
+    return file_entry, tempPath, log_response
 
 
-def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
-    # TODO: Fix the annot. here
+def compress_engine(
+        compressMode:Literal["GhostScript","PyMuPDF"], 
+        compressSettings:pymupdf_settings|gs_settings, 
+        compressWorker:Callable[[tuple
+            [
+            tuple[Path, typeFileDict], pymupdf_settings | gs_settings, Path]], 
+            typeWorkerResults,
+            ], 
+        filesDict:dict[Path, typeFileDict]
+    ):
 
     from multiprocessing import Pool
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -413,8 +432,8 @@ def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
 
     for file_entry in filesDict.items():
         target = file_entry[0]
-        targetSavePath  = file_entry[1]['saving_path']
-        tempFile = (target + ".temp") if target == targetSavePath else targetSavePath
+        targetSavePath  = file_entry[1]["savingPath"]
+        tempFile = Path(target).with_suffix(".pdf.temp") if target == targetSavePath else targetSavePath
         worker_task_details.append((file_entry, compressSettings, tempFile))
         temp_paths.append(tempFile)
 
@@ -442,7 +461,7 @@ def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
 
         except Exception as e:
             pool.terminate()
-            raise PrettyErrorDisplay(f"GhostScript compression has failed\n{e}")
+            raise PrettyErrorDisplay(f"Compression ({compressMode}) has failed\n{e}")
 
 
         finally:
@@ -451,7 +470,7 @@ def compress_engine(compressMode, compressSettings, compressWorker, filesDict):
             for temp in temp_paths:
                 if os.path.exists(temp):
                     os.remove(temp)
-                    print("Incomplete output file deleted. " + temp)
+                    log.debug("Incomplete output file deleted. " + temp)
         
     return filesDict
 
@@ -461,7 +480,6 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
 
     log.info("Validating files...")
     filesDict = validate_pdf_dict(fileList, source,  exclude, excludeSource,  mimecheck)
-
     log.info("Validation complete")
     
     # Display overview before confirm
@@ -486,7 +504,7 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
             case 'pymupdf_settings': filesDict = compress_engine("PyMuPDF", compressSettings, worker_pymupdf_compression, validated_pdf_dict)
             case 'gs_settings': filesDict = compress_engine("GhostScript", compressSettings, worker_gs_compression, validated_pdf_dict)
         #########################################
-        log.info("Compression runtime over.")
+        log.info("Compression runtime complete.")
         
         # 2nd Size Capture: Concluding Runtime
         end_time = time.time()
@@ -541,20 +559,22 @@ def compress(
     
     import sys # detect for ghostscript commands.
     from pdfsimuti.utils import get_gs_name
+    
     commandline_gs_exception = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--color-down", "--grey-res", "--grey_down", "--grey_sample_type"]
     compressSettings:gs_settings | pymupdf_settings = pymupdf_settings(garbageStrength=garbage)
 
+    if items == None and not source:
+        raise PrettyErrorDisplay("No filepaths were added to compress.py or with --source")
+    
     if any(value in commandline_gs_exception for value in sys.argv) and compressMethod == "pymupdf":
         raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
     
-    elif compressMethod == ("gs", "ghostscript"):
+    elif compressMethod in ("gs","ghostscript"):
         compressSettings = gs_settings(get_gs_name(), float(compatibility.value), presets.value, embedAllFonts, colorConversion.value, color_down, color_res, color_sample_type.value, gray_down, grey_res, grey_sample_type.value, gs_custom)
     
     elif compressMethod == "pymupdf":
         compressSettings = pymupdf_settings(garbageStrength=garbage)
     
-    if items == None and not source:
-        raise PrettyErrorDisplay("No filepaths were added to compress.py or with --source")
 
     # compress runtime handles the main load
     compress_runtime(items, source, mimecheck, exclude, excludeSource, compressSettings, preserve_choice=preserve)

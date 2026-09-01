@@ -11,13 +11,14 @@ from rich.table import Table
 from rich import print
 
 from pdfsimuti.utils import validate_pdf_dict, exit_program, return_confirm
-from pdfsimuti.utils import PrettyErrorDisplay, DEFAULT_OUTPUT, fileDictTyped, OPER_SYS
+from pdfsimuti.utils import PrettyErrorDisplay, DEFAULT_OUTPUT, typeFileDict, OPER_SYS
 from rich.console import Group, Console, RenderableType
 
 console = Console()
 import typer
 app = typer.Typer(add_completion=False, suggest_commands = True, rich_markup_mode = "rich", pretty_exceptions_show_locals=False)
 
+type typeFilesDict = dict[Path, typeFileDict] | None
 
 class SortOrder(str, Enum):
     none = "none"
@@ -56,7 +57,7 @@ def sort_natural(files_dict, reverse=False):
     return result
 
 
-def sort_dict(sort_type:str, files_dict):
+def sort_dict(sort_type:str, files_dict) -> dict[Path, typeFileDict] | None:
     match sort_type:
         case 'none':
             return files_dict
@@ -135,7 +136,7 @@ def return_merge_success_display(outputPath:Path) -> RenderableType:
     
 
 
-def display_merge_overview(filesDict:dict[Path, fileDictTyped], outputPath:Path, preserveFiles: bool, sort:str) -> RenderableType:
+def display_merge_overview(filesDict:dict[Path, typeFileDict], outputPath:Path, preserveFiles: bool, sort:str) -> RenderableType:
 
     from rich.rule import Rule
     from pdfsimuti.utils import returnValidDisplayRenderable # display file status despite the result
@@ -225,6 +226,7 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
         console.print(Panel(return_merge_success_display(Path(output)), subtitle="MERGE COMPLETED", border_style="green", expand=False))
     else:
         exit_program()
+
 
 @app.command(help="""
 Merges several PDFs into a super PDF.
