@@ -259,14 +259,14 @@ def merge(
     # in case someone pass --mimecheck as --output
     if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
+    
+    if items == None and not source:
+        raise PrettyErrorDisplay("No filepaths were added to merge.py or with --source")
 
     validated_dict = validate_pdf_dict(items, source, exclude, exclude_source ,mimecheck)
 
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
         validated_dict = sort_dict(sort, validated_dict)
-    
-    if items == None and not source:
-        raise PrettyErrorDisplay("No filepaths were added to merge.py or with --source")
         
     merge_runtime(validated_dict, output, preserve, sort)
