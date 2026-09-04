@@ -47,8 +47,8 @@ class PrettyErrorDisplay(ClickException):
         super().__init__(capture.get())
         
 
-def exit_program():
-    print("[bold red]Program Exited[/bold red]")
+def exit_program(msg:str="Program Exited"):
+    print(f"[bold red]{msg}[/bold red]")
     exit()
     
 

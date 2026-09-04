@@ -118,14 +118,14 @@ def designate_saving_filePath(target: str) -> str:
                     subject = subject.with_name(typer.prompt("Enter new filename only: "))
 
             case subject if subject.exists() and not overwrite:
-                print("\n[yellow]CAUTION![/yellow] Specified output filepath already exists.")
+                print("\n[red]Error![/red] Specified output filepath already exists.")
                 if not return_confirm("Do you wish to overwrite this file? (Default: Y)"):    
                     print("\nFilename cannot be same if overwrite isn't allowed")
                     savePath = Path(typer.prompt("Enter new output path or filename again: "))
                 else: overwrite = True
 
             case subject if not (parent := subject.parent).exists() and not folder_creation:
-                print(f"\n[yellow]CAUTION[/yellow] File directory [purple]{parent}[/purple] doesn't exist.")
+                print(f"\n[red]Error![/red] File directory doesn't exist: [purple]{parent}[/purple]")
                 folder_creation = return_confirm("Create new directory?")
                 if not folder_creation:
                     savePath = Path(typer.prompt("Enter new output path or filename again: "))
@@ -172,38 +172,31 @@ def display_merge_overview(filesDict:dict[Path, typeFileDict], outputPath:Path, 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
 
-    try:
-        log.info("Started merge operations.")
-        # in case the user approves overwrite.
-        # if not done, this will remove the merged file if --no-preserve is active
-        with pymupdf.open() as doc:
-            for item_entry in itemsDict.keys():
-                doc.insert_file(item_entry)
-                log.info(f'Inserted file: {item_entry}')
-            log.info("Finalizing saving...")
-            doc.save(outputFile)
+    log.info("Started merge operations.")
+    # in case the user approves overwrite.
+    # if not done, this will remove the merged file if --no-preserve is active
+    with pymupdf.open() as doc:
+        for item_entry in itemsDict.keys():
+            doc.insert_file(item_entry)
+            log.info(f'Inserted file: {item_entry}')
+        log.info("Finalizing saving...")
+        doc.save(outputFile)
+    
+    if outputFile in itemsDict:
+        itemsDict.pop(outputFile)
+
+    # only delete after merging
+    if not preserveFiles:
+        for item_entry in itemsDict: 
+            os.remove(item_entry)
+
+    log.info("Merge operations completed.")
         
-        if outputFile in itemsDict:
-            itemsDict.pop(outputFile)
-
-        # only delete after merging
-        if not preserveFiles:
-            for item_entry in itemsDict: 
-                os.remove(item_entry)
-
-        log.info("Merge operations completed.")
-        
-    except KeyboardInterrupt:
-        exit_program()
-    except ValueError:
-        raise PrettyErrorDisplay(f"Fatal. PyMuPDF unable to read data. Run with mimechecking.")
-    except Exception as e:  
-        raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
-
 
 def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
     output = designate_saving_filePath(output)
     output_dir = Path(output).parent
+    create_directory = False
 
      # display overview to the user
     console.print(Panel(display_merge_overview(filesDict, Path(output), preserveFiles, sort), border_style="blue", expand=False))
@@ -215,20 +208,35 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
             if not return_confirm("Proceed?"):
                 exit_program()        
         if not os.path.isdir(output_dir): 
-            try: os.makedirs(output_dir)
+            try: 
+                os.makedirs(output_dir)
+                create_directory = True
             except PermissionError:
                 raise PrettyErrorDisplay(f"Program failed. Unable to create directory: {output_dir}")
         
         # purify dict of rejected items
         validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
 
-        generate_merged_pdf(validated_dict, output, preserveFiles)
+        try:
+            generate_merged_pdf(validated_dict, output, preserveFiles)
+        except KeyboardInterrupt:
+            log.error("Runtime aborted.")
+            if create_directory:
+                log.debug("Removing created directory...")
+                os.rmdir(output_dir)
+                log.debug("Removed")
+            exit_program("Program interrupted and exited.")
+
+        except ValueError:
+            raise PrettyErrorDisplay(f"Fatal. PyMuPDF unable to read data. Run with mimechecking.")
+        except Exception as e:  
+            raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
 
         # at this point, merge is sucessful
         # display successful merge details
         console.print(Panel(return_merge_success_display(Path(output)), subtitle="MERGE COMPLETED", border_style="green", expand=False))
     else:
-        exit_program()
+        exit_program("Program aborted by User's choice.")
 
 
 @app.command(help="""
