@@ -530,47 +530,59 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
 
     # note. Optional from typing for Optional[List[type]] is the same as List[type] | None
 def compress(
-    items: Annotated[Optional[List[Path]], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple.", metavar="pdf_item")] = None,
-    mimecheck: Annotated[bool, typer.Option(help="Performs a PDF mimecheck for advanced PDF validation")]=True,
-    exclude: Annotated[Optional[List[Path]], typer.Option("--exclude", "-x", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=None,
-    source: Annotated[Optional[List[Path]], typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
-    excludeSource: Annotated[Optional[List[Path]], typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
+    items: Annotated[Optional[List[Path]], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple.", metavar="PDF file")] = None,
+    mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF mimecheck for advanced PDF validation")]=True,
+    exclude: Annotated[Optional[List[Path]], typer.Option("--exclude", "-e", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=None,
+    source: Annotated[Optional[List[Path]], typer.Option("--source", "-s", help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
+    excludeSource: Annotated[Optional[List[Path]], typer.Option("--exclude-source", "-es", help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
     compressMethod: Annotated[compressMethodChoice, typer.Option("-cm", "--compressMethod", help="Compression application choice. Tip: 'ghostscript' can be written as 'gs'", rich_help_panel="Additional options", metavar="[gs/ghostscript|pymupdf]")] = compressMethodChoice.pymupdf,
     preserve: Annotated[bool, typer.Option(help="Preserve file on compress. Will be saved in a folder on the working directory.", rich_help_panel='Additional options')]=False,
-    garbage: Annotated[int, typer.Option(max=4, min=0, help="PyMuPDF garbage strength control", rich_help_panel="PyMuPDF Settings")] = 4,
+
+    garbage: Annotated[int, typer.Option("--garbage", "-g", max=4, min=0, help="PyMuPDF garbage strength control", rich_help_panel="PyMuPDF Settings")] = 4,
 
     compatibility: Annotated[gsCompatibilityChoice, typer.Option(help="Specify ghostscript compatibility mode", rich_help_panel="GhostScript options")] = gsCompatibilityChoice.one_seven,
-    presets: Annotated[gsPDFshrinkPresets, typer.Option("-p", "--presets", help="Specify ghostscript pdf compression presets", rich_help_panel="GhostScript options")] = gsPDFshrinkPresets.ebook,
-    embedAllFonts: Annotated[bool, typer.Option(help="Embed fonts in PDF for cross-platform font support", rich_help_panel="GhostScript options")] = True,
-    colorConversion: Annotated[gsColorConversionStrategy, typer.Option("-cc", "--colorConversion", help="[red](Caution!)[/red] Change color space of the document.", case_sensitive=False, rich_help_panel="GhostScript options")] = gsColorConversionStrategy.leaveColorUnchanged,
+    presets: Annotated[gsPDFshrinkPresets, typer.Option("--preset", help="Specify ghostscript pdf compression presets", rich_help_panel="GhostScript options")] = gsPDFshrinkPresets.ebook,
+    embedAllFonts: Annotated[bool, typer.Option("--embed-all-fonts/--no-embed-all-fonts",help="Embed fonts in PDF for cross-platform font support", rich_help_panel="GhostScript options")] = True,
+    colorConversion: Annotated[gsColorConversionStrategy, typer.Option("-cc", "--color-conversion", help="[red](Caution!)[/red] Change color space of the document.", case_sensitive=False, rich_help_panel="GhostScript options")] = gsColorConversionStrategy.leaveColorUnchanged,
     
-    color_down:Annotated[bool, typer.Option(help="Enable reduction of color images", rich_help_panel="GhostScript options (Color Down Sampling)")] = True,
-    color_res: Annotated[int, typer.Option(min=0, help="Target DPI for color image resolution. Low DPI = More pixalated", rich_help_panel="GhostScript options (Color Down Sampling)")] = 150,
-    color_sample_type: Annotated[gsDownSampleControl, typer.Option("--color_sample_type", "-cs", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Color Down Sampling)")] = gsDownSampleControl.bicubic,
+    color_down:Annotated[bool, typer.Option("--color-down/--no-color-down", help="Enable reduction of color images", rich_help_panel="GhostScript options (Color Down Sampling)")] = True,
+    color_res: Annotated[int, typer.Option("--color-res", min=0, help="Target DPI for color image resolution. Low DPI = More pixalated", rich_help_panel="GhostScript options (Color Down Sampling)")] = 150,
+    color_sample_type: Annotated[gsDownSampleControl, typer.Option("--color-sample-type", "-cst", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Color Down Sampling)")] = gsDownSampleControl.bicubic,
     
-    gray_down: Annotated[bool, typer.Option(help="Enable reduction of Black/White", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = True,
-    grey_res: Annotated[int, typer.Option(min=0, help="Target DPI for grey image resolution. Low DPI = More pixalated", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = 150,
-    grey_sample_type: Annotated[gsDownSampleControl, typer.Option("--grey_sample_type", "-gs", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = gsDownSampleControl.bicubic,
+    grey_down: Annotated[bool, typer.Option("--grey-down/--no-grey-down", help="Enable reduction of Black/White", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = True,
+    grey_res: Annotated[int, typer.Option("--grey-res", min=0, help="Target DPI for grey image resolution. Low DPI = More pixalated", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = 150,
+    grey_sample_type: Annotated[gsDownSampleControl, typer.Option("--grey-sample-type", "-gst", help="Specify algorithm for downsampling", rich_help_panel="GhostScript options (Grey Image Down Sampling)")] = gsDownSampleControl.bicubic,
     
-    gs_custom: Annotated[str, typer.Option(help="Custom commands for ghostscript. Commands must be case-sensitive. Can override everything.", rich_help_panel="GhostScript options (Advanced)")] = ''
+    gs_custom: Annotated[str, typer.Option('--gs-custom', help="Custom commands for ghostscript. Commands must be case-sensitive. Can override everything.", rich_help_panel="GhostScript options (Advanced)")] = ''
     ):
 
-    log.info("performing command line validation")
+    log.info("Performing command line validation")
     
     import sys # detect for ghostscript commands.
-    from pdfsimuti.utils import get_gs_name
     
-    commandline_gs_exception = ["-p", '--presets', "--gs_custom", "--compatibility", "-cs", "-gs",  "--color-res", "--color_sample_type", "--color-down", "--grey-res", "--grey_down", "--grey_sample_type"]
-    compressSettings:gs_settings | pymupdf_settings = pymupdf_settings(garbageStrength=garbage)
+    
+    commandline_gs_exception = [
+        '--compatibility', "--preset", "--embed-all-fonts", "--no-embed-all-fonts", "-cc", 
+        "--color-conversion",  "--color-down", "--no-color-down", "--color-res", "--color-sample-type", "-cst", 
+        "--grey-down", "--no-grey-down","--grey-res", "--grey-sample-type", "-gst", "--gs-custom"]
+    commandline_pymupdf_exception = [
+        '--garbage', '-g'
+    ]
+
+    compressSettings:gs_settings | pymupdf_settings | None = None
 
     if items == None and not source:
         raise PrettyErrorDisplay("No filepaths were added to compress.py or with --source")
     
     if any(value in commandline_gs_exception for value in sys.argv) and compressMethod == "pymupdf":
-        raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMupdf compression mode.")
-    
+        raise PrettyErrorDisplay("Ghostscript options cannot be added to PyMuPDF.")
+
+    elif any(value in commandline_pymupdf_exception for value in sys.argv) and compressMethod == "gs":
+        raise PrettyErrorDisplay("PyMuPDF options cannot be added to GhostScript.")
+
     elif compressMethod in ("gs","ghostscript"):
-        compressSettings = gs_settings(get_gs_name(), float(compatibility.value), presets.value, embedAllFonts, colorConversion.value, color_down, color_res, color_sample_type.value, gray_down, grey_res, grey_sample_type.value, gs_custom)
+        from pdfsimuti.utils import get_gs_name
+        compressSettings = gs_settings(get_gs_name(), float(compatibility.value), presets.value, embedAllFonts, colorConversion.value, color_down, color_res, color_sample_type.value, grey_down, grey_res, grey_sample_type.value, gs_custom)
     
     elif compressMethod == "pymupdf":
         compressSettings = pymupdf_settings(garbageStrength=garbage)

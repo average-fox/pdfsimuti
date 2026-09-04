@@ -18,6 +18,9 @@ console = Console()
 import typer
 app = typer.Typer(add_completion=False, suggest_commands = True, rich_markup_mode = "rich", pretty_exceptions_show_locals=False)
 
+from pdfsimuti.logClass import Log, console
+log = Log(console).logger
+
 type typeFilesDict = dict[Path, typeFileDict] | None
 
 class SortOrder(str, Enum):
@@ -162,12 +165,6 @@ def display_merge_overview(filesDict:dict[Path, typeFileDict], outputPath:Path, 
 
 
 def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
-    import logging
-    from rich.logging import RichHandler
-    logging.basicConfig(
-        level="NOTSET", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
-    )   
-    log = logging.getLogger("rich")
 
     try:
         log.info("Started merge operations.")
@@ -246,11 +243,11 @@ ___   __ _______ ______   _______ _______
 )
 
 def merge(
-    items: Annotated[Optional[List[Path]], typer.Argument(help="PDF files to merge. You can also use --source instead.")]=None,
-    sort: Annotated[SortOrder, typer.Option(case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = SortOrder.none,
-    exclude: Annotated[Optional[List[Path]], typer.Option(help="Specify files to exclude from merging.", rich_help_panel="Additional Options", metavar="FILEPATH")]=None,
-    source: Annotated[Optional[List[Path]], typer.Option(help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
-    exclude_source: Annotated[Optional[List[Path]], typer.Option(help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
+    items: Annotated[Optional[List[Path]], typer.Argument(help="PDF files to merge. You can also use --source instead.", metavar="PDF file")]=None,
+    sort: Annotated[SortOrder, typer.Option("--sort" , case_sensitive=False, help="Sort files for order-specific merging", rich_help_panel="Additional Options")] = SortOrder.none,
+    exclude: Annotated[Optional[List[Path]], typer.Option("--exclude", "-e", help="Specify files to exclude from merging.", rich_help_panel="Additional Options", metavar="FILEPATH")]=None,
+    source: Annotated[Optional[List[Path]], typer.Option("--source", "-s", help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
+    excludeSource: Annotated[Optional[List[Path]], typer.Option("--exclude-source", "-es", help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
     
     mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
@@ -263,10 +260,11 @@ def merge(
     if items == None and not source:
         raise PrettyErrorDisplay("No filepaths were added to merge.py or with --source")
 
-    validated_dict = validate_pdf_dict(items, source, exclude, exclude_source ,mimecheck)
+    validated_dict = validate_pdf_dict(items, source, exclude, excludeSource ,mimecheck)
 
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
+        log.debug("Sorting files...")
         validated_dict = sort_dict(sort, validated_dict)
         
     merge_runtime(validated_dict, output, preserve, sort)
