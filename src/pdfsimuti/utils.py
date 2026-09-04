@@ -115,9 +115,11 @@ def txt_file_reader(fileList:list[Path]|None, sourceFile:list[Path]|None, typeFi
                     value = line.strip()
                     if value: changedFileList.append(Path(value))
         except FileNotFoundError:
-            raise PrettyErrorDisplay(f"External file source not found: [purple]{sourceFileItem}[/purple]")
+            log.error(f"External file source not found: [purple]{sourceFileItem}[/purple]")
         except Exception as e:
-            raise PrettyErrorDisplay(f"Error with the source file.\nError: {e}")
+            log.error(f"""
+            Error with the source file.\nError: {e}
+            """)
     
     return changedFileList
 

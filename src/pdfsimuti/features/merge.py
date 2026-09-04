@@ -44,23 +44,29 @@ class SortOrder(str, Enum):
         return description.get(self)
 
 
-def sort_natural(files_dict, reverse=False):
+def sort_natural(files_dict: dict[Path, typeFileDict], reverse=False) -> dict[Path, typeFileDict]:
+    from itertools import islice
 
     def nat(item):
         return [
             int(item) if item.isdigit() else item.lower() for item in re.split(r'(\d+)', item) # turns a string into letters and digits
         ]
+
     
-    nonwhitespace = [(position, item.replace(" ", "")) for position, item in enumerate(files_dict, start=0)]
-    val_sort = sorted(nonwhitespace, key=lambda item: nat(item[1]), reverse=reverse)
-    result =  {
-        key: files_dict[key]
-        for _, key in val_sort
-    }
+    nonwhitespace = [(position, item.name.replace(" ", "")) for position, item in enumerate(files_dict, start=0)]
+    val_sort = [item[0] for item in sorted(nonwhitespace, key=lambda item: nat(item[1]), reverse=reverse)]
+
+    result = {}
+    for index in val_sort:
+        entry, value = next(islice(files_dict.items(), index, None))
+        result[entry] = value
+
     return result
 
 
 def sort_dict(sort_type:str, files_dict) -> dict[Path, typeFileDict] | None:
+
+
     match sort_type:
         case 'none':
             return files_dict
