@@ -588,11 +588,18 @@ def compress(
 
     elif compressMethod in ("gs","ghostscript"):
         from pdfsimuti.utils import get_gs_name
+        from pdfsimuti.diagnostic.checkhealth import check_gs_installation
+
+        if not check_gs_installation(gs_name=get_gs_name()):
+            raise PrettyErrorDisplay("""
+            Unable to proceed. GhostScript is not installed on your system.
+            
+            Recommend either installing GhostScript or switching to default. 
+            """)
         compressSettings = gs_settings(get_gs_name(), float(compatibility.value), presets.value, embedAllFonts, colorConversion.value, color_down, color_res, color_sample_type.value, grey_down, grey_res, grey_sample_type.value, gs_custom)
     
     elif compressMethod == "pymupdf":
         compressSettings = pymupdf_settings(garbageStrength=garbage)
-    
 
     # compress runtime handles the main load
     compress_runtime(items, source, mimecheck, exclude, excludeSource, compressSettings, preserve_choice=preserve)

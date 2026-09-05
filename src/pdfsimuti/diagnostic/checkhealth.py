@@ -1,6 +1,7 @@
 import typer
 import sys
 import subprocess # capture output
+from subprocess import CompletedProcess
 
 import importlib.util # getting package ModuleSpec
 from importlib.metadata import version # for checking packages versions
@@ -49,6 +50,14 @@ packages_dict:dict[str, packagesInfoTyped] = {
         }    
 }
 
+
+def check_gs_installation(gs_name:str) -> CompletedProcess[str] | None:
+    try:
+        return subprocess.run([gs_name, '--version'], capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
+
+
 def get_packages_status(*args:str):
     """
     Get package's moduleSpec, installed locations and other details.
@@ -56,16 +65,13 @@ def get_packages_status(*args:str):
 
     for package in args:
         match package:
-            case 'ghostscript':
-                try: 
-                    if (result := subprocess.run([gs_name, '--version'], capture_output=True, text=True)).stdout:
-                        import shutil
-                        bin_loc = shutil.which(gs_name) # get location of the package
-                        packages_dict["ghostscript"]["version"] = result.stdout.rstrip() # rstrip gets rid of the /n that comes from the capture_output
-                        packages_dict["ghostscript"]["searchLoc"] = bin_loc
-                        packages_dict["ghostscript"]["installed"] = True
-                except FileNotFoundError: pass
-
+            case 'ghostscript': 
+                if (result := check_gs_installation(gs_name=gs_name)):
+                    import shutil
+                    bin_loc = shutil.which(gs_name) # get location of the package
+                    packages_dict["ghostscript"]["version"] = result.stdout.rstrip() # rstrip gets rid of the /n that comes from the capture_output
+                    packages_dict["ghostscript"]["searchLoc"] = bin_loc
+                    packages_dict["ghostscript"]["installed"] = True
             case _:
                 if (spec := importlib.util.find_spec(package)):
                     packages_dict[package]["version"] = version(packages_dict[package]["packageName"])
