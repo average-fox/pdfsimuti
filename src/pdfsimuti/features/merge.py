@@ -230,7 +230,11 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
         except ValueError:
             raise PrettyErrorDisplay(f"Fatal. PyMuPDF unable to read data. Run with mimechecking.")
         except Exception as e:  
-            raise PrettyErrorDisplay(f"Program failed to run. \n{e}")
+            raise PrettyErrorDisplay(f"""
+                Program failed to run.
+                Error message: {e}
+                Error type: {e.__class__.__name__}
+            """)
 
         # at this point, merge is sucessful
         # display successful merge details

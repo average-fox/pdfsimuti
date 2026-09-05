@@ -10,7 +10,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.console import Group
 
-from pdfsimuti.utils import return_basename, CURRENT_DIR
+from pdfsimuti.utils import CURRENT_DIR
 from pdfsimuti.utils import PrettyErrorDisplay, text_dedent, typeFileDict
 
 from collections.abc import Callable
@@ -131,7 +131,7 @@ class gs_settings:
             log.error("Invalid command found")
             raise PrettyErrorDisplay(f"""
                 Ghostscript via PDFsimuti cannot have external PDF files. Please insert them outside of --gs-custom.
-                Command: '{self.custom}'  
+                Custom -gs command detected: '{self.custom}'  
             """)
     
 
@@ -326,7 +326,8 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
         log_response = ("error", text_dedent(f"""
         --------------------
         CAUTION. '{target.name}' cannot be compressed.
-        Error: {e}
+        Error message: {e}
+        Error type: {e.__class__.__name__}
         --------------------
         """))
         target_properties['valid'] = False
@@ -389,7 +390,7 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
             file_entry[1]['state'] = "[green]Compressed[/green]"
 
             
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         file_entry[1]['valid'] = False
         os.remove(tempPath)
         log_response = ("error", f"Unable to compress file: [red]{target}[/red]")

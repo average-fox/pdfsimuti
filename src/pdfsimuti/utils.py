@@ -64,7 +64,7 @@ def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
 def get_calling_function():
     # Referance: https://stackoverflow.com/questions/3711184/how-to-use-inspect-to-get-the-callers-info-from-callee-in-python
     from inspect import getouterframes
-    return return_basename(getouterframes(sys._getframe(1))[1].filename)
+    return Path(getouterframes(sys._getframe(1))[1].filename).name
 
 
 def get_gs_name() -> str:
@@ -78,11 +78,6 @@ def get_gs_name() -> str:
         else: gs_name+="32c"
         
     return gs_name
-        
-
-        
-def return_basename(item: str) -> str:
-    return os.path.basename(item)
 
 
 def return_dirname(item:str) -> str:
@@ -91,10 +86,6 @@ def return_dirname(item:str) -> str:
 
 def check_file_readability(item: Path) -> bool:
     return item.is_file() and os.access(item, os.R_OK)
-
-
-def return_joined_filePath(filePath1:str, filePath2:str) -> str:
-    return os.path.join(filePath1, filePath2)
 
 
 def txt_file_reader(fileList:list[Path]|None, sourceFile:list[Path]|None, typeFile:str) -> list[Path]:
