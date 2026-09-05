@@ -209,6 +209,7 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
     Args:
         filesDict (dict): A dictionary of validated file paths ready for compression.
         compressSettings (instance): An instance of either ``gs_settings`` or ``pymupdf_settings``.
+        preserve_choice (bool): Confirm if `--preserve` got passed or not.
     """    
     from rich.rule import Rule
     from pdfsimuti.utils import returnValidDisplayRenderable
@@ -240,8 +241,6 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
         final_size =  file_entry[1]['final_size']/1048576
         target = file_entry[1]['savingPath']
 
-        # TODO: Optimize this codebase
-
         if not file_entry[1]['valid']:
             failed_count += 1
             if file_entry[1]['state'] == "[yellow]Unchanged[/yellow]":
@@ -255,6 +254,7 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
     messenge = (
         text_dedent(f"""
         [yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected
+        If preserve mode is active, this files are not copied.
         Total Processed: {len(filesDict)-failed_count}/{len(filesDict)}
         """)
     ) 
@@ -325,7 +325,7 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
     except Exception as e: 
         log_response = ("error", text_dedent(f"""
         --------------------
-        CAUTION. '{return_basename(str(target))}' cannot be compressed.
+        CAUTION. '{target.name}' cannot be compressed.
         Error: {e}
         --------------------
         """))
@@ -390,15 +390,13 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
 
             
     except subprocess.CalledProcessError as e:
-        # two types of errors can occur here. either the file got removed during operation or ghostscript failed to run.
-        # if file removed during operation, script will still continue
         file_entry[1]['valid'] = False
         os.remove(tempPath)
         log_response = ("error", f"Unable to compress file: [red]{target}[/red]")
 
         # what is this??
         if not os.path.exists(target):
-            log_response = ("error", f"Filepath: [red]{return_basename(str(target))}[/red]. File not found.")
+            log_response = ("error", f"Filepath: [red]{target.name}[/red]. File not found.")
             file_entry[1]['state'] = 'File not found.'
         else:
             file_entry[1]['state'] = '[red]-gs failure[/red]'
@@ -416,6 +414,9 @@ def compress_engine(
             ], 
         filesDict:dict[Path, typeFileDict]
     ):
+    """
+    handles the process of compressing the files by tasking it to it's respective workers.
+    """
 
     from multiprocessing import Pool
     from rich.progress import Progress, BarColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn, MofNCompleteColumn
