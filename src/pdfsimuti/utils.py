@@ -181,7 +181,7 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
     # 3. start validation loop over dict
     for file_items in filesDict.items():
         target = file_items[0]
-        file_mime = magic.from_file(target) if magic else None
+        file_mime = magic.from_file(str(target)) if magic else None
         # 3.1. get size of the file
         try:
             file_items[1]["initial_size"] = Path(target).stat().st_size
