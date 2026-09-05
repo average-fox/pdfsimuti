@@ -261,7 +261,7 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
     outcome_print_group = Group(
             table,
             f"{messenge}" if result_reverted else '',
-            f"\nTotal time taken: {round(time_elasped, 2)} seconds",
+            f"\nTotal time taken: {str(round(time_elasped, 2))} seconds",
     )
     print(Panel(outcome_print_group, subtitle="Compression Completed", border_style="bright_green", expand=False))
     

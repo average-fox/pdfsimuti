@@ -36,7 +36,7 @@ packages_dict:dict[str, packagesInfoTyped] = {
         },
     
     'magic' : {
-        "packageName": f"{"python-magic-bin" if sys.platform == "wind32" else "python-magic"}",
+        "packageName": f"{"python-magic-bin" if sys.platform == "win32" else "python-magic"}",
         "version": "[red]Not found[/red]", 
         "searchLoc": "[red]Not found[/red]", 
         "installed": False
