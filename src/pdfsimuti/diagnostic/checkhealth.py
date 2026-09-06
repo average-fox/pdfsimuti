@@ -35,13 +35,6 @@ packages_dict:dict[str, packagesInfoTyped] = {
         "installed": False
         },
     
-    'magic' : {
-        "packageName": f"{"python-magic-bin" if sys.platform == "win32" else "python-magic"}",
-        "version": "[red]Not found[/red]", 
-        "searchLoc": "[red]Not found[/red]", 
-        "installed": False
-        },
-    
     "ghostscript" : {
         "packageName": get_gs_name(),
         "version": "[red]Not found[/red]",
@@ -118,7 +111,7 @@ def checkhealth():
     """
 
     # update package status
-    get_packages_status('pymupdf', 'magic', 'ghostscript')
+    get_packages_status('pymupdf', 'ghostscript')
 
     with console.screen():
         console.print(padding.Padding(return_checkhealth_renderable(), (1,1)))
