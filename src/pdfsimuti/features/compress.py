@@ -224,6 +224,8 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
 
 
 def display_compress_outcome(filesDict : dict, time_elasped: float):
+    # FIXME: there are many types of state now. create a match/case to handle them all
+    # FIXME: also, fix the mess on the other codelines after this is completed.
     result_reverted = False
     failed_count = 0
     
@@ -245,7 +247,7 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
             failed_count += 1
             if file_entry[1]['state'] == "[yellow]Unchanged[/yellow]":
                 result_reverted = True
-            table.add_row(f"{index}", f"{target.name}", f"{target}", str(round(initial_size,3))+ " MB", "[red on white] Error [/red on white]", f"{file_entry[1]['state']}")
+            table.add_row(f"{index}", f"{target.name}", f"{target}", str(round(initial_size,3))+ " MB", "[red on white]Error[/red on white]", f"{file_entry[1]['state']}")
         else:
             compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 5)))
             table.add_row(f"{index}", target.name, f"{target}", f"{round(initial_size,3)} MB", f"{round(final_size,3)} MB", f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
@@ -475,10 +477,11 @@ def compress_engine(
                     log.debug("Incomplete output file deleted. " + str(temp))
 
             for _, file_property in filesDict.items():
-                if file_property["state"] == None:
-                    file_property["state"] = "[red]Incomplete[/red]"
+                if file_property["state"] == "[green]Verified[/green]" or file_property["state"] == "[yellow]Unknown[/yellow]":
+                    file_property["state"] = "[red on white]Incomplete[/red on white]"
                     file_property["valid"] = False
-        
+
+    print(filesDict)
     return filesDict
 
 
@@ -497,6 +500,7 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
         import time
         
         validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid'] != False}
+        print(validated_pdf_dict)
 
         # 1st size capture: Initial Runtime
         start_time = time.time()
@@ -508,7 +512,7 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
         else:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will get replaced after successful compression!")
             if not return_confirm("Proceed?"):
-                exit()  
+                exit()
         #########################################
         match compressSettings.__class__.__name__:
             case 'pymupdf_settings': filesDict = compress_engine("PyMuPDF", compressSettings, worker_pymupdf_compression, validated_pdf_dict)
