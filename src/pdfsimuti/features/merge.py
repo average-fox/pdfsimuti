@@ -219,6 +219,7 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
 
         try:
             generate_merged_pdf(validated_dict, output, preserveFiles)
+
         except KeyboardInterrupt:
             log.error("Runtime aborted.")
             if create_directory:
@@ -229,6 +230,7 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
 
         except ValueError:
             raise PrettyErrorDisplay(f"Fatal. PyMuPDF unable to read data. Run with mimechecking.")
+        
         except Exception as e:  
             raise PrettyErrorDisplay(f"""
                 Program failed to run.
@@ -277,6 +279,10 @@ def merge(
     
     if items == None and not source:
         raise PrettyErrorDisplay("No filepaths were added to merge.py or with --source")
+
+    from pdfsimuti.main import return_pymupdf_moduleSpec
+    if not return_pymupdf_moduleSpec:
+        raise PrettyErrorDisplay("Unable to proceed. PyMuPDF is not found on your machine.")
 
     validated_dict = validate_pdf_dict(items, source, exclude, excludeSource ,mimecheck)
 

@@ -19,8 +19,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "python-magic>=0.4.27,<0.5; sys_platform == 'linux'",
-    "python-magic-bin>=0.4.14,<0.5; sys_platform == 'win32'",
     "pymupdf>=1.24.12,<2",
     "typer==0.21.2",
 ]

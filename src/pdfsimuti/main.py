@@ -46,6 +46,10 @@ class customTyperGroup(TyperGroup):
         return app_object
 
 
+def return_pymupdf_moduleSpec():
+    return importlib.util.find_spec('pymupdf')
+
+
 def version_callback(value:bool):
     if value:
         print(f"pdfSimUti v{__version__}")

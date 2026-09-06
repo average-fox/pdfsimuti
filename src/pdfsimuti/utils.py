@@ -153,60 +153,39 @@ def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
 
     return return_list
 
-
 def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
-    
-    # 1. verify pymupdf 
-    try:
-        pymupdf = importlib.import_module('pymupdf')
-    except ModuleNotFoundError:
-        pymupdf = None
-        log.warning("PyMuPDF not found. Skipping password protection check.")
 
-    # 2. confirm magic exists. 
-    try:
-        magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
-    except ModuleNotFoundError:
-        raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
+    pymupdf = importlib.import_module('pymupdf')
 
-    # 3. start validation loop over dict
-    for file_items in filesDict.items():
-        target = file_items[0]
-        file_mime = magic.from_file(str(target)) if magic else None
-        # 3.1. get size of the file
+    for file_item in filesDict.items():
+        target = file_item[0]
+        # separate case when mimechecking is disabled.
         try:
-            file_items[1]["initial_size"] = Path(target).stat().st_size
-        except Exception:
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = 'ERROR'
+            if pymupdf.open(target).needs_pass:
+                file_item[1]['valid'] = False
+                file_item[1]['state'] = "[yellow]Password Protected[/yellow]"
+        except pymupdf.FileDataError:
+            file_item[1]['state'] = "[red]Error.\nCannot open file[/red]"
 
-        # 3.2. check file readability
         if not check_file_readability(target):
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = "Unreadable file"
+            file_item[1]['valid'] = False
+            file_item[1]['state'] = "Unreadable File"
 
-        # 3.3. check file mime
-        elif magic and file_mime != "application/pdf":
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = f"Mimecheck pass failed.\nReceived:[yellow]\n{file_mime}[/yellow]"
+        file_item[1]['initial_size'] = target.stat().st_size
+        if file_item[1]["initial_size"] == 0:
+            file_item[1]['valid'] = False
+            file_item[1]['state'] = "[red]File is empty[/red]"
 
-        # 3.4. check password protection (uses pymupdf)
-        elif pymupdf:
+        if mimecheck:
             try:
-                if pymupdf.open(file_items[0]).needs_pass:
-                    file_items[1]['valid'] = False
-                    file_items[1]['state'] = 'Password Protected'
+                pymupdf.open(target)
+                file_item[1]['valid'] = True
+                file_item[1]['state'] = "[green]Verified[/green]"
             except pymupdf.FileDataError:
-                file_items[1]['state'] = "Can't Open file."
-        
-        # 3.5 state file validity. if none; that meant mimecheck is disabled.
-        if file_items[1]['valid'] is None and mimecheck:
-            file_items[1]['valid'] = True
-        elif file_items[1]['initial_size'] == 0:
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = "[red]File is empty[/red]"
-        elif not mimecheck:
-            file_items[1]['valid'] = None
+                file_item[1]['valid'] = False
+                file_item[1]['state'] = "[red]Unreadable.\nPossibly corrupted.[/red]"
+        else: 
+            file_item[1]["state"] = "[yellow]Unknown[/yellow]"
 
     return filesDict
 
