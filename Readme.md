@@ -2,16 +2,16 @@
     <img src="https://github.com/average-fox/assets/blob/main/pdfsimuti/demo.png?raw=true" alt="pdfsimuti demo" width="78%">
 </p>
 
-**Portable Document Format Simple Utility Tool** or pronounced as `pdfSimUti` (pdfsimuti on the CLI) is a simple Command Line Interface (CLI) created for mundane tasks involving PDF files. It is written in python with `Rich` for colorful terminal display, `Typer + Click` for terminal interface & `python-magic` for file type checking. It utilizes [PyMuPDF](https://github.com/pymupdf/PyMuPDF) and [GhostScript](https://www.ghostscript.com/about/index.html) for PDF file manipulation.
+**Portable Document Format Simple Utility Tool** or pronounced as `pdfSimUti` (pdfsimuti on the CLI) is a simple Command Line Interface (CLI) created for mundane tasks involving PDF files. It is written in python with `Rich` for colorful terminal display and `Typer + Click` for terminal interface. It utilizes [PyMuPDF](https://github.com/pymupdf/PyMuPDF) for PDF file manipulation and supports [GhostScript](https://www.ghostscript.com/about/index.html) for advanced compression as well.
 
 ## Features
 As of `v0.3.5`, `pdfSimUti` can do these tasks ~
 
-1. Ability to merge files or compress them while providing options to change their behavior.
+1. Ability to merge files or compress them.
 
 2. It can perform operations from file paths and `.txt` format files while also specifying which files to ignore/exclude.
 
-3. It can read an entire directory for PDF files (not recursively yet) as well.
+3. It can read an entire directory for PDF files (not recursively yet) as well by passing `.`
 
 4. `pdfSimUti` displays an overview of the task and showing progress of the active task.
 
