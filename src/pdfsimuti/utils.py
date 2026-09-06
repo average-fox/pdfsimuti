@@ -156,8 +156,6 @@ def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
 def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
 
     pymupdf = importlib.import_module('pymupdf')
-    
-    # TODO: restructure this entire code right now
 
     for file_item in filesDict.items():
         target = file_item[0]
@@ -168,17 +166,6 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
                 file_item[1]['state'] = "[yellow]Password Protected[/yellow]"
         except pymupdf.FileDataError:
             file_item[1]['state'] = "[red]Error.\nCannot open file[/red]"
-        
-        if mimecheck:
-            try:
-                pymupdf.open(target)
-            except pymupdf.FileDataError:
-                file_item[1]['valid'] = False
-                file_item[1]['state'] = "[red]Unreadable.\nPossibly corrupted.[/red]"
-        else: 
-            file_item[1]['valid'] = None
-            file_item[1]["state"] = "[yellow]Unknown[/yellow]"
-
 
         if not check_file_readability(target):
             file_item[1]['valid'] = False
@@ -189,10 +176,16 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
             file_item[1]['valid'] = False
             file_item[1]['state'] = "[red]File is empty[/red]"
 
-        if file_item[1]['valid'] is None:
-            file_item[1]['valid'] = True
-            file_item[1]['state'] = "[green]Verified[/green]"
-            
+        if mimecheck:
+            try:
+                pymupdf.open(target)
+                file_item[1]['valid'] = True
+                file_item[1]['state'] = "[green]Verified[/green]"
+            except pymupdf.FileDataError:
+                file_item[1]['valid'] = False
+                file_item[1]['state'] = "[red]Unreadable.\nPossibly corrupted.[/red]"
+        else: 
+            file_item[1]["state"] = "[yellow]Unknown[/yellow]"
 
     return filesDict
 
