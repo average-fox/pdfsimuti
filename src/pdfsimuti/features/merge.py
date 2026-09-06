@@ -201,7 +201,13 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
      # display overview to the user
     console.print(Panel(display_merge_overview(filesDict, Path(output), preserveFiles, sort), border_style="blue", expand=False))
     
-    if return_confirm("\nMerge with current settings? (Default: N)", default=False):
+    from pdfsimuti.utils import PURE_FILES_DICT
+    confirmation = False
+    if PURE_FILES_DICT == False:
+        print("[yellow]CAUTION![/yellow] At least one file is not cleared for merging.\nThey will get excluded from merging.")
+        confirmation = return_confirm(msg="Do you want to continue?", default=False, caution=True)
+    else: confirmation = return_confirm(msg="Merge with current settings? ", default=False) 
+    if confirmation:
         
         if not preserveFiles:
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")

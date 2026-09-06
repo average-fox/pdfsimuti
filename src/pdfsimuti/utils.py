@@ -18,6 +18,7 @@ from pdfsimuti.logClass import Log, console
 CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
 OPER_SYS = sys.platform
+PURE_FILES_DICT = False # will get updated after returnValidatedDict ran. 
 
 log = Log(console=console).logger
 
@@ -54,7 +55,7 @@ def exit_program(msg:str="Program Exited"):
 
 def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
     if caution:
-        confirm_once = typer.confirm("Proceed", default=False)
+        confirm_once = typer.confirm(text_dedent(msg), default=False)
         if confirm_once:
             return typer.confirm("Are you sure to proceed?", default=False)
         return False
@@ -158,23 +159,27 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
     pymupdf = importlib.import_module('pymupdf')
 
     for file_item in filesDict.items():
+
+        # FIXME: you can use continue to speed up the process. you don't need all of these checks. if one is hit, others are useless.
         target = file_item[0]
+        file_item[1]['initial_size'] = target.stat().st_size
+        
         # separate case when mimechecking is disabled.
         try:
             if pymupdf.open(target).needs_pass:
                 file_item[1]['valid'] = False
-                file_item[1]['state'] = "[yellow]Password Protected[/yellow]"
+                file_item[1]['state'] = "[red on white]Error.\nPassword Protected.[/red on white]"
         except pymupdf.FileDataError:
-            file_item[1]['state'] = "[red]Error.\nCannot open file[/red]"
+            file_item[1]['valid'] = False
+            file_item[1]['state'] = "[red on white]Error.\nCannot open file.[/red on white]"
 
         if not check_file_readability(target):
             file_item[1]['valid'] = False
-            file_item[1]['state'] = "Unreadable File"
+            file_item[1]['state'] = "[yellow]Unreadable File.[/yellow]"
 
-        file_item[1]['initial_size'] = target.stat().st_size
         if file_item[1]["initial_size"] == 0:
             file_item[1]['valid'] = False
-            file_item[1]['state'] = "[red]File is empty[/red]"
+            file_item[1]['state'] = "[red on white]File is empty.[/red on white]"
 
         if mimecheck:
             try:
@@ -183,9 +188,12 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
                 file_item[1]['state'] = "[green]Verified[/green]"
             except pymupdf.FileDataError:
                 file_item[1]['valid'] = False
-                file_item[1]['state'] = "[red]Unreadable.\nPossibly corrupted.[/red]"
+                file_item[1]['state'] = "[red on white]Unreadable.\nPossibly corrupted.[/red on white]"
         else: 
             file_item[1]["state"] = "[yellow]Unknown[/yellow]"
+
+        if file_item[1]['valid'] == False:
+            PURE_FILES_DICT = False
 
     return filesDict
 
@@ -258,22 +266,17 @@ def returnValidDisplayRenderable(filesDict:dict[Path, typeFileDict]) -> Renderab
         valid = file_item[1]["valid"]
         file_name = str(file_item[0])
         basename = Path(file_name).name
-        validity = file_item[1]['state']
+        state = file_item[1]['state']
         size = f"{file_item[1]['initial_size']/ (1024 * 1024):.3f}"
-        if valid:
-            validity = "[green]Verified[/green]" 
-            index += 1
-        elif valid == None:
-            validity = "[yellow]Unknown[/yellow]"
+        if valid or valid == None:
             index += 1
         else:
-            # state is false
             size = "[red]X[/red]"
             file_name = f"[strike][red]{file_name}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
         # Rich table doesn't take any 'int' type
         file_index = str(index) if valid == None or valid == True else "[red]X[/red]"
-        validated_list_table.add_row(file_index, basename, file_name, validity, str(size))
+        validated_list_table.add_row(file_index, basename, file_name, state, str(size))
 
     return validated_list_table

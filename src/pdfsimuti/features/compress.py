@@ -245,16 +245,16 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
             failed_count += 1
             if file_entry[1]['state'] == "[yellow]Unchanged[/yellow]":
                 result_reverted = True
-            table.add_row(f"{index}", f"{target.name}", f"{target}", str(round(initial_size,3))+ " MB", "[red]Error[/red]", f"{file_entry[1]['state']}")
+            table.add_row(f"{index}", f"{target.name}", f"{target}", str(round(initial_size,3))+ " MB", "[red on white] Error [/red on white]", f"{file_entry[1]['state']}")
         else:
-            compression_calculate = abs(round((initial_size - final_size)/initial_size*100, 5))
+            compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 5)))
             table.add_row(f"{index}", target.name, f"{target}", f"{round(initial_size,3)} MB", f"{round(final_size,3)} MB", f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
 
 
     messenge = (
         text_dedent(f"""
-        [yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected
-        If preserve mode is active, this files are not copied.
+        [yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected.
+        If preserve mode is active, these files are not copied.
         Total Processed: {len(filesDict)-failed_count}/{len(filesDict)}
         """)
     ) 
@@ -503,9 +503,12 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
         log.info("Compression runtime started.")
 
         # if preserve is enabled, the save files are changed. if not, they are same value as target which meant overwrite.
-        if preserve_choice: 
+        if preserve_choice:
             filesDict = designate_preserve_saveFolder(validated_pdf_dict)
-
+        else:
+            print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will get replaced after successful compression!")
+            if not return_confirm("Proceed?"):
+                exit()  
         #########################################
         match compressSettings.__class__.__name__:
             case 'pymupdf_settings': filesDict = compress_engine("PyMuPDF", compressSettings, worker_pymupdf_compression, validated_pdf_dict)
