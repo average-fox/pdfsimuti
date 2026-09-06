@@ -40,7 +40,26 @@ packages_dict:dict[str, packagesInfoTyped] = {
         "version": "[red]Not found[/red]",
         "searchLoc": "[red]Not found[/red]",
         "installed": False
-        }    
+        },
+    'typer' : {
+            "packageName": "typer",
+            "version": "[red]Not found[/red]", 
+            "searchLoc": "[red]Not found[/red]", 
+            "installed": False
+        },
+    'rich' : {
+            "packageName": "rich",
+            "version": "[red]Not found[/red]", 
+            "searchLoc": "[red]Not found[/red]", 
+            "installed": False
+        },
+    'click' : {
+            "packageName": "click",
+            "version": "[red]Not found[/red]", 
+            "searchLoc": "[red]Not found[/red]", 
+            "installed": False
+    },
+      
 }
 
 
@@ -111,7 +130,7 @@ def checkhealth():
     """
 
     # update package status
-    get_packages_status('pymupdf', 'ghostscript')
+    get_packages_status('pymupdf', 'ghostscript', 'rich', 'typer', 'click')
 
     with console.screen():
         console.print(padding.Padding(return_checkhealth_renderable(), (1,1)))
