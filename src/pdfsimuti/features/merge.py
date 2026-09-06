@@ -278,6 +278,10 @@ def merge(
     if items == None and not source:
         raise PrettyErrorDisplay("No filepaths were added to merge.py or with --source")
 
+    from pdfsimuti.main import return_pymupdf_moduleSpec
+    if not return_pymupdf_moduleSpec:
+        raise PrettyErrorDisplay("Unable to proceed. PyMuPDF is not found on your machine.")
+
     validated_dict = validate_pdf_dict(items, source, exclude, excludeSource ,mimecheck)
 
     # If user passes a sort order, update the previous list. Will happen after list validation
