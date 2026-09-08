@@ -28,7 +28,6 @@ log = Log(console).logger
 type typeLogRes = tuple[Literal['warning','info','error',''],str]
 type typeWorkerResults = tuple[
     tuple[Path, typeFileDict],
-    Path,
     typeLogRes
 ]
 type typeGSPresets = Literal['ebook', 'screen', 'printer', 'prepress']
@@ -224,8 +223,7 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
 
 
 def display_compress_outcome(filesDict : dict, time_elasped: float):
-    # FIXME: there are many types of state now. create a match/case to handle them all
-    # FIXME: also, fix the mess on the other codelines after this is completed.
+
     result_reverted = False
     failed_count = 0
     
@@ -239,20 +237,37 @@ def display_compress_outcome(filesDict : dict, time_elasped: float):
 
     for index, file_entry in enumerate(filesDict.items()):
         index += 1
-        initial_size = file_entry[1]['initial_size']/1048576
-        final_size =  file_entry[1]['final_size']/1048576
+        initial_size = round(file_entry[1]['initial_size']/1048576,3)
+        final_size =  round(file_entry[1]['final_size']/1048576,3)
         target = file_entry[1]['savingPath']
+        state = file_entry[1]['state']
+        compression_calculate = ""
 
-        if not file_entry[1]['valid']:
-            failed_count += 1
-            if file_entry[1]['state'] == "[yellow]Unchanged[/yellow]":
+        match file_entry[1]['valid']:
+            case None:
+                failed_count += 1
                 result_reverted = True
-            table.add_row(f"{index}", f"{target.name}", f"{target}", str(round(initial_size,3))+ " MB", "[red on white]Error[/red on white]", f"{file_entry[1]['state']}")
-        else:
-            compression_calculate = str(abs(round((initial_size - final_size)/initial_size*100, 5)))
-            table.add_row(f"{index}", target.name, f"{target}", f"{round(initial_size,3)} MB", f"{round(final_size,3)} MB", f'[green]{"-"+compression_calculate}%[/green]' if initial_size > final_size else f'[red]{"+"+compression_calculate}%[/red]')
+                state = f"[yellow]{state}[/yellow]"
+                compression_calculate = state
+                final_size = state
+            case False:
+                failed_count += 1
+                state = f"[red on white]{state}[/red on white]"
+                final_size = "[red on white]Error[/red on white]"
+                compression_calculate = state
+            case True:
+                state = f"[green]{state}[/green]"
+                compression_calculate = f"[green]{str(abs(round((initial_size - final_size)/initial_size*100, 5)))}%[/green]"
 
-
+        table.add_row(
+            f"{index}",
+            f"{target.name}",
+            f"{target}",
+            f"{initial_size}",
+            f"{final_size}",
+            f"{compression_calculate}",
+        )
+                
     messenge = (
         text_dedent(f"""
         [yellow]CAUTION![/yellow] Some files were not compressed. Unchanged files are not affected.
@@ -294,9 +309,9 @@ def designate_preserve_saveFolder(targetDict: dict):
 
 
 
-def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf_settings | gs_settings, Path]) -> typeWorkerResults:
+def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf_settings | gs_settings]) -> typeWorkerResults:
 
-    file_entry, pymupdf_settings, tempPath = task_details
+    file_entry, pymupdf_settings = task_details
 
     global pymupdf
     assert pymupdf is not None
@@ -304,25 +319,44 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
     target = file_entry[0]
     target_properties = file_entry[1]
     log_response:tuple[str, str] = ("", "")
+    tempPath = None
 
+    import tempfile
+    from tempfile import gettempdir
+    import uuid
+
+    temp_dir = tempfile.gettempdir()
+    tempPath = os.path.join(temp_dir, f"pdfsimuti_{uuid.uuid4().hex}.pdf.temp") 
     try:
-        with pymupdf.open(target) as doc:
-            doc.save(tempPath, garbage=pymupdf_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True)
-            target_properties['final_size'] = os.path.getsize(tempPath)
-            
-            if (target_properties['initial_size'] <= target_properties['final_size']):
-                log_response = ("warning", f"File unchanged. File: {target}")
-                os.remove(tempPath)
-                target_properties['valid'] = False
-                target_properties['state'] = '[yellow]Unchanged[/yellow]'
-            else:
-                target_properties['valid'] = True
-                target_properties['state'] = "[green]Compressed[/green]"
+        doc = pymupdf.open(target)
+        # doc.subset_fonts()
+        # doc.rewrite_images(dpi_threshold=100, dpi_target=72, quality=60, lossy=True, loseless=True, bitonal=True, color=True, gray=True)
+        doc.save(tempPath, garbage=pymupdf_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True, use_objstms=True, compression_effort=40)
+        target_properties['final_size'] = os.path.getsize(tempPath)
 
-                log_response = ("info", f"File compressed: {target}")
-        
-                if target == target_properties['savingPath']: 
-                    os.replace(tempPath, target)
+        doc.close()
+
+        if (target_properties['initial_size'] <= target_properties['final_size']):
+            log_response = ("warning", f"[yellow]Unchanged[/yellow] file size: {target}")
+            target_properties['valid'] = None
+            target_properties['state'] = 'Unchanged'
+        else:
+            target_properties['valid'] = True
+            target_properties['state'] = "Compressed"
+
+            log_response = ("info", f"File compressed: {target}")
+
+    except PermissionError as e:
+        log_response = ("error", text_dedent(f"""
+        --------------------
+        CAUTION. '{target.name}' cannot be compressed.
+        Error message: {e}
+        Error type: {e.__class__.__name__}
+        --------------------
+        """))
+
+        target_properties['valid'] = False
+        target_properties['state'] = 'Permissions Error'
 
     except Exception as e: 
         log_response = ("error", text_dedent(f"""
@@ -333,15 +367,19 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
         --------------------
         """))
         target_properties['valid'] = False
-        target_properties['state'] = '[red]PyMuPDF failure[/red]'
+        target_properties['state'] = 'PyMuPDF failure'
+    
+    finally:
+        if tempPath and os.path.exists(tempPath):
+            os.remove(tempPath)
 
-    return file_entry, tempPath, log_response
+    return (target, target_properties), log_response
 
 
-def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf_settings | gs_settings, Path]) -> typeWorkerResults:
+def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf_settings | gs_settings]) -> typeWorkerResults:
     # TODO: fix the annot. here
 
-    file_entry, gs_settings, tempPath = task_details
+    file_entry, gs_settings = task_details
 
     global subprocess
     assert subprocess is not None
@@ -350,6 +388,12 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
     target_properties = file_entry[1]
     log_response:typeLogRes = ('','')
 
+    import tempfile
+    from tempfile import gettempdir
+    import uuid
+
+    temp_dir = tempfile.gettempdir()
+    tempPath = os.path.join(temp_dir, f"pdfsimuti_{uuid.uuid4().hex}.pdf.temp") 
     command = [
             gs_settings['gs_name'],
             '-sDEVICE=pdfwrite',
@@ -378,10 +422,9 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
         file_entry[1]['final_size'] = os.path.getsize(tempPath)
 
         if file_entry[1]['initial_size'] <= file_entry[1]['final_size']:
-            log_response = ("warning", f"File [yellow]unchanged[/yellow]. File: {target}")
-            file_entry[1]['valid'] = False
-            file_entry[1]['state'] = '[yellow]Unchanged[/yellow]'
-            os.remove(tempPath)
+            log_response = ("warning", f"[yellow]Unchanged[/yellow] file size: {target}")
+            file_entry[1]['valid'] = None
+            file_entry[1]['state'] = 'Unchanged'
         else:
             # only works if --preserve is not enabled.
             if target == target_properties['savingPath']:
@@ -389,22 +432,27 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
 
             log_response = ("info", f"File [green]compressed[/green]: {target}")
             file_entry[1]['valid'] = True
-            file_entry[1]['state'] = "[green]Compressed[/green]"
+            file_entry[1]['state'] = "Compressed"
 
             
     except subprocess.CalledProcessError:
         file_entry[1]['valid'] = False
-        os.remove(tempPath)
         log_response = ("error", f"Unable to compress file: [red]{target}[/red]")
 
         # what is this??
         if not os.path.exists(target):
             log_response = ("error", f"Filepath: [red]{target.name}[/red]. File not found.")
             file_entry[1]['state'] = 'File not found.'
+            file_entry[1]['valid'] = False
         else:
-            file_entry[1]['state'] = '[red]-gs failure[/red]'
+            file_entry[1]['valid'] = False
+            file_entry[1]['state'] = '-gs failure'
 
-    return file_entry, tempPath, log_response
+    finally:
+        if tempPath and os.path.exists(tempPath): 
+            os.remove(tempPath)
+
+    return file_entry, log_response
 
 
 def compress_engine(
@@ -433,14 +481,11 @@ def compress_engine(
     ]
 
     worker_task_details = []
-    temp_paths = []
 
     for file_entry in filesDict.items():
         target = file_entry[0]
         targetSavePath  = file_entry[1]["savingPath"]
-        tempFile = Path(target).with_suffix(".pdf.temp") if target == targetSavePath else targetSavePath
-        worker_task_details.append((file_entry, compressSettings, tempFile))
-        temp_paths.append(tempFile)
+        worker_task_details.append((file_entry, compressSettings))
 
     log.info(f"Started {compressMode} compression runtime.")
 
@@ -450,8 +495,7 @@ def compress_engine(
 
         try:
             for result in pool.imap_unordered(compressWorker, worker_task_details, chunksize=1):
-                (target, target_info), tempFile, outcome= result
-                temp_paths.remove(tempFile)
+                (target, target_info), outcome= result
                 filesDict[target].update(target_info) # update dict of target status after compress
                 level, message = outcome
                 getattr(log, level)(message)
@@ -465,23 +509,17 @@ def compress_engine(
 
         except Exception as e:
             pool.terminate()
-            raise PrettyErrorDisplay(f"Compression ({compressMode}) has failed\n{e}")
-
+            raise PrettyErrorDisplay(f"Compression ({compressMode}) has failed.\nError: {e}\nError type: {e.__class__.__name__}")
 
         finally:
             progress.stop()
             pool.join()
-            for temp in temp_paths:
-                if os.path.exists(temp):
-                    os.remove(temp)
-                    log.debug("Incomplete output file deleted. " + str(temp))
 
             for _, file_property in filesDict.items():
-                if file_property["state"] == "[green]Verified[/green]" or file_property["state"] == "[yellow]Unknown[/yellow]":
+                if file_property["state"] == "Verified" or file_property["state"] == "Unknown":
                     file_property["state"] = "[red on white]Incomplete[/red on white]"
                     file_property["valid"] = False
 
-    print(filesDict)
     return filesDict
 
 
@@ -500,7 +538,6 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
         import time
         
         validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid'] != False}
-        print(validated_pdf_dict)
 
         # 1st size capture: Initial Runtime
         start_time = time.time()
@@ -513,11 +550,11 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
             print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will get replaced after successful compression!")
             if not return_confirm("Proceed?"):
                 exit()
-        #########################################
+                
         match compressSettings.__class__.__name__:
             case 'pymupdf_settings': filesDict = compress_engine("PyMuPDF", compressSettings, worker_pymupdf_compression, validated_pdf_dict)
             case 'gs_settings': filesDict = compress_engine("GhostScript", compressSettings, worker_gs_compression, validated_pdf_dict)
-        #########################################
+
         log.info("Compression runtime complete.")
         
         # 2nd Size Capture: Concluding Runtime
