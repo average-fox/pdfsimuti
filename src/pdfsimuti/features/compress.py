@@ -303,7 +303,7 @@ def designate_preserve_saveFolder(targetDict: dict):
                 log.error("IOError while creating directory. Program terminated.")
                 raise PrettyErrorDisplay("IOError issue.")
     for file_entry in targetDict.items():
-        file_entry[1]['saving_path'] = os.path.join(folder_path, os.path.basename(file_entry[0]))
+        file_entry[1]['savingPath'] = Path(folder_path, file_entry[0].name)
     
     return targetDict
 
@@ -322,7 +322,6 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
     tempPath = None
 
     import tempfile
-    from tempfile import gettempdir
     import uuid
 
     temp_dir = tempfile.gettempdir()
@@ -331,6 +330,7 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
         doc = pymupdf.open(target)
         # doc.subset_fonts()
         # doc.rewrite_images(dpi_threshold=100, dpi_target=72, quality=60, lossy=True, loseless=True, bitonal=True, color=True, gray=True)
+
         doc.save(tempPath, garbage=pymupdf_settings["garbageStrength"], deflate=True, deflate_fonts=True, deflate_images=True, use_objstms=True, compression_effort=40)
         target_properties['final_size'] = os.path.getsize(tempPath)
 
@@ -371,7 +371,7 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
     
     finally:
         if tempPath and os.path.exists(tempPath):
-            os.remove(tempPath)
+            os.replace(tempPath, file_entry[1]['savingPath'])
 
     return (target, target_properties), log_response
 
@@ -389,7 +389,6 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
     log_response:typeLogRes = ('','')
 
     import tempfile
-    from tempfile import gettempdir
     import uuid
 
     temp_dir = tempfile.gettempdir()
@@ -450,7 +449,7 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
 
     finally:
         if tempPath and os.path.exists(tempPath): 
-            os.remove(tempPath)
+            os.replace(tempPath, file_entry[1]['savingPath'])
 
     return file_entry, log_response
 
@@ -534,6 +533,7 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
     display_overview_confirm(filesDict, compressSettings, preserve_choice)
 
 
+
     if return_confirm("\nDo you want to continue with this settings?"):
         import time
         
@@ -564,6 +564,7 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimeche
         display_compress_outcome(validated_pdf_dict, float(end_time-start_time))
     else:
         print("[red]Aborted[/red]")
+
 
 @app.command(
     help="""
