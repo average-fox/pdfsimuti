@@ -18,7 +18,6 @@ from pdfsimuti.logClass import Log, console
 CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
 OPER_SYS = sys.platform
-PURE_FILES_DICT = False # will get updated after returnValidatedDict ran. 
 
 log = Log(console=console).logger
 
@@ -86,6 +85,7 @@ def return_dirname(item:str) -> str:
 
 
 def check_file_readability(item: Path) -> bool:
+    # may be redundant after the application of fitz for file checking
     return item.is_file() and os.access(item, os.R_OK)
 
 
@@ -157,6 +157,7 @@ def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
 def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
 
     pymupdf = importlib.import_module('pymupdf')
+    import tempfile
 
     for file_item in filesDict.items():
 
@@ -172,35 +173,40 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
                 file_item[1]['valid'] = False
                 file_item[1]['state'] = "Error.\nPassword Protected."
                 continue
-        except pymupdf.FileDataError:
+
+        except pymupdf.EmptyFileError:
             file_item[1]['valid'] = False
-            file_item[1]['state'] = "Error.\nCannot open file."
+            file_item[1]['state'] = "Empty file"
             continue
 
         if not check_file_readability(target):
             file_item[1]['valid'] = False
-            file_item[1]['state'] = "Unreadable File."
-            continue
-
-        if file_item[1]["initial_size"] == 0:
-            file_item[1]['valid'] = False
-            file_item[1]['state'] = "File is empty."
+            file_item[1]['state'] = "Unreadable File"
             continue
 
         if mimecheck:
             try:
+                pymupdf.TOOLS.reset_mupdf_warnings()
+
                 doc = pymupdf.open(target)
+                warnings = pymupdf.TOOLS.mupdf_warnings()
                 doc.close()
-                file_item[1]['valid'] = True
-                file_item[1]['state'] = "Verified"
+
+                if 'object missing' in warnings.lower():
+                    file_item[1]['valid'] = False
+                    file_item[1]['state'] = "Crucial PDF object missing"
+                else:
+                    file_item[1]['valid'] = True
+                    file_item[1]['state'] = "Verified"
             except pymupdf.FileDataError:
                 file_item[1]['valid'] = False
                 file_item[1]['state'] = "Unreadable.\nPossibly corrupted."
+            except Exception:
+                file_item[1]['valid'] = False
+                file_item[1]['state'] = "Unknown Error"
+
         else: 
             file_item[1]["state"] = "Unknown"
-
-        if file_item[1]['valid'] == False:
-            PURE_FILES_DICT = False
 
     return filesDict
 
@@ -282,11 +288,10 @@ def returnValidDisplayRenderable(filesDict:dict[Path, typeFileDict]) -> Renderab
             file_name = f"[strike][red]{file_name}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
-        match state:
-            case 'Verified': state = "[green on white]Verified[/green on white]"
-            case 'Unknown': state = "[yellow]Unknown[/yellow]"
-            case _:
-                state = f"[red on white]{state}[/red on white]"
+        match valid:
+            case True: state = "[green on white]Verified[/green on white]"
+            case None: state = f"[yellow]{state}[/yellow]"
+            case False: state = f"[red on white]{state}[/red on white]"
 
         # Rich table doesn't take any 'int' type
         file_index = str(index) if valid == None or valid == True else "[red]X[/red]"

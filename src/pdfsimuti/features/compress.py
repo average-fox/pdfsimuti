@@ -1,5 +1,6 @@
 import typer
 import os
+import shutil
 
 from typing import List, Annotated, Optional, Literal
 from enum import Enum
@@ -449,7 +450,8 @@ def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf
 
     finally:
         if tempPath and os.path.exists(tempPath): 
-            os.replace(tempPath, file_entry[1]['savingPath'])
+            shutil.move(tempPath, file_entry[1]['savingPath']) # os.replace not allowed. It will cause cross-device link error
+
 
     return file_entry, log_response
 
@@ -459,7 +461,7 @@ def compress_engine(
         compressSettings:pymupdf_settings|gs_settings, 
         compressWorker:Callable[[tuple
             [
-            tuple[Path, typeFileDict], pymupdf_settings | gs_settings, Path]], 
+            tuple[Path, typeFileDict], pymupdf_settings | gs_settings]], 
             typeWorkerResults,
             ], 
         filesDict:dict[Path, typeFileDict]

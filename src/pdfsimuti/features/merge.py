@@ -80,6 +80,13 @@ def sort_dict(sort_type:str, files_dict) -> dict[Path, typeFileDict] | None:
             return dict(sorted(files_dict.items(), key=lambda item: os.path.getctime(item[0])))
 
 
+def check_pure_dict(filesDict: dict[Path, typeFileDict]) -> bool:
+    for file_item in filesDict.items():
+        target_validity = file_item[1]['valid']
+        if not target_validity: return False
+    return True
+
+
 def reserved_filenaming_charCheck(filename:str) -> bool:
     if re.search(r'[\"#$|<>:?*/(\)\\\"]', filename):
         return True
@@ -201,54 +208,54 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
      # display overview to the user
     console.print(Panel(display_merge_overview(filesDict, Path(output), preserveFiles, sort), border_style="blue", expand=False))
     
-    from pdfsimuti.utils import PURE_FILES_DICT
-    confirmation = False
-    if PURE_FILES_DICT == False:
-        print("[yellow]CAUTION![/yellow] At least one file is not cleared for merging.\nThey will get excluded from merging.")
-        confirmation = return_confirm(msg="Do you want to continue?", default=False, caution=True)
-    else: confirmation = return_confirm(msg="Merge with current settings? ", default=False) 
-    if confirmation:
-        
-        if not preserveFiles:
-            print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
-            if not return_confirm("Proceed?"):
-                exit_program()        
-        if not os.path.isdir(output_dir): 
-            try: 
-                os.makedirs(output_dir)
-                create_directory = True
-            except PermissionError:
-                raise PrettyErrorDisplay(f"Program failed. Unable to create directory: {output_dir}")
-        
-        # purify dict of rejected items
-        validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+    if not preserveFiles:
+        print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will be deleted after successful merge!")
+        if not return_confirm("Proceed?"):
+            exit_program()
 
-        try:
-            generate_merged_pdf(validated_dict, output, preserveFiles)
+    if not check_pure_dict(filesDict):
+        print("[yellow]CAUTION![/yellow] Not all files are clear for merging. They will get excluded. Continue?")
+        if not return_confirm("Proceed?"):
+            exit_program()
 
-        except KeyboardInterrupt:
-            log.error("Runtime aborted.")
-            if create_directory:
-                log.debug("Removing created directory...")
-                os.rmdir(output_dir)
-                log.debug("Removed")
-            exit_program("Program interrupted and exited.")
+    if not os.path.isdir(output_dir): 
+        try: 
+            os.makedirs(output_dir)
+            create_directory = True
+        except PermissionError:
+            raise PrettyErrorDisplay(f"Program failed. Unable to create directory: {output_dir}")
+    
+    # purify dict of rejected items
+    validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
 
-        except ValueError:
-            raise PrettyErrorDisplay(f"Fatal. PyMuPDF unable to read data. Run with mimechecking.")
-        
-        except Exception as e:  
-            raise PrettyErrorDisplay(f"""
-                Program failed to run.
-                Error message: {e}
-                Error type: {e.__class__.__name__}
-            """)
+    try:
+        generate_merged_pdf(validated_dict, output, preserveFiles)
 
-        # at this point, merge is sucessful
-        # display successful merge details
-        console.print(Panel(return_merge_success_display(Path(output)), subtitle="MERGE COMPLETED", border_style="green", expand=False))
-    else:
-        exit_program("Program aborted by User's choice.")
+    except KeyboardInterrupt:
+        log.error("Runtime aborted.")
+        if create_directory:
+            log.debug("Removing created directory...")
+            os.rmdir(output_dir)
+            log.debug("Removed")
+        exit_program("Program interrupted and exited.")
+
+    except ValueError as e:
+        raise PrettyErrorDisplay(f"""
+        Fatal. PyMuPDF unable to read data.
+        Exception: {e}
+        """)
+    
+    except Exception as e:  
+        raise PrettyErrorDisplay(f"""
+            Program failed to run.
+            Error message: {e}
+            Error type: {e.__class__.__name__}
+        """)
+
+    # at this point, merge is sucessful
+    # display successful merge details
+    console.print(Panel(return_merge_success_display(Path(output)), subtitle="MERGE COMPLETED", border_style="green", expand=False))
+
 
 
 @app.command(help="""
