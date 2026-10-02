@@ -259,7 +259,8 @@ def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:lis
         
         case "merge.py":
             if final_validated_file_count <= 1:
-                raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
+                console.print(returnValidDisplayRenderable(validatedFilesDict))
+                raise PrettyErrorDisplay("Expected at least 2 pdf files for merging.")
         
             return validatedFilesDict
 
