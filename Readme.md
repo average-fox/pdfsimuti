@@ -62,4 +62,4 @@ Sidenote: `pdfSimUti` requires `Python 3.13.5` installed on your machine. With n
 
 `pdfSimUti` is a hobby project of mine created for merging files or compressing them without any *specialized software app* or any reliance from internet saying `Daily File Size Exceeded`. It is far from complete and is missing many features. But of `v0.3.5` and beyond, it is ready for use. 
 
-It is written without any AI assistance and only tested by me. I appreciate your suggestions for `pdfSimUti` and suggest to report any [issues](https://github.com/average-fox/pdfsimuti/issues) with the program on GitHub. 
+It is written without any AI assistance and only tested by me. I appreciate your suggestions for `pdfSimUti` and recommend to report any [issues](https://github.com/average-fox/pdfsimuti/issues) with the program on GitHub. 
