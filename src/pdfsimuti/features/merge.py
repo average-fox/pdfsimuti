@@ -205,6 +205,7 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
     output = designate_saving_filePath(output)
     output_dir = Path(output).parent
     create_directory = False
+    APPROVED = False
 
      # display overview to the user
     console.print(Panel(display_merge_overview(filesDict, Path(output), preserveFiles, sort), border_style="blue", expand=False))
@@ -216,8 +217,13 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
 
     if not check_pure_dict(filesDict):
         print("[yellow]CAUTION![/yellow] Not all files are clear for merging. They will get excluded. Continue?")
+        APPROVED = True
         if not return_confirm("Proceed?"):
             exit_program()
+
+
+    if not APPROVED: 
+        if not return_confirm("Merge with selected documents?", default=False): exit_program()
 
     if not os.path.isdir(output_dir): 
         try: 
@@ -227,7 +233,7 @@ def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
             raise PrettyErrorDisplay(f"Program failed. Unable to create directory: {output_dir}")
     
     # purify dict of rejected items
-    validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True}
+    validated_dict = {key:value for key, value in filesDict.items() if value['valid'] == True or value['valid'] == None}
 
     try:
         generate_merged_pdf(validated_dict, output, preserveFiles)

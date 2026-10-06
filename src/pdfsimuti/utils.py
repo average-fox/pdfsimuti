@@ -165,39 +165,49 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict]):
         # create a single loop or two to handle this. make them fit into a single try/except
         
         target = file_item[0]
+        validity = True
         file_item[1]['initial_size'] = target.stat().st_size
+        warnings = None
 
         try:
-            file_item[1]['valid'] = True # set as default
+            match target:
+                case target if file_item[1]['initial_size'] == 0:
+                    validity = False
+                    file_item[1]['state'] = "0 byte. Empty file."
 
-            pymupdf.TOOLS.reset_mupdf_warnings()
-            warnings = pymupdf.TOOLS.mupdf_warnings()
-            target_doc = pymupdf.open(target)
+                case target if pymupdf.open(target).needs_pass == 1:
+                    validity = False
+                    file_item[1]['state'] = "Password Protected."
 
-            if target_doc.needs_pass == 1:
-                file_item[1]['valid'] = False
-                file_item[1]['state'] = "Password Protected."
-                continue
+                case target if not check_file_readability(target):
+                    validity = False
+                    file_item[1]['state'] = "Unreadable File"
 
-            # may be redundant
-            if not check_file_readability(target):
-                file_item[1]['valid'] = False
-                file_item[1]['state'] = "Unreadable File"
-                continue
+                case target if 'object missing' in (warnings := pymupdf.TOOLS.mupdf_warnings()):
+                    validity = False
+                    file_item[1]['state'] = "Critical PDF object missing\nCheck terminal log."
+                    log.error(f"[red]File Warning[/red] from [i]{target.name}[/i]\n-------\n" + warnings + "\n-------")
 
-            if 'object missing' in warnings.lower():
-                file_item[1]['valid'] = False
-                file_item[1]['state'] = "Crucial PDF object missing\nCheck terminal log."
-                continue
+                # Please trust the trick
+                case target if 'format error' in warnings:
+                    validity = None
+                    file_item[1]['state'] = "PDF file integrity warning.\nCheck terminal log.\nFile may fail on runtime."
+                    log.info(f"[yellow]File Caution[/yellow] from [i]{target.name}[/i]\n-------\n" + warnings + "\n-------")
+
+
+                case _:
+                    validity = True
 
         except pymupdf.FileDataError:
-            file_item[1]['valid'] = False
+            validity = False
             file_item[1]['state'] = "Unreadable.\nPossibly corrupted."
 
         except Exception:
-            file_item[1]['valid'] = False
+            validity = False
             file_item[1]['state'] = "Unknown Error"
-            
+
+        file_item[1]['valid'] = validity
+
     return filesDict
 
 
@@ -231,8 +241,7 @@ def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:lis
     VALIDATED_FILE_COUNT = 0
     for item in validatedFilesDict.items():
         valid = item[1]['valid']
-        print(valid)
-        if valid == True: VALIDATED_FILE_COUNT+=1
+        if valid == True or valid == None: VALIDATED_FILE_COUNT+=1
 
     # this works not only for merge but also for compress. If no valid files are found, it shouldn't proceeed.
     if VALIDATED_FILE_COUNT == 0:
@@ -266,24 +275,24 @@ def returnValidDisplayRenderable(filesDict:dict[Path, typeFileDict]) -> Renderab
 
     for file_item in filesDict.items(): 
         valid = file_item[1]["valid"]
-        file_name = str(file_item[0])
-        basename = Path(file_name).name
+        filePath = str(file_item[0])
+        basename = Path(filePath).name
         state = file_item[1]['state']
         size = f"{file_item[1]['initial_size']/ (1024 * 1024):.3f}"
         if valid or valid == None:
             index += 1
         else:
             size = "[red]X[/red]"
-            file_name = f"[strike][red]{file_name}[/strike][/red]"
+            filePath = f"[strike][red]{filePath}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
 
         match valid:
-            case True: state = "[green on white]Verified[/green on white]"
+            case True: state = "[green]Verified[/green]"
             case None: state = f"[yellow]{state}[/yellow]"
-            case False: state = f"[red on white]{state}[/red on white]"
+            case False: state = f"[red]{state}[/red]"
 
         # Rich table doesn't take any 'int' type
         file_index = str(index) if valid == None or valid == True else "[red]X[/red]"
-        validated_list_table.add_row(file_index, basename, file_name, state, str(size))
+        validated_list_table.add_row(file_index, basename, filePath, state, str(size))
 
     return validated_list_table

@@ -12,7 +12,7 @@ from rich.panel import Panel
 from rich.console import Group
 
 from pdfsimuti.utils import CURRENT_DIR
-from pdfsimuti.utils import PrettyErrorDisplay, text_dedent, typeFileDict
+from pdfsimuti.utils import PrettyErrorDisplay, text_dedent, typeFileDict, exit_program
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -372,7 +372,7 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
     
     finally:
         if tempPath and os.path.exists(tempPath):
-            os.replace(tempPath, file_entry[1]['savingPath'])
+            shutil.move(tempPath, file_entry[1]['savingPath']) # os.replace not allowed. It will cause cross-device link error
 
     return (target, target_properties), log_response
 
@@ -484,7 +484,6 @@ def compress_engine(
 
     for file_entry in filesDict.items():
         target = file_entry[0]
-        targetSavePath  = file_entry[1]["savingPath"]
         worker_task_details.append((file_entry, compressSettings))
 
     log.info(f"Started {compressMode} compression runtime.")
@@ -536,38 +535,35 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, exclude
     # Display overview before confirm
     display_overview_confirm(filesDict, compressSettings, preserve_choice)
 
+    if not return_confirm("\nDo you want to continue with this settings?"): exit_program() 
 
+    import time
+    
+    validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid'] == True}
 
-    if return_confirm("\nDo you want to continue with this settings?"):
-        import time
-        
-        validated_pdf_dict = {file_entry: file_properties for file_entry, file_properties in (filesDict or {}).items() if file_properties['valid'] != False}
+    # 1st size capture: Initial Runtime
+    start_time = time.time()
+    log.info("Compression runtime started.")
 
-        # 1st size capture: Initial Runtime
-        start_time = time.time()
-        log.info("Compression runtime started.")
-
-        # if preserve is enabled, the save files are changed. if not, they are same value as target which meant overwrite.
-        if preserve_choice:
-            filesDict = designate_preserve_saveFolder(validated_pdf_dict)
-        else:
-            print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will get replaced after successful compression!")
-            if not return_confirm("Proceed?"):
-                exit()
-                
-        match compressSettings.__class__.__name__:
-            case 'pymupdf_settings': filesDict = compress_engine("PyMuPDF", compressSettings, worker_pymupdf_compression, validated_pdf_dict)
-            case 'gs_settings': filesDict = compress_engine("GhostScript", compressSettings, worker_gs_compression, validated_pdf_dict)
-
-        log.info("Compression runtime complete.")
-        
-        # 2nd Size Capture: Concluding Runtime
-        end_time = time.time()
-
-        # Display compress outcome.
-        display_compress_outcome(validated_pdf_dict, float(end_time-start_time))
+    # if preserve is enabled, the save files are changed. if not, they are same value as target which meant overwrite.
+    if preserve_choice:
+        filesDict = designate_preserve_saveFolder(validated_pdf_dict)
     else:
-        print("[red]Aborted[/red]")
+        print("[yellow]CAUTION![/yellow] [code]--no-preserve[/code] flag present! Files will get replaced after successful compression!")
+        if not return_confirm("Proceed?"):
+            exit()
+            
+    match compressSettings.__class__.__name__:
+        case 'pymupdf_settings': filesDict = compress_engine("PyMuPDF", compressSettings, worker_pymupdf_compression, validated_pdf_dict)
+        case 'gs_settings': filesDict = compress_engine("GhostScript", compressSettings, worker_gs_compression, validated_pdf_dict)
+
+    log.info("Compression runtime complete.")
+    
+    # 2nd Size Capture: Concluding Runtime
+    end_time = time.time()
+
+    # Display compress outcome.
+    display_compress_outcome(validated_pdf_dict, float(end_time-start_time))
 
 
 @app.command(
