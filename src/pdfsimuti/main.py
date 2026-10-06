@@ -1,6 +1,6 @@
 import typer
-import importlib
-import importlib.metadata
+
+from importlib import util, metadata, import_module
 
 from typing import Optional, Annotated
 from click import Context
@@ -8,7 +8,7 @@ from click.core import Command
 
 from typer.core import TyperGroup
 
-__version__ = importlib.metadata.version('pdfsimuti')
+__version__ = metadata.version('pdfsimuti')
 
 app = typer.Typer(
     no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False, suggest_commands = True,
@@ -39,7 +39,7 @@ class customTyperGroup(TyperGroup):
 
     def _lazy_load(self, command_name: str) -> typer.Typer:
         module_name = self.lazyCommands[command_name]
-        module = importlib.import_module(module_name)
+        module = import_module(module_name)
         app_object = getattr(module, "app", None)
         if not app_object: raise ValueError(f"Lazy loading {module_name} failed.")
 
@@ -47,7 +47,7 @@ class customTyperGroup(TyperGroup):
 
 
 def return_pymupdf_moduleSpec():
-    return importlib.util.find_spec('pymupdf')
+    return util.find_spec('pymupdf')
 
 
 def version_callback(value:bool):

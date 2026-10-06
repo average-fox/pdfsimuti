@@ -378,7 +378,6 @@ def worker_pymupdf_compression(task_details: tuple[tuple[Path, typeFileDict], py
 
 
 def worker_gs_compression(task_details: tuple[tuple[Path, typeFileDict], pymupdf_settings | gs_settings]) -> typeWorkerResults:
-    # TODO: fix the annot. here
 
     file_entry, gs_settings = task_details
 
@@ -523,12 +522,15 @@ def compress_engine(
 
     return filesDict
 
+# def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimecheck: bool, exclude: list[Path]|None, excludeSource: list[Path]|None,  compressSettings, preserve_choice:bool):
 
-def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimecheck: bool, exclude: list[Path]|None, excludeSource: list[Path]|None,  compressSettings, preserve_choice:bool):
+def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, exclude: list[Path]|None, excludeSource: list[Path]|None,  compressSettings, preserve_choice:bool):
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
 
     log.info("Validating files...")
-    filesDict = validate_pdf_dict(fileList, source,  exclude, excludeSource,  mimecheck)
+
+    filesDict = validate_pdf_dict(fileList, source,  exclude, excludeSource)
+
     log.info("Validation complete")
     
     # Display overview before confirm
@@ -618,7 +620,9 @@ def compress(
     commandline_gs_exception = [
         '--compatibility', "--preset", "--embed-all-fonts", "--no-embed-all-fonts", "-cc", 
         "--color-conversion",  "--color-down", "--no-color-down", "--color-res", "--color-sample-type", "-cst", 
-        "--grey-down", "--no-grey-down","--grey-res", "--grey-sample-type", "-gst", "--gs-custom"]
+        "--grey-down", "--no-grey-down","--grey-res", "--grey-sample-type", "-gst", "--gs-custom"
+    ]
+    
     commandline_pymupdf_exception = [
         '--garbage', '-g'
     ]
@@ -650,4 +654,4 @@ def compress(
         compressSettings = pymupdf_settings(garbageStrength=garbage)
 
     # compress runtime handles the main load
-    compress_runtime(items, source, mimecheck, exclude, excludeSource, compressSettings, preserve_choice=preserve)
+    compress_runtime(items, source, exclude, excludeSource, compressSettings, preserve_choice=preserve)

@@ -154,10 +154,10 @@ def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
 
     return return_list
 
-def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
+
+def returnValidatedDict(filesDict: dict[Path, typeFileDict]):
 
     pymupdf = importlib.import_module('pymupdf')
-    import tempfile
 
     for file_item in filesDict.items():
 
@@ -166,60 +166,48 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict], mimecheck: bool):
         
         target = file_item[0]
         file_item[1]['initial_size'] = target.stat().st_size
-        
-        # separate case when mimechecking is disabled.
+
         try:
-            if pymupdf.open(target).needs_pass == 1:
+            file_item[1]['valid'] = True # set as default
+
+            pymupdf.TOOLS.reset_mupdf_warnings()
+            warnings = pymupdf.TOOLS.mupdf_warnings()
+            target_doc = pymupdf.open(target)
+
+            if target_doc.needs_pass == 1:
                 file_item[1]['valid'] = False
-                file_item[1]['state'] = "Error.\nPassword Protected."
+                file_item[1]['state'] = "Password Protected."
                 continue
 
-        except pymupdf.EmptyFileError:
-            file_item[1]['valid'] = False
-            file_item[1]['state'] = "Empty file"
-            continue
-
-        if not check_file_readability(target):
-            file_item[1]['valid'] = False
-            file_item[1]['state'] = "Unreadable File"
-            continue
-
-        if mimecheck:
-            try:
-                pymupdf.TOOLS.reset_mupdf_warnings()
-
-                doc = pymupdf.open(target)
-                warnings = pymupdf.TOOLS.mupdf_warnings()
-                doc.close()
-
-                if 'object missing' in warnings.lower():
-                    file_item[1]['valid'] = False
-                    file_item[1]['state'] = "Crucial PDF object missing"
-                else:
-                    file_item[1]['valid'] = True
-                    file_item[1]['state'] = "Verified"
-            except pymupdf.FileDataError:
+            # may be redundant
+            if not check_file_readability(target):
                 file_item[1]['valid'] = False
-                file_item[1]['state'] = "Unreadable.\nPossibly corrupted."
-            except Exception:
+                file_item[1]['state'] = "Unreadable File"
+                continue
+
+            if 'object missing' in warnings.lower():
                 file_item[1]['valid'] = False
-                file_item[1]['state'] = "Unknown Error"
+                file_item[1]['state'] = "Crucial PDF object missing\nCheck terminal log."
+                continue
 
-        else: 
-            file_item[1]["state"] = "Unknown"
+        except pymupdf.FileDataError:
+            file_item[1]['valid'] = False
+            file_item[1]['state'] = "Unreadable.\nPossibly corrupted."
 
+        except Exception:
+            file_item[1]['valid'] = False
+            file_item[1]['state'] = "Unknown Error"
+            
     return filesDict
 
-            
-def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:list[Path]|None, excludeSource:list[Path]|None, mimecheck:bool):
+
+def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:list[Path]|None, excludeSource:list[Path]|None):
 
     items = txt_file_reader(items, source, "--source") if source else items
     exclude= txt_file_reader(exclude, excludeSource, "--exclude") if excludeSource else exclude
     
     unvalidated_files:list[Path] = scan_items_entry(items) or []
     excludeList:list[Path] = scan_items_entry(exclude) if exclude else []
-
-    if not mimecheck: log.warning("Mimechecking disabled! Corrupted files can disrupt the process.")  
 
     excludeFreeFilesDict = [
         Path(file_entry) for file_entry in unvalidated_files
@@ -237,17 +225,17 @@ def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:lis
         for file_entry in excludeFreeFilesDict
     }
 
-    validatedFilesDict = returnValidatedDict(newFilesDict, mimecheck)
+    validatedFilesDict = returnValidatedDict(newFilesDict)
 
-    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and type of the file (mimecheck)
-    # this loop checks between true/false and none. if none then it's validation is unknown.
-    final_validated_file_count = 0
+
+    VALIDATED_FILE_COUNT = 0
     for item in validatedFilesDict.items():
         valid = item[1]['valid']
-        if valid == None or valid == True: final_validated_file_count+=1
+        print(valid)
+        if valid == True: VALIDATED_FILE_COUNT+=1
 
     # this works not only for merge but also for compress. If no valid files are found, it shouldn't proceeed.
-    if final_validated_file_count == 0:
+    if VALIDATED_FILE_COUNT == 0:
         raise PrettyErrorDisplay("No compatible PDF files found.")
     
     # different feature require different form of filesDict
@@ -258,7 +246,7 @@ def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:lis
             return validatedFilesDict
         
         case "merge.py":
-            if final_validated_file_count <= 1:
+            if VALIDATED_FILE_COUNT <= 1:
                 console.print(returnValidDisplayRenderable(validatedFilesDict))
                 raise PrettyErrorDisplay("Expected at least 2 pdf files for merging.")
         

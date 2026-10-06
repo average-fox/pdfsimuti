@@ -201,6 +201,7 @@ def generate_merged_pdf(itemsDict:dict, outputFile:str, preserveFiles=True):
         
 
 def merge_runtime(filesDict, output:str, preserveFiles:bool, sort:str):
+
     output = designate_saving_filePath(output)
     output_dir = Path(output).parent
     create_directory = False
@@ -282,11 +283,15 @@ def merge(
     source: Annotated[Optional[List[Path]], typer.Option("--source", "-s", help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
     excludeSource: Annotated[Optional[List[Path]], typer.Option("--exclude-source", "-es", help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
     
-    mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF file mime check. Files that failed the check will be removed from selection.", rich_help_panel="Options")]=True,
     preserve: Annotated[bool, typer.Option("--preserve/--no-preserve", "-p/-np", help="Preserve the files after merging..", rich_help_panel="Options")] = True,
     output: Annotated[str, typer.Option("--output", "-o", help="Save output file name. Accepted formats like folder/file.pdf or file.pdf", rich_help_panel="Options")]=DEFAULT_OUTPUT):
 
-    # in case someone pass --mimecheck as --output
+
+    command_exception = ["--source" , "-s", "--exclude", "-e", "--preserve", "--no-preserve", "-p", "-np", "--exclude-source", "-es", "--sort"]
+
+    # more testing required
+
+    # in case someone pass --source or --exclude as --output
     if output == "--mimecheck" or output == "-m" or output == "-nm" or output =="-no-mimecheck":
         raise PrettyErrorDisplay("--mimecheck flag can't be used after --output.")
     
@@ -297,11 +302,11 @@ def merge(
     if not return_pymupdf_moduleSpec:
         raise PrettyErrorDisplay("Unable to proceed. PyMuPDF is not found on your machine.")
 
-    validated_dict = validate_pdf_dict(items, source, exclude, excludeSource ,mimecheck)
+    validated_dict = validate_pdf_dict(items, source, exclude, excludeSource)
 
     # If user passes a sort order, update the previous list. Will happen after list validation
     if sort:
         log.debug("Sorting files...")
         validated_dict = sort_dict(sort, validated_dict)
-        
+    
     merge_runtime(validated_dict, output, preserve, sort)
