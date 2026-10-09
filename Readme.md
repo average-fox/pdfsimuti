@@ -2,12 +2,12 @@
     <img src="https://github.com/average-fox/assets/blob/main/pdfsimuti/demo.png?raw=true" alt="pdfsimuti demo" width="78%">
 </p>
 
-**Portable Document Format Simple Utility Tool** or pronounced as `pdfSimUti` (pdfsimuti on the CLI) is a simple Command Line Interface (CLI) created for mundane tasks involving PDF files. It is written in python with `Rich` for colorful terminal display and `Typer + Click` for terminal interface. It utilizes [PyMuPDF](https://github.com/pymupdf/PyMuPDF) for PDF file manipulation and supports [GhostScript](https://www.ghostscript.com/about/index.html) for advanced compression as well.
+**Portable Document Format Simple Utility Tool** or pronounced as `pdfSimUti` (pdfsimuti on the CLI) is a simple Command Line Interface (CLI) software created for mundane tasks involving PDF files. It is written in python with `Rich` for colorful terminal display and `Typer + Click` for terminal interface. It utilizes [PyMuPDF](https://github.com/pymupdf/PyMuPDF) for PDF file manipulation and supports [GhostScript](https://www.ghostscript.com/about/index.html) for advanced compression as well.
 
 ## Features
-As of `v0.3.5`, `pdfSimUti` can do these tasks ~
+As of `v0.3.5`, `pdfSimUti` can~
 
-1. Ability to merge files or compress them.
+1. Merge files or compress them.
 
 2. It can perform operations from file paths and `.txt` format files while also specifying which files to ignore/exclude.
 
@@ -15,7 +15,7 @@ As of `v0.3.5`, `pdfSimUti` can do these tasks ~
 
 4. `pdfSimUti` displays an overview of the task and showing progress of the active task.
 
-5. It can detect corrupted, password-protected or files with lack of permission too.
+5. It can detect corrupted, password-protected or files with lack of permission.
 
 6. It can sort out the files both by name, by creation date, by modified dates or none. Just add them in any order you like.
 
@@ -48,18 +48,23 @@ As of `v0.3.5`, `pdfSimUti` can do these tasks ~
     ```
 3. Install it via `uv`
     ```
-    uv pip install .
+    uv pip install . --system
     ```
 
-    Due to `pdfsimUti` being quite untested (yet!), i suggest that you run it with a virtual environment (`venv`) first using `uv venv`. Be sure to activate the environment afterwards.
+    This will install the software on your entire machine. If you wish to use it in a virtual environmnent,
+        
+        uv venv
+        uv pip install .
+    
+
 4. Check installation status
     ```
     pdfsimuti --version
     ```
 
-Sidenote: `pdfSimUti` requires `Python 3.13.5` installed on your machine. With new Python versions comes newer features and optimizations. The same applies to its dependencies.
+Sidenote: `pdfSimUti` requires `Python 3.13.5` (or better) installed on your machine. With new Python versions comes newer features and optimizations. The same applies to its dependencies.
 ## Development
 
-`pdfSimUti` is a hobby project of mine created for merging files or compressing them without any *specialized software app* or any reliance from internet saying `Daily File Size Exceeded`. It is far from complete and is missing many features. But of `v0.3.5` and beyond, it is ready for use. 
+`pdfSimUti` is a hobby project of mine created for merging files or compressing them without any *specialized software app*. It is far from complete and is missing many features. But of `v0.3.5` and beyond, it is ready for use. 
 
 It is written without any AI assistance and only tested by me. I appreciate your suggestions for `pdfSimUti` and recommend to report any [issues](https://github.com/average-fox/pdfsimuti/issues) with the program on GitHub. 
