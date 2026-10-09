@@ -1,6 +1,9 @@
-<p align="center">
-    <img src="https://github.com/average-fox/assets/blob/main/pdfsimuti/demo.png?raw=true" alt="pdfsimuti demo" width="78%">
+<p align="right">
+    <img src="https://github.com/average-fox/assets/blob/main/pdfsimuti/demo-1.png?raw=true" alt="pdfsimuti demo" width="78%">
 </p>
+
+<p>
+    <img src="https://github.com/average-fox/assets/blob/main/pdfsimuti/demo-2.png?raw=true" alt="pdfsimuti demo 2" width="78%">
 
 **Portable Document Format Simple Utility Tool** or pronounced as `pdfSimUti` (pdfsimuti on the CLI) is a simple Command Line Interface (CLI) software created for mundane tasks involving PDF files. It is written in python with `Rich` for colorful terminal display and `Typer + Click` for terminal interface. It utilizes [PyMuPDF](https://github.com/pymupdf/PyMuPDF) for PDF file manipulation and supports [GhostScript](https://www.ghostscript.com/about/index.html) for advanced compression as well.
 
