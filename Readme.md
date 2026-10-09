@@ -4,7 +4,7 @@
 
 **Portable Document Format Simple Utility Tool** or pronounced as `pdfSimUti` (pdfsimuti on the CLI) is a simple Command Line Interface (CLI) software created for mundane tasks involving PDF files. It is written in python with `Rich` for colorful terminal display and `Typer + Click` for terminal interface. It utilizes [PyMuPDF](https://github.com/pymupdf/PyMuPDF) for PDF file manipulation and supports [GhostScript](https://www.ghostscript.com/about/index.html) for advanced compression as well.
 
-## Features
+# Features
 As of `v0.3.5`, `pdfSimUti` can~
 
 1. Merge files or compress them.
@@ -23,7 +23,7 @@ As of `v0.3.5`, `pdfSimUti` can~
 
 8. It is cross-platform compatible. It can run on Windows OS (10,11) and Linux distros. ***However***, it has received no testings on MacOS so be cautious.
 
-## Installation
+# Installation
 
 `pdfSimUti` is not complete so you won't find it on `PyPl` or any official sources. You can only install it from this repository using `uv`.
 
@@ -63,7 +63,12 @@ As of `v0.3.5`, `pdfSimUti` can~
     ```
 
 Sidenote: `pdfSimUti` requires `Python 3.13.5` (or better) installed on your machine. With new Python versions comes newer features and optimizations. The same applies to its dependencies.
-## Development
+
+## For Windows Users
+
+`pdfsimuti` requires `MSVCP140.dll`. If you are running a Windows LTSC build over a newly build machine, the specified `MSVCP140.dll` may not be present. Please install the `Microsoft Visual C++ Redistributable` over [here](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#latest-supported-redistributable-version).
+
+# Development
 
 `pdfSimUti` is a hobby project of mine created for merging files or compressing them without any *specialized software app*. It is far from complete and is missing many features. But of `v0.3.5` and beyond, it is ready for use. 
 
