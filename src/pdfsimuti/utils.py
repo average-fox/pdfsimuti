@@ -186,13 +186,13 @@ def returnValidatedDict(filesDict: dict[Path, typeFileDict]):
                 case target if 'object missing' in (warnings := pymupdf.TOOLS.mupdf_warnings()):
                     validity = False
                     file_item[1]['state'] = "Critical PDF object missing\nCheck terminal log."
-                    log.error(f"[red]File Warning[/red] from [i]{target.name}[/i]\n-------\n" + warnings + "\n-------")
+                    log.error(f"[red]File Warning[/red] from [i]{target}[/i]\n-------\n" + warnings + "\n-------")
 
                 # Please trust the trick
                 case target if 'format error' in warnings:
                     validity = None
                     file_item[1]['state'] = "PDF file integrity warning.\nCheck terminal log.\nFile may fail on runtime."
-                    log.info(f"[yellow]File Caution[/yellow] from [i]{target.name}[/i]\n-------\n" + warnings + "\n-------")
+                    log.info(f"[yellow]File Caution[/yellow] from [i]{target}[/i]\n-------\n" + warnings + "\n-------")
 
 
                 case _:

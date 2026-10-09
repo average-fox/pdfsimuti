@@ -214,12 +214,23 @@ def display_overview_confirm(filesDict, compressSettings, preserve_choice):
     from rich.rule import Rule
     from pdfsimuti.utils import returnValidDisplayRenderable
 
+    no_preserve_caution_warning = Group(
+        Rule("Caution", style="yellow"),
+        console.render_str(f"Be advised. Preservation of flags not active. Original files will be fully affected.\nPlease check your settings before continuation.")
+    )
     panel_group = Group(
         Rule("Compress Settings"),
         console.render_str(f"{compressSettings.display_properties(preserve_choice)}"),
         Rule("Selected files for Compression"),
-        returnValidDisplayRenderable(filesDict)
+        returnValidDisplayRenderable(filesDict),
     )
+
+    if not preserve_choice:
+        panel_group = Group(
+            panel_group,
+            no_preserve_caution_warning
+        )
+
     console.print(Panel(panel_group, subtitle="Compress Overview", border_style="bright_cyan", expand=False))
 
 
@@ -521,7 +532,6 @@ def compress_engine(
 
     return filesDict
 
-# def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, mimecheck: bool, exclude: list[Path]|None, excludeSource: list[Path]|None,  compressSettings, preserve_choice:bool):
 
 def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, exclude: list[Path]|None, excludeSource: list[Path]|None,  compressSettings, preserve_choice:bool):
     from pdfsimuti.utils import validate_pdf_dict, return_confirm
@@ -583,7 +593,6 @@ def compress_runtime(fileList: list[Path]|None, source: list[Path]|None, exclude
     # note. Optional from typing for Optional[List[type]] is the same as List[type] | None
 def compress(
     items: Annotated[Optional[List[Path]], typer.Argument(help="PDF file(s) to be compressed. Can be single or multiple.", metavar="PDF file")] = None,
-    mimecheck: Annotated[bool, typer.Option("--mimecheck/--no-mimecheck", "-m/-nm", help="Performs a PDF mimecheck for advanced PDF validation")]=True,
     exclude: Annotated[Optional[List[Path]], typer.Option("--exclude", "-e", help="Specify file to exclude from merging. You can specify exact file path depending on how you have added a folder directory", rich_help_panel="Additional options")]=None,
     source: Annotated[Optional[List[Path]], typer.Option("--source", "-s", help="Add files as filepaths from external files (.txt)", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
     excludeSource: Annotated[Optional[List[Path]], typer.Option("--exclude-source", "-es", help="Specify external file as exclude filepath source", rich_help_panel="Additional options", metavar=".txt FILE")] = None,
