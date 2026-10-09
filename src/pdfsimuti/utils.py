@@ -4,24 +4,32 @@ import struct # windows os + ghostScript only. Required to get CPU bit since gsw
 import sys
 from pathlib import Path
 
+from typing import TypedDict
+
 from rich import print
+from rich.console import RenderableType
 
 from click.exceptions import ClickException
 import typer
 
+from pdfsimuti.logClass import Log, console
+
+
 CURRENT_DIR = os.getcwd()
 DEFAULT_OUTPUT = 'merged.pdf'
+OPER_SYS = sys.platform
 
-def text_dedent(msg) -> str:
-    """
-    Remove common leading whitespace and strip surrounding space/newlines.
+log = Log(console=console).logger
 
-    Args:
-        msg (str): The multi-line string content to dedent.
+class typeFileDict(TypedDict):
+    savingPath: Path
+    valid: None | bool
+    state: None | str
+    initial_size: int
+    final_size: int
 
-    Returns:
-        (str): The dedented string with no leading or trailing whitespace.
-    """
+
+def text_dedent(msg:str) -> str:
     import textwrap
     return textwrap.dedent(msg).strip()
 
@@ -30,7 +38,6 @@ class PrettyErrorDisplay(ClickException):
     """
     Imports from Click.exceptions.ClickException to create a pretty error display.
     """
-    
     def __init__(self, message):
         from rich.console import Console
         from io import StringIO
@@ -40,141 +47,79 @@ class PrettyErrorDisplay(ClickException):
         super().__init__(capture.get())
         
 
-def exit_program():
-    print("[bold red]Program Exited[/bold red]")
+def exit_program(msg:str="Program Exited"):
+    print(f"[bold red]{msg}[/bold red]")
     exit()
     
 
 def return_confirm(msg:str='', caution:bool=False, default:bool=True) -> bool:
-    """
-    Prompt the user for a confirmation (Y/n) using Typer, defaulting to True on Enter.
-
-    Args:
-        msg (str): The confirmation message displayed to the user.
-        caution (bool): Ask twice with extreme caution
-        default (bool) : Default control behavior
-
-    Returns:
-        bool: True if confirmed (Y or Enter), False otherwise (n).
-    """
     if caution:
-        confirm_once = typer.confirm("Proceed to abort?", default=True)
-        if not confirm_once:
-            return typer.confirm("(final) Are you absolutely sure not to abort?", default=False)
+        confirm_once = typer.confirm(text_dedent(msg), default=False)
+        if confirm_once:
+            return typer.confirm("Are you sure to proceed?", default=False)
         return False
     return typer.confirm(msg, default=default)
 
 
 def get_calling_function():
-    """
-    Get the file basename of the function two stack frames up. This is required 
-    by ``validate_pdf_list`` to specify return statement origins.
-
-    Returns:
-        str: The basename of the caller's Python file.
-    """
-    # thanks to https://stackoverflow.com/questions/3711184/how-to-use-inspect-to-get-the-callers-info-from-callee-in-python
+    # Referance: https://stackoverflow.com/questions/3711184/how-to-use-inspect-to-get-the-callers-info-from-callee-in-python
     from inspect import getouterframes
-    return return_basename(getouterframes(sys._getframe(1))[1].filename)
+    return Path(getouterframes(sys._getframe(1))[1].filename).name
 
 
-def rtn_gs_name() -> str:
-    """
-    Determine the correct Ghostscript executable name for cross-platform compatibility. 
-    It checks the OS and architecture (gs, gswin64c, or gswin32c).
-
-    Returns:
-        str: The correct Ghostscript callname on the installed machine.
-    """
+def get_gs_name() -> str:
     gs_name = "gs"
     
     # only linux and windows environments are supported. if there are others, well open an issue then :)
     # string appending is used here. its much less complicated.
-    # intellsence will keep warning about this but its okay.
     if sys.platform == "win32":
         gs_name+="win"
         if 8*struct.calcsize("P"): gs_name+="64c"  
         else: gs_name+="32c"
         
     return gs_name
-        
-
-        
-def return_basename(item: str) -> str:
-    
-    """
-    Return the basename of a given filepath, regardless of the active directory.
-
-    Args:
-        item (str): The full or relative filepath.
-
-    Returns:
-        str: The final component of the path (the filename/basename).
-    """
-    return os.path.basename(item)
 
 
 def return_dirname(item:str) -> str:
-    """
-    Return the directory path of a file, excluding the filename.
-
-    Args:
-        item (str): The full or relative filepath.
-
-    Returns:
-        str: The directory component of the path (the folder).
-    """
     return os.path.dirname(item)
 
 
-def return_abspath(item:str) -> str:
-    """
-    Return the normalized absolute path of a file or directory.
-
-    Args:
-        item (str): The relative or absolute path of the file.
-
-    Returns:
-        str: The absolute path of the file.
-    """
-    return os.path.abspath(item)
+def check_file_readability(item: Path) -> bool:
+    # may be redundant after the application of fitz for file checking
+    return item.is_file() and os.access(item, os.R_OK)
 
 
-def check_file_readability(item: str) -> bool:
-    """
-    Check if a file can be opened and read by attempting to open it.
+def txt_file_reader(fileList:list[Path]|None, sourceFile:list[Path]|None, typeFile:str) -> list[Path]:
+    changedFileList: list[Path] = []
 
-    Args:
-        item (str): The path to the file to check.
+    for item in fileList or []: changedFileList.append(Path(item))
 
-    Returns:
-        bool: True if the file is readable (no exception), False otherwise.
-    """
-    return os.path.isfile(item) and os.access(item, os.R_OK)
+    for sourceFileItem in sourceFile or []:
+        if not sourceFileItem.suffix.lower() == ".txt": 
+            log.error(f"External source file not .txt suffix: [yellow][i]{sourceFileItem.absolute()}[/i][/yellow]")
+            continue
 
+        log.debug(f'Reading external [code]{typeFile}[/code] file: {sourceFileItem}...')
 
-def get_file_extension(filename: str) -> str:
-    return filename.lower().split(".")[-1].lower()
-
-
-def return_joined_filePath(filePath1:str, filePath2:str) -> str:
-    return os.path.join(filePath1, filePath2)
-
-
-def txt_file_reader(victimFile, filePath:str) -> list:
-
-    if get_file_extension(filePath) != "txt": return victimFile
-
-    with open(filePath, 'r') as file:
-        victimFile.extend(line.strip() for line in file)
-
-    return victimFile
+        try:
+            with sourceFileItem.open('r') as file:
+                for line in file:
+                    value = line.strip()
+                    if value: changedFileList.append(Path(value))
+        except FileNotFoundError:
+            log.error(f"External file source not found: [purple]{sourceFileItem}[/purple]")
+        except Exception as e:
+            log.error(f"""
+            Error with the source file.\nError: {e}
+            """)
+    
+    return changedFileList
 
 
-def scan_items_entry(itemList: list) -> list:
+def scan_items_entry(itemList: list[Path]|None) -> list[Path]:
 
     return_list = []
-    for item in itemList:
+    for item in itemList or []:
         file = Path(item).resolve()
         file_type = "directory" if file.is_dir() else "file" if file.is_file() else "unknown"
         file_suffix = file.suffix.lower()
@@ -188,7 +133,7 @@ def scan_items_entry(itemList: list) -> list:
                 if folder_item not in return_list:
                     return_list.append(folder_item)
                 else:
-                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: {folder_item}")
+                    log.warning(f"Duplicate file found and ignored: [i]{folder_item}[/i]")
 
         # case 2: its a file
         elif file_type == "file":
@@ -196,160 +141,158 @@ def scan_items_entry(itemList: list) -> list:
                 if str(file) not in return_list:
                     return_list.append(str(file))
                 else:
-                    print(f"[yellow]CAUTION![/yellow] Duplicate file found and ignored: [i][yellow]{str(file)}[/yellow] [/i]")
+                    log.warning(f"Duplicate file found and ignored: [i]{str(file)}[/i]")
             else:
-                print(f"[red]WARNING![/red] File not PDF: [i][yellow]{str(file)}[/yellow] [/i]")
+                log.error(f"File not PDF: [i]{str(file)}[/i]")
         
         # case 3: its neither and looks like a directory
         elif file_suffix == "" and file_type == "unknown":
-            print(f"[red]WARNING![/red] Folder not found: [i][yellow]{str(file)}[/yellow] [/i]")
+            log.error(f"Folder not found: [i]{str(file)}[/i]")
         
         else:
-            print(f"[red]WARNING![/red] File not found: [i][yellow]{str(file)}[/yellow] [/i]")
+            log.error(f"File not found: [i]{str(file)}[/i]")
 
     return return_list
 
 
-def return_validate_pdf_dict(filesDict: dict, mimecheck: bool):
-    
-    # 1. verify fitz 
-    try:
-        fitz = importlib.import_module('fitz')
-    except ModuleNotFoundError:
-        fitz = None
-        print("[yellow]CAUTION![/yellow] PyMuPDF (fitz) not found. Skipping password protection check.")
+def returnValidatedDict(filesDict: dict[Path, typeFileDict]):
 
-    # 2. confirm magic exists. 
-    # if it doesnt and user still approves it; raise error
-    try:
-        magic = importlib.import_module('magic').Magic(mime=True) if mimecheck else None
-    except ModuleNotFoundError:
-        raise PrettyErrorDisplay("Package 'magic' required for mimecheck not found. Check your packages via [code]pdfsimuti checkhealth[/code]")
+    pymupdf = importlib.import_module('pymupdf')
 
-    # 3. start validation loop over dict
-    for file_items in filesDict.items():
-        file_name = file_items[0]
-        file_mime = magic.from_file(file_items[0]) if magic else None
-        # 3.1. get size of the file
-        try:
-            file_items[1]['initial_size'] = Path(file_name).stat().st_size
-        except Exception:
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = 'ERROR'
+    for file_item in filesDict.items():
 
-        # 3.2. check file readability
-        if not check_file_readability(file_items[0]):
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = "Unreadable file"
-
-        # 3.3. check file mime
-        elif magic and file_mime != "application/pdf":
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = f"Mimecheck pass failed.\nReceived:[yellow]\n{file_mime}[/yellow]"
-
-        # 3.4. check password protection (uses fitz)
-        elif fitz:
-            try:
-                if fitz.open(file_items[0]).needs_pass:
-                    file_items[1]['valid'] = False
-                    file_items[1]['state'] = 'Password Protected'
-            except fitz.FileDataError:
-                file_items[1]['state'] = "Can't Open file."
+        # FIXME: you can use continue to speed up the process. you don't need all of these checks all the time
+        # create a single loop or two to handle this. make them fit into a single try/except
         
-        # 3.5 state file validity. if none; that meant mimecheck is disabled.
-        if file_items[1]['valid'] is None and mimecheck:
-            file_items[1]['valid'] = True
-        elif file_items[1]['initial_size'] == 0:
-            file_items[1]['valid'] = False
-            file_items[1]['state'] = "[red]File is empty[/red]"
-        elif not mimecheck:
-            file_items[1]['valid'] = None
+        target = file_item[0]
+        validity = True
+        file_item[1]['initial_size'] = target.stat().st_size
+        warnings = None
+
+        try:
+            match target:
+                case target if file_item[1]['initial_size'] == 0:
+                    validity = False
+                    file_item[1]['state'] = "0 byte. Empty file."
+
+                case target if pymupdf.open(target).needs_pass == 1:
+                    validity = False
+                    file_item[1]['state'] = "Password Protected."
+
+                case target if not check_file_readability(target):
+                    validity = False
+                    file_item[1]['state'] = "Unreadable File"
+
+                case target if 'object missing' in (warnings := pymupdf.TOOLS.mupdf_warnings()):
+                    validity = False
+                    file_item[1]['state'] = "Critical PDF object missing\nCheck terminal log."
+                    log.error(f"[red]File Warning[/red] from [i]{target}[/i]\n-------\n" + warnings + "\n-------")
+
+                # Please trust the trick
+                case target if 'format error' in warnings:
+                    validity = None
+                    file_item[1]['state'] = "PDF file integrity warning.\nCheck terminal log.\nFile may fail on runtime."
+                    log.info(f"[yellow]File Caution[/yellow] from [i]{target}[/i]\n-------\n" + warnings + "\n-------")
+
+
+                case _:
+                    validity = True
+
+        except pymupdf.FileDataError:
+            validity = False
+            file_item[1]['state'] = "Unreadable.\nPossibly corrupted."
+
+        except Exception:
+            validity = False
+            file_item[1]['state'] = "Unknown Error"
+
+        file_item[1]['valid'] = validity
 
     return filesDict
 
-            
-def validate_pdf_dict(items, source, exclude, excludeSource, mimecheck):
 
-    items = items or [] # without this, item will be treated as NoneType
-    items = txt_file_reader(items, source) if source else items
-    exclude= txt_file_reader(exclude, excludeSource) if excludeSource else exclude
+def validate_pdf_dict(items:list[Path]|None, source:list[Path]|None, exclude:list[Path]|None, excludeSource:list[Path]|None):
+
+    items = txt_file_reader(items, source, "--source") if source else items
+    exclude= txt_file_reader(exclude, excludeSource, "--exclude") if excludeSource else exclude
     
-    unvalidated_files = scan_items_entry(items)
-    excludeList = scan_items_entry(exclude) if exclude else []
+    unvalidated_files:list[Path] = scan_items_entry(items) or []
+    excludeList:list[Path] = scan_items_entry(exclude) if exclude else []
 
-    if not mimecheck: print("[yellow]CAUTION![/yellow] Mimechecking disabled! Corrupted files can disrupt the process.")  
+    excludeFreeFilesDict = [
+        Path(file_entry) for file_entry in unvalidated_files
+        if file_entry not in excludeList
+    ]
 
-    # template for file dict
-    newFilesDict = {item_entry: {'saving_path': item_entry, 'valid': None, 'state': None, 'initial_size': 0, 'final_size': 0} for item_entry in ([filePaths for filePaths in unvalidated_files if filePaths not in excludeList] if exclude else unvalidated_files)} 
-    validatedFilesDict = return_validate_pdf_dict(newFilesDict, mimecheck)
+    newFilesDict: dict[Path, typeFileDict] = {
+        file_entry: {
+            "savingPath": file_entry,
+            "valid": None,
+            "state": None,
+            "initial_size": 0,
+            "final_size": 0,
+        }
+        for file_entry in excludeFreeFilesDict
+    }
 
-    # in this stage, it counts the number of purely validated files after scanning for extensions, exclude and type of the file (mimecheck)
-    # this loop checks between true/false and none. if none then it's validation is unknown.
-    final_validated_file_count = 0
+    validatedFilesDict = returnValidatedDict(newFilesDict)
+
+
+    VALIDATED_FILE_COUNT = 0
     for item in validatedFilesDict.items():
         valid = item[1]['valid']
-        if valid == None or valid == True: final_validated_file_count+=1
+        if valid == True or valid == None: VALIDATED_FILE_COUNT+=1
 
     # this works not only for merge but also for compress. If no valid files are found, it shouldn't proceeed.
-    if final_validated_file_count == 0:
+    if VALIDATED_FILE_COUNT == 0:
         raise PrettyErrorDisplay("No compatible PDF files found.")
     
     # different feature require different form of filesDict
     # merge requires fileDict length to be greater than 1. compress doesn't have any requirements.
+
     match get_calling_function():
         case "compress.py": 
             return validatedFilesDict
         
         case "merge.py":
-            if final_validated_file_count <= 1:
-                raise PrettyErrorDisplay("Excepted at least 2 pdf files for merging.")
+            if VALIDATED_FILE_COUNT <= 1:
+                console.print(returnValidDisplayRenderable(validatedFilesDict))
+                raise PrettyErrorDisplay("Expected at least 2 pdf files for merging.")
         
             return validatedFilesDict
 
 
-def return_validated_display(filesDict:dict):
-    """
-    Returns a Rich table as output for terminal print.
-    Table only show the state of the files before operation
-    Takes a dict which it expects to have absolute filename, validity, state of the file and size.
-    If valid is not True, they will be displayed as X and red strikethroughs.
-    
-    Args:
-        filesDict (dict): dict containing information of the files and their properties.
+def returnValidDisplayRenderable(filesDict:dict[Path, typeFileDict]) -> RenderableType:
 
-    Returns:
-        str: Rich-based table output as string
-    """
     from rich.table import Table
     index = 0
     validated_list_table = Table(show_lines=True)
-    validated_list_table.add_column("SI", justify="center", vertical="middle")
+    validated_list_table.add_column("#", justify="center", vertical="middle")
     validated_list_table.add_column("Filename", vertical="middle")
     validated_list_table.add_column("Abspath", vertical="middle", overflow="fold")
     validated_list_table.add_column("Status", vertical="middle")
     validated_list_table.add_column("Size (MB)", vertical="middle", justify="center")
 
     for file_item in filesDict.items(): 
-        valid = file_item[1]['valid']
-        file_name = file_item[0]
-        basename = os.path.splitext(return_basename(file_item[0]))[0]
+        valid = file_item[1]["valid"]
+        filePath = str(file_item[0])
+        basename = Path(filePath).name
         state = file_item[1]['state']
         size = f"{file_item[1]['initial_size']/ (1024 * 1024):.3f}"
-        if valid:
-            validity = "[green]Verified[/green]" 
-            index += 1
-        elif valid == None:
-            validity = "[yellow]Unknown[/yellow]"
+        if valid or valid == None:
             index += 1
         else:
-            # state is false
-            validity = state
             size = "[red]X[/red]"
-            file_name = f"[strike][red]{file_name}[/strike][/red]"
+            filePath = f"[strike][red]{filePath}[/strike][/red]"
             basename = f"[strike][red]{basename}[/strike][/red]"
+
+        match valid:
+            case True: state = "[green]Verified[/green]"
+            case None: state = f"[yellow]{state}[/yellow]"
+            case False: state = f"[red]{state}[/red]"
 
         # Rich table doesn't take any 'int' type
         file_index = str(index) if valid == None or valid == True else "[red]X[/red]"
-        validated_list_table.add_row(file_index, basename, file_name, validity, str(size))
+        validated_list_table.add_row(file_index, basename, filePath, state, str(size))
 
     return validated_list_table

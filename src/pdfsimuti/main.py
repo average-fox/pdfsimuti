@@ -1,29 +1,62 @@
 import typer
-import importlib.metadata
 
-from typing import Optional
-from typing_extensions import Annotated
+from importlib import util, metadata, import_module
 
-from pdfsimuti.features import merge, compress
-from pdfsimuti.diagnostic import checkhealth
+from typing import Optional, Annotated
+from click import Context
+from click.core import Command
+
+from typer.core import TyperGroup
+
+__version__ = metadata.version('pdfsimuti')
 
 app = typer.Typer(
-    no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False,
-    context_settings={"help_option_names" : ["-h", "--help"]},
-)
+    no_args_is_help=True, pretty_exceptions_show_locals=False, rich_markup_mode="rich", add_completion=False, suggest_commands = True,
+    context_settings={"help_option_names" : ["-h", "--help"]},)
 
-# See https://docs.python.org/3/library/importlib.metadata.html#distribution-versions
-__version__ = importlib.metadata.version('pdfsimuti')
+
+class customTyperGroup(TyperGroup):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lazyCommands = {
+        "merge": "pdfsimuti.features.merge",
+        "compress": "pdfsimuti.features.compress",
+        "checkhealth": "pdfsimuti.diagnostic.checkhealth"
+        }
+
+
+    def list_commands(self, ctx: Context) -> list[str]:
+        return super().list_commands(ctx) + list(self.lazyCommands.keys())
+
+
+    def get_command(self, ctx: Context, cmd_name: str) -> Command | None:
+        if cmd_name in self.lazyCommands:
+            cmd = self._lazy_load(cmd_name)
+            cmd.info.name = cmd_name
+            return typer.main.get_command(cmd)
+        return super().get_command(ctx, cmd_name)
+
+
+    def _lazy_load(self, command_name: str) -> typer.Typer:
+        module_name = self.lazyCommands[command_name]
+        module = import_module(module_name)
+        app_object = getattr(module, "app", None)
+        if not app_object: raise ValueError(f"Lazy loading {module_name} failed.")
+
+        return app_object
+
+
+def return_pymupdf_moduleSpec():
+    return util.find_spec('pymupdf')
 
 
 def version_callback(value:bool):
-    # You have to use an argument 'bool' otherwise you will get a "Missing Command" error.
     if value:
-        print(f"PDFSimuti {__version__}")
+        print(f"pdfSimUti v{__version__}")
         raise typer.Exit()
 
 
-@app.callback(epilog="Author: @foxes_nteq_dogs")
+@app.callback(epilog="Author: average-fox (@foxes_nteq_dogs)", cls=customTyperGroup)
 def main(version: Annotated[
     Optional[bool],
     typer.Option("--version", "-v", callback=version_callback, is_eager=True, help="Show version & exit")] = None,
@@ -32,57 +65,6 @@ def main(version: Annotated[
     Utility collection tool for PDF written in Python with Typer.
     """
     pass
-
-
-# See: https://github.com/fastapi/typer/issues/178 
-app.command(
-    # short_help="",
-    help="""
-    Merges several PDFs into a super PDF.
-    
-
- ___   __ _______ ______   _______ _______ 
-|  |_|  |       |    _ | |       |       |
-|       |    ___|   | || |    ___|    ___|
-|       |   |___|   |_||_|   | __|   |___ 
-|       |    ___|    __  |   ||  |    ___|
-| ||_|| |   |___|   |  | |   |_| |   |___ 
-|_|   |_|_______|___|  |_|_______|_______|
-
-- Output file is 'merged.pdf' by default but you can change it using --ouput TEXT
-- Tip: Pass '.' to include current directory.
-- Tip: You can pass folder paths as well just like adding PDF filenames.
-"""
-    )(merge.merge)
-
-
-app.command(
-    help="""
-    Compress PDF(s) into smaller sizes.
-
-
-    _______ _______ __   __ _______ ______   _______ _______ _______ 
-    |       |       |  |_|  |       |    _ | |       |       |       |
-    |   ----|   _   |       |    _  |   | || |    ___|  _____|  _____|
-    |  |    |  | |  |       |   |_| |   |_||_|   |___| |_____| |_____ 
-    |  |    |  |_|  |       |    ___|    __  |    ___|_____  |_____  |
-    |  |____|       | ||_|| |   |   |   |  | |   |___ _____| |_____| |
-    |_______|_______|_|   |_|___|   |___|  |_|_______|_______|_______|
-    
-    """)(compress.compress)
-
-
-app.command(
-    help="""
-    Shows you the status of the packages required for the program.
-    
-    You don't have to install all of them. However, that would limit the program's capability.
-    
-    - Verbose level 1: Returns package presence or not.
-    - Verbose level 2: Verbose 1 + package related details.
-    - Verbose level 3: Verbose 1 + 2 + effect on the program.
-    """
-    )(checkhealth.checkhealth)
 
 
 if __name__ == "__main__": app()
