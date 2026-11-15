@@ -21,7 +21,8 @@ class customTyperGroup(TyperGroup):
         self.lazyCommands = {
         "merge": "pdfsimuti.features.merge",
         "compress": "pdfsimuti.features.compress",
-        "checkhealth": "pdfsimuti.diagnostic.checkhealth"
+        "checkhealth": "pdfsimuti.diagnostic.checkhealth",
+        "convert": "pdfsimuti.features.convert"
         }
 
 
