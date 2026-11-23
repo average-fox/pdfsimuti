@@ -9,6 +9,9 @@ Scripts
 # Personal for VSCODE
 settings.json
 
+# Personal for Neovim
+pyrightconfig.json
+
 # Python Cache files
 src/pdfsimuti/__pycache__
 src/pdfsimuti/features/__pycache__
